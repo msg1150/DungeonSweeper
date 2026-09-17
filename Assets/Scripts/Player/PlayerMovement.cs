@@ -49,6 +49,8 @@ public class PlayerMovement : MonoBehaviour
     // 현재 대시 방향
     private Vector2 dashDirection;
 
+    private bool movementEnabled = true;
+
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
@@ -56,12 +58,21 @@ public class PlayerMovement : MonoBehaviour
 
     private void Update()
     {
+        if (!movementEnabled)
+            return;
+
         ReadMovementInput();
         UpdateDash();
     }
 
     private void FixedUpdate()
     {
+        if (!movementEnabled)
+        {
+            rb.linearVelocity = Vector2.zero;
+            return;
+        }
+
         Move();
     }
 
@@ -163,5 +174,21 @@ public class PlayerMovement : MonoBehaviour
 
         dashTimeRemaining = dashDuration;
         dashCooldownRemaining = dashCooldown;
+    }
+
+    /// <summary>
+    /// 외부 시스템에서 플레이어 이동/대시 입력을
+    /// 활성화하거나 비활성화할 때 사용합니다.
+    /// </summary>
+    public void SetMovementEnabled(bool enabled)
+    {
+        movementEnabled = enabled;
+
+        // 이동을 막는 순간 기존 속도도 제거합니다.
+        if (!movementEnabled)
+        {
+            moveInput = Vector2.zero;
+            rb.linearVelocity = Vector2.zero;
+        }
     }
 }
