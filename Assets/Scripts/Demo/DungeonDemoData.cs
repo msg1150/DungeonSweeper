@@ -152,4 +152,9 @@ public sealed class DismantleSession
         if (IsInSuccessWindow) Successes++;
         else Failures++;
     }
+
+    public void AddSupplySuccess()
+    {
+        if (!IsComplete) Successes++;
+    }
 }

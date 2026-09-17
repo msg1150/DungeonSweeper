@@ -37,11 +37,15 @@ public class DungeonRunController : MonoBehaviour
     {
         Instance = this;
         FindExistingPlayer();
+        ClearLegacyDungeonGeometry();
+        DungeonLayoutFactory.CreateLayout();
+        DungeonVisionFog legacyWorldFog = FindAnyObjectByType<DungeonVisionFog>();
+        if (legacyWorldFog != null) legacyWorldFog.gameObject.SetActive(false);
         BuildDemoWorld();
 
         DungeonDemoHud hud = new GameObject("Dungeon Demo HUD").AddComponent<DungeonDemoHud>();
         hud.Initialize(this);
-        Say("입구입니다. 시체를 해체하고 전리품을 가방에 배치해 회수하세요.", 6f);
+        Say(TownProgress.HasAcceptedContract ? $"의뢰 목표: {TownProgress.ContractTargetName}을 가방에 넣고 탈출하세요." : "입구입니다. 시체를 해체하고 전리품을 가방에 배치해 회수하세요.", 6f);
     }
 
     private void Update()
@@ -51,7 +55,10 @@ public class DungeonRunController : MonoBehaviour
         if (hasEscaped)
         {
             if (Keyboard.current.eKey.wasPressedThisFrame)
+            {
+                TownProgress.BankRun(inventory.TotalValue, inventory.ContainsShape(TownProgress.ContractTarget));
                 SceneManager.LoadScene("Town");
+            }
             return;
         }
 
@@ -80,12 +87,31 @@ public class DungeonRunController : MonoBehaviour
         player = movement.transform;
         PlayerVisualAnimator.Ensure(player.gameObject);
         playerBody = player.GetComponent<Rigidbody2D>();
-        entrance = player.position;
+        entrance = DungeonLayoutFactory.Entrance;
+        player.position = entrance;
+        if (playerBody != null) playerBody.position = entrance;
+        DungeonCameraFollow.Ensure(player);
 
         PlayerInteractor oldInteractor = player.GetComponent<PlayerInteractor>();
         if (oldInteractor != null) oldInteractor.enabled = false;
         DismantleController oldDismantle = FindAnyObjectByType<DismantleController>();
         if (oldDismantle != null) oldDismantle.enabled = false;
+    }
+
+    // Dungeon_Test에 남아 있던 테스트용 벽/배경은 새 런타임 레이아웃과 겹치므로 사용하지 않는다.
+    private void ClearLegacyDungeonGeometry()
+    {
+        foreach (BoxCollider2D collider in FindObjectsByType<BoxCollider2D>())
+        {
+            if (collider.GetComponentInParent<PlayerMovement>() == null)
+                collider.enabled = false;
+        }
+
+        foreach (SpriteRenderer renderer in FindObjectsByType<SpriteRenderer>())
+        {
+            if (renderer.GetComponentInParent<PlayerMovement>() == null)
+                renderer.enabled = false;
+        }
     }
 
     private void BuildDemoWorld()
@@ -94,32 +120,29 @@ public class DungeonRunController : MonoBehaviour
         DismantleDifficulty standard = new DismantleDifficulty(3, 3, .95f, .22f);
 
         CorpseInteractable existing = FindAnyObjectByType<CorpseInteractable>();
-        if (existing != null)
-        {
-            existing.enabled = false;
-            corpses.Add(new CorpseRunData(existing.gameObject, "고블린 시체", standard,
-                new LootDefinition("고블린 이빨", 1, 1, 20, LootShape.Tooth),
-                new LootDefinition("낡은 단검", 1, 3, 75, LootShape.Dagger)));
-        }
-        else
-        {
-            corpses.Add(factory.CreateCorpse("고블린 시체", new Vector2(-1.7f, 1.1f), standard,
-                new LootDefinition("고블린 이빨", 1, 1, 20, LootShape.Tooth),
-                new LootDefinition("낡은 단검", 1, 3, 75, LootShape.Dagger)));
-        }
+        if (existing != null) existing.gameObject.SetActive(false);
+        corpses.Add(factory.CreateCorpse("고블린 시체", DungeonLayoutFactory.RandomFloorPosition(5f), standard,
+            new LootDefinition("고블린 이빨", 1, 1, 20, LootShape.Tooth),
+            new LootDefinition("낡은 단검", 1, 3, 75, LootShape.Dagger)));
 
-        corpses.Add(factory.CreateCorpse("슬라임 시체", new Vector2(2.1f, 2.7f), standard,
+        corpses.Add(factory.CreateCorpse("슬라임 시체", DungeonLayoutFactory.RandomFloorPosition(11f), standard,
             new LootDefinition("슬라임 젤", 1, 2, 40, LootShape.Gel),
             new LootDefinition("슬라임 핵", 1, 1, 90, LootShape.Core)));
-        corpses.Add(factory.CreateCorpse("오우거 시체", new Vector2(5.5f, -2.5f), new DismantleDifficulty(4, 3, 1.12f, .16f),
+        corpses.Add(factory.CreateCorpse("오우거 시체", DungeonLayoutFactory.RandomFloorPosition(17f), new DismantleDifficulty(4, 3, 1.12f, .16f),
             LootDefinition.CreateShaped("두꺼운 가죽", 130, LootShape.Hide,
                 new Vector2Int(0, 0), new Vector2Int(1, 0), new Vector2Int(0, 1)),
             new LootDefinition("오우거 뿔", 1, 3, 160, LootShape.Horn)));
 
-        factory.CreateExitMarker("입구", entrance + new Vector2(-.7f, 0f), new Color(.25f, .55f, 1f), false);
-        specialGate = new Vector2(6.8f, 2.7f);
+        factory.CreateExitMarker("입구", entrance, new Color(.25f, .55f, 1f), false);
+        specialGate = DungeonLayoutFactory.RandomGateSpawn();
         factory.CreateExitMarker("특수 탈출 게이트", specialGate, new Color(.75f, .3f, 1f), true);
 
+        DungeonLayoutFactory.RandomPatrolPoints(7f, out Vector2 goblinA, out Vector2 goblinB);
+        DungeonLayoutFactory.RandomPatrolPoints(12f, out Vector2 slimeA, out Vector2 slimeB);
+        DungeonLayoutFactory.RandomPatrolPoints(17f, out Vector2 ogreA, out Vector2 ogreB);
+        factory.CreateEnemy("순찰 고블린", player, goblinA, goblinB);
+        factory.CreateEnemy("배회 슬라임", player, slimeA, slimeB);
+        factory.CreateEnemy("경비 오우거", player, ogreA, ogreB);
     }
 
     private void TryInteract()
@@ -150,6 +173,20 @@ public class DungeonRunController : MonoBehaviour
     private void UpdateDismantling()
     {
         dismantleSession.Tick(Time.deltaTime);
+        if (Keyboard.current.rKey.wasPressedThisFrame && TownProgress.TryUseSupplyKit())
+        {
+            dismantleSession.AddSupplySuccess();
+            Say("보급 도구 사용: 해체 성공 1회를 확보했습니다.");
+            if (dismantleSession.IsComplete)
+            {
+                foreach (LootDefinition loot in activeCorpse.Loot) pendingLoot.Add(loot);
+                activeCorpse.MarkProcessed();
+                dismantleSession = null;
+                activeCorpse = null;
+                OpenLootPlacement();
+            }
+            return;
+        }
         if (Keyboard.current.escapeKey.wasPressedThisFrame)
         {
             EndDismantling("작업을 중단했습니다.");
@@ -159,6 +196,11 @@ public class DungeonRunController : MonoBehaviour
 
         bool success = dismantleSession.IsInSuccessWindow;
         dismantleSession.RegisterAttempt();
+        if (!success)
+        {
+            AlertNearbyMonsters(activeCorpse.Visual.transform.position);
+            Say("해체 소음 발생! 근처 몬스터가 소리를 조사합니다.");
+        }
         if (dismantleSession.IsComplete)
         {
             foreach (LootDefinition loot in activeCorpse.Loot)
@@ -185,6 +227,12 @@ public class DungeonRunController : MonoBehaviour
         activeCorpse = null;
         movement.SetMovementEnabled(true);
         Say(message);
+    }
+
+    private static void AlertNearbyMonsters(Vector2 noisePosition)
+    {
+        foreach (EnemyAgent enemy in FindObjectsByType<EnemyAgent>())
+            enemy.HearNoise(noisePosition, DungeonTuning.Active.hearingRange);
     }
 
     public void NotifyPlayerCaught()

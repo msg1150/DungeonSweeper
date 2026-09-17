@@ -23,13 +23,20 @@ public sealed class GridInventory
         return null;
     }
 
+    public bool ContainsShape(LootShape shape)
+    {
+        foreach (StoredLoot item in items)
+            if (item.Definition.Shape == shape) return true;
+        return false;
+    }
+
     public bool TryPlace(LootDefinition loot, int startX, int startY)
     {
         if (!CanPlace(loot, startX, startY)) return false;
         int id = nextId++;
         items.Add(new StoredLoot(id, loot, new Vector2Int(startX, startY)));
         FillCells(loot, startX, startY, id);
-        TotalValue += loot.Value;
+        TotalValue += Mathf.RoundToInt(loot.Value * DungeonTuning.Active.lootValueMultiplier);
         return true;
     }
 

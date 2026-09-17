@@ -12,13 +12,18 @@ public class DungeonDemoHud : MonoBehaviour
     private int draggingStoredItemId;
     private Vector2 dragMousePosition;
     private Rect bagGrid;
+    private bool[,] discovered;
+    private bool legacyFogRemoved;
 
     public void Initialize(DungeonRunController controller) => run = controller;
 
     private void OnGUI()
     {
         if (run == null) return;
+        RemoveLegacyWorldFog();
+        DrawVisionOverlay();
         DrawHeader();
+        DrawMinimap();
         if (run.IsLootPlacementOpen) DrawLootPlacementModal();
         else DrawInventory();
         DrawContextPrompt();
@@ -27,13 +32,80 @@ public class DungeonDemoHud : MonoBehaviour
         if (run.HasEscaped) DrawResult();
     }
 
+    private void RemoveLegacyWorldFog()
+    {
+        if (legacyFogRemoved) return;
+        foreach (DungeonVisionFog fog in FindObjectsByType<DungeonVisionFog>())
+            fog.gameObject.SetActive(false);
+        legacyFogRemoved = true;
+    }
+
+    // 투명 텍스처 합성 대신 화면 타일별로 어둠을 직접 그린다.
+    // 중심 타일은 그리지 않으므로 월드가 확실하게 보이며, 바깥 타일만 거리에 따라 어두워진다.
+    private void DrawVisionOverlay()
+    {
+        Camera camera = Camera.main;
+        if (camera == null || run.Player == null) return;
+        DungeonTuning tuning = DungeonTuning.Active;
+        float pixelsPerWorld = Screen.height / (camera.orthographicSize * 2f);
+        Vector3 worldScreen = camera.WorldToScreenPoint(run.Player.position);
+        Vector2 playerScreen = new Vector2(worldScreen.x, Screen.height - worldScreen.y);
+        // 6px 단위는 원형 감쇠를 충분히 부드럽게 보이게 하면서도 데모 해상도에서 안정적이다.
+        const float tileSize = 6f;
+        float darkRadius = Mathf.Max(tuning.darkSightRadius, tuning.clearSightRadius + .01f);
+        for (float y = 0f; y < Screen.height; y += tileSize)
+        for (float x = 0f; x < Screen.width; x += tileSize)
+        {
+            Vector2 tileCenter = new Vector2(x + tileSize * .5f, y + tileSize * .5f);
+            float distanceInWorld = Vector2.Distance(tileCenter, playerScreen) / pixelsPerWorld;
+            float alpha = Mathf.SmoothStep(0f, tuning.outerDarkness,
+                Mathf.InverseLerp(tuning.clearSightRadius, darkRadius, distanceInWorld));
+            if (alpha <= .005f) continue;
+            GUI.color = new Color(0f, 0f, 0f, alpha);
+            GUI.DrawTexture(new Rect(x, y, tileSize + 1f, tileSize + 1f), Texture2D.whiteTexture);
+        }
+        GUI.color = Color.white;
+    }
+
     private void DrawHeader()
     {
         GUI.skin.label.fontSize = 17;
         GUI.skin.label.alignment = TextAnchor.UpperLeft;
         GUI.color = Color.white;
         GUI.Label(new Rect(16, 14, 740, 25), "DUNGEON SWEEPER  ·  비전투 회수 작업 데모");
-        GUI.Label(new Rect(16, 39, 740, 24), $"회수 가치 {run.Inventory.TotalValue}G    |    [WASD] 이동 / [Space] 대시 / [E] 상호작용");
+        string contract = TownProgress.HasAcceptedContract ? $"  |  의뢰: {TownProgress.ContractTargetName} +{TownProgress.ActiveContractBonus}G" : string.Empty;
+        GUI.Label(new Rect(16, 39, 900, 24), $"{DungeonLayoutFactory.LayoutName}  |  회수 가치 {run.Inventory.TotalValue}G{contract}    |    [WASD] 이동 / [Space] 대시 / [E] 상호작용");
+    }
+
+    private void DrawMinimap()
+    {
+        if (run.Player == null) return;
+        if (discovered == null) discovered = new bool[DungeonLayoutFactory.Width, DungeonLayoutFactory.Height];
+        Vector2Int playerCell = DungeonLayoutFactory.WorldToCell(run.Player.position);
+        for (int x = 0; x < DungeonLayoutFactory.Width; x++)
+        for (int y = 0; y < DungeonLayoutFactory.Height; y++)
+            if (DungeonLayoutFactory.IsWalkableCell(x, y) && Mathf.Abs(x - playerCell.x) + Mathf.Abs(y - playerCell.y) <= 3)
+                discovered[x, y] = true;
+
+        const float cell = 7f;
+        float width = DungeonLayoutFactory.Width * cell;
+        float height = DungeonLayoutFactory.Height * cell;
+        Rect panel = new Rect(Screen.width - width - 30f, 155f, width + 16f, height + 38f);
+        GUI.color = new Color(.02f, .035f, .06f, .9f);
+        GUI.Box(panel, GUIContent.none);
+        GUI.color = Color.white;
+        GUI.skin.label.fontSize = 13;
+        GUI.skin.label.alignment = TextAnchor.UpperLeft;
+        GUI.Label(new Rect(panel.x + 8f, panel.y + 6f, width, 18f), "탐색 지도");
+        for (int x = 0; x < DungeonLayoutFactory.Width; x++)
+        for (int y = 0; y < DungeonLayoutFactory.Height; y++)
+        {
+            if (!discovered[x, y]) continue;
+            Rect tile = new Rect(panel.x + 8f + x * cell, panel.y + 28f + (DungeonLayoutFactory.Height - 1 - y) * cell, cell - 1f, cell - 1f);
+            GUI.color = new Vector2Int(x, y) == playerCell ? mint : new Color(.3f, .43f, .52f);
+            GUI.DrawTexture(tile, Texture2D.whiteTexture);
+        }
+        GUI.color = Color.white;
     }
 
     private void DrawInventory()
@@ -108,6 +180,13 @@ public class DungeonDemoHud : MonoBehaviour
             GUI.DrawTexture(cellRect, Texture2D.whiteTexture);
             if (id != 0) HandleStoredDragStart(id, cellRect);
         }
+        foreach (StoredLoot item in run.Inventory.Items)
+        {
+            Rect iconRect = new Rect(x + item.Position.x * cell + 7f, y + item.Position.y * cell + 7f,
+                item.Definition.Width * cell - 14f, item.Definition.Height * cell - 14f);
+            GUI.color = Color.white;
+            LootIconLibrary.Draw(iconRect, item.Definition.Shape);
+        }
     }
 
     private void DrawPendingLootCards(float x, float y)
@@ -133,12 +212,14 @@ public class DungeonDemoHud : MonoBehaviour
             GUI.skin.label.fontSize = 13;
             GUI.Label(new Rect(card.x + 14f, card.y + 40f, 195f, 20f), $"공간 {width} × {height}  ·  {loot.Value}G");
 
-            float previewCell = Mathf.Min(82f / height, 105f / width);
+            Rect iconRect = new Rect(card.x + 220f, card.y + 28f, 55f, 55f);
+            GUI.color = Color.white;
+            LootIconLibrary.Draw(iconRect, loot.Shape);
+            float previewCell = Mathf.Min(72f / height, 52f / width);
             float previewWidth = width * previewCell;
             float previewHeight = height * previewCell;
-            Rect preview = new Rect(card.x + 220f + (105f - previewWidth) * .5f, card.y + 14f + (82f - previewHeight) * .5f, previewWidth, previewHeight);
+            Rect preview = new Rect(card.x + 282f + (52f - previewWidth) * .5f, card.y + 20f + (72f - previewHeight) * .5f, previewWidth, previewHeight);
             GUI.color = LootColor((int)loot.Shape + 1);
-            GUI.DrawTexture(new Rect(card.x + 220f, card.y + 14f, 105f, 82f), Texture2D.whiteTexture);
             DrawLootShape(displayLoot, preview);
             GUI.color = Color.white;
             Rect rotateButton = new Rect(card.x + 14f, card.y + 72f, 66f, 26f);
@@ -262,7 +343,7 @@ public class DungeonDemoHud : MonoBehaviour
         GUI.skin.label.fontSize = 19;
         GUI.Label(new Rect(x, y + 14, width, 28), $"{run.ActiveCorpseName} 해체  ·  성공 {session.Successes}/{session.Difficulty.RequiredSuccesses}  ·  훼손 {session.Failures}/{session.Difficulty.MaxFailures}");
         GUI.skin.label.fontSize = 14;
-        GUI.Label(new Rect(x, y + 45, width, 24), "포인터가 초록색 영역에 있을 때 [E]를 누르세요");
+        GUI.Label(new Rect(x, y + 45, width, 24), TownProgress.SupplyKits > 0 ? "[E] 정밀 해체  ·  [R] 보급 도구 사용: 즉시 성공 1회" : "포인터가 초록색 영역에 있을 때 [E]를 누르세요");
         Rect bar = new Rect(x + 42, y + 91, width - 84, 28);
         GUI.color = new Color(.4f, .09f, .11f); GUI.DrawTexture(bar, Texture2D.whiteTexture);
         GUI.color = mint; GUI.DrawTexture(new Rect(bar.x + bar.width * session.WindowStart, bar.y, bar.width * session.Difficulty.SuccessWindowSize, bar.height), Texture2D.whiteTexture);
