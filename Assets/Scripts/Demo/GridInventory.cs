@@ -9,41 +9,64 @@ public sealed class GridInventory
 
     private readonly int[,] cells = new int[Width, Height];
     private readonly List<StoredLoot> items = new();
+    private int nextId = 1;
 
     public int TotalValue { get; private set; }
     public IReadOnlyList<StoredLoot> Items => items;
 
     public int GetCell(int x, int y) => cells[x, y];
 
-    public bool TryStore(LootDefinition loot)
+    public StoredLoot GetItem(int id)
     {
-        for (int y = 0; y <= Height - loot.Height; y++)
-        for (int x = 0; x <= Width - loot.Width; x++)
-        {
-            if (!CanPlace(loot, x, y)) continue;
-            int id = items.Count + 1;
-            items.Add(new StoredLoot(id, loot, new Vector2Int(x, y)));
-            FillCells(loot, x, y, id);
-            TotalValue += loot.Value;
-            return true;
-        }
-
-        return false;
+        foreach (StoredLoot item in items)
+            if (item.Id == id) return item;
+        return null;
     }
 
-    private bool CanPlace(LootDefinition loot, int startX, int startY)
+    public bool TryPlace(LootDefinition loot, int startX, int startY)
     {
-        for (int y = 0; y < loot.Height; y++)
-        for (int x = 0; x < loot.Width; x++)
-            if (cells[startX + x, startY + y] != 0) return false;
+        if (!CanPlace(loot, startX, startY)) return false;
+        int id = nextId++;
+        items.Add(new StoredLoot(id, loot, new Vector2Int(startX, startY)));
+        FillCells(loot, startX, startY, id);
+        TotalValue += loot.Value;
+        return true;
+    }
+
+    public bool CanPlace(LootDefinition loot, int startX, int startY)
+    {
+        if (startX < 0 || startY < 0 || startX + loot.Width > Width || startY + loot.Height > Height)
+            return false;
+        foreach (Vector2Int cell in loot.OccupiedCells)
+            if (cells[startX + cell.x, startY + cell.y] != 0) return false;
+        return true;
+    }
+
+    public bool TryMove(int itemId, int startX, int startY)
+    {
+        StoredLoot item = GetItem(itemId);
+        if (item == null) return false;
+        ClearCells(item.Definition, item.Position.x, item.Position.y);
+        if (!CanPlace(item.Definition, startX, startY))
+        {
+            FillCells(item.Definition, item.Position.x, item.Position.y, item.Id);
+            return false;
+        }
+        FillCells(item.Definition, startX, startY, item.Id);
+        item.MoveTo(new Vector2Int(startX, startY));
         return true;
     }
 
     private void FillCells(LootDefinition loot, int startX, int startY, int id)
     {
-        for (int y = 0; y < loot.Height; y++)
-        for (int x = 0; x < loot.Width; x++)
-            cells[startX + x, startY + y] = id;
+        foreach (Vector2Int cell in loot.OccupiedCells)
+            cells[startX + cell.x, startY + cell.y] = id;
+    }
+
+    private void ClearCells(LootDefinition loot, int startX, int startY)
+    {
+        foreach (Vector2Int cell in loot.OccupiedCells)
+            cells[startX + cell.x, startY + cell.y] = 0;
     }
 }
 
@@ -51,7 +74,7 @@ public sealed class StoredLoot
 {
     public int Id { get; }
     public LootDefinition Definition { get; }
-    public Vector2Int Position { get; }
+    public Vector2Int Position { get; private set; }
 
     public StoredLoot(int id, LootDefinition definition, Vector2Int position)
     {
@@ -59,4 +82,6 @@ public sealed class StoredLoot
         Definition = definition;
         Position = position;
     }
+
+    public void MoveTo(Vector2Int position) => Position = position;
 }

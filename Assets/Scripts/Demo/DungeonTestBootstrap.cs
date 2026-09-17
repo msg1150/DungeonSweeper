@@ -6,7 +6,8 @@ public static class DungeonTestBootstrap
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void CreateVerticalSlice()
     {
-        if (SceneManager.GetActiveScene().name != "Dungeon_Test" || Object.FindAnyObjectByType<DungeonRunController>() != null)
+        string sceneName = SceneManager.GetActiveScene().name;
+        if ((sceneName != "Dungeon_Test" && sceneName != "Dungeon") || Object.FindAnyObjectByType<DungeonRunController>() != null)
             return;
 
         new GameObject("Dungeon Test Demo").AddComponent<DungeonRunController>();
