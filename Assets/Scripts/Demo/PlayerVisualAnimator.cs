@@ -7,6 +7,8 @@ public sealed class PlayerVisualAnimator : MonoBehaviour
     private Transform visual;
     private SpriteRenderer visualRenderer;
     private Sprite[] walkFrames;
+    private Sprite[] dashFrames;
+    private PlayerMovement movement;
     private float frameTimer;
 
     public static void Ensure(GameObject player)
@@ -18,6 +20,9 @@ public sealed class PlayerVisualAnimator : MonoBehaviour
     private void Awake()
     {
         body = GetComponent<Rigidbody2D>();
+        movement = GetComponent<PlayerMovement>();
+        if (movement != null) movement.DashStarted += RestartAnimation;
+        PlayerVisualProfile profile = PlayerVisualProfile.Active;
         SpriteRenderer source = GetComponent<SpriteRenderer>();
         if (source == null) return;
 
@@ -28,17 +33,35 @@ public sealed class PlayerVisualAnimator : MonoBehaviour
         visualRenderer.color = source.color;
         visualRenderer.sortingLayerID = source.sortingLayerID;
         visualRenderer.sortingOrder = source.sortingOrder;
+        visualObject.transform.localScale = Vector3.one * profile.visualScale;
         source.enabled = false;
 
         visual = visualObject.transform;
         walkFrames = CreateWalkFrames();
+        dashFrames = CreateFrames(profile.dashSheetResource, profile);
         if (walkFrames.Length > 0) visualRenderer.sprite = walkFrames[0];
+    }
+
+    private void RestartAnimation() => frameTimer = 0f;
+
+    private void OnDestroy()
+    {
+        if (movement != null) movement.DashStarted -= RestartAnimation;
     }
 
     private void LateUpdate()
     {
         if (visual == null) return;
-        Vector2 velocity = body != null ? body.linearVelocity : Vector2.zero;
+        PlayerVisualProfile profile = PlayerVisualProfile.Active;
+        Vector2 velocity = movement != null ? movement.Velocity : body != null ? body.linearVelocity : Vector2.zero;
+        if (velocity.x < -.02f) visualRenderer.flipX = true;
+        else if (velocity.x > .02f) visualRenderer.flipX = false;
+        if (movement != null && movement.IsDashing && dashFrames != null && dashFrames.Length > 0)
+        {
+            frameTimer += Time.unscaledDeltaTime;
+            visualRenderer.sprite = dashFrames[Mathf.FloorToInt(frameTimer * profile.dashFramesPerSecond) % dashFrames.Length];
+            return;
+        }
         if (velocity.sqrMagnitude <= .0025f || walkFrames == null || walkFrames.Length == 0)
         {
             if (walkFrames != null && walkFrames.Length > 0) visualRenderer.sprite = walkFrames[0];
@@ -46,23 +69,21 @@ public sealed class PlayerVisualAnimator : MonoBehaviour
         }
 
         frameTimer += Time.unscaledDeltaTime;
-        int frame = Mathf.FloorToInt(frameTimer * 9f) % walkFrames.Length;
+        int frame = Mathf.FloorToInt(frameTimer * profile.walkFramesPerSecond) % walkFrames.Length;
         visualRenderer.sprite = walkFrames[frame];
     }
 
     private static Sprite[] CreateWalkFrames()
     {
-        Texture2D sheet = Resources.Load<Texture2D>("Sprites/player-walk-cycle");
+        PlayerVisualProfile profile = PlayerVisualProfile.Active;
+        return CreateFrames(profile.walkSheetResource, profile);
+    }
+
+    private static Sprite[] CreateFrames(string resourcePath, PlayerVisualProfile profile)
+    {
+        Texture2D sheet = Resources.Load<Texture2D>(resourcePath);
         if (sheet == null) return System.Array.Empty<Sprite>();
-        int frameWidth = sheet.width / 2;
-        int frameHeight = sheet.height / 2;
-        Sprite[] frames = new Sprite[4];
-        for (int index = 0; index < frames.Length; index++)
-        {
-            int x = (index % 2) * frameWidth;
-            int y = (index / 2) * frameHeight;
-            frames[index] = Sprite.Create(sheet, new Rect(x, y, frameWidth, frameHeight), new Vector2(.5f, .5f), frameWidth);
-        }
-        return frames;
+        int frameWidth = sheet.width / Mathf.Max(1, profile.columns);
+        return CasualArtLibrary.LoadSheet(resourcePath, profile.columns, profile.rows, frameWidth, true);
     }
 }

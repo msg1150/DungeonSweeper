@@ -21,8 +21,8 @@ public class DungeonDemoHud : MonoBehaviour
     {
         if (run == null) return;
         RemoveLegacyWorldFog();
-        DrawVisionOverlay();
         DrawHeader();
+        DrawHealth();
         DrawMinimap();
         if (run.IsLootPlacementOpen) DrawLootPlacementModal();
         else DrawInventory();
@@ -40,33 +40,6 @@ public class DungeonDemoHud : MonoBehaviour
         legacyFogRemoved = true;
     }
 
-    // 투명 텍스처 합성 대신 화면 타일별로 어둠을 직접 그린다.
-    // 중심 타일은 그리지 않으므로 월드가 확실하게 보이며, 바깥 타일만 거리에 따라 어두워진다.
-    private void DrawVisionOverlay()
-    {
-        Camera camera = Camera.main;
-        if (camera == null || run.Player == null) return;
-        DungeonTuning tuning = DungeonTuning.Active;
-        float pixelsPerWorld = Screen.height / (camera.orthographicSize * 2f);
-        Vector3 worldScreen = camera.WorldToScreenPoint(run.Player.position);
-        Vector2 playerScreen = new Vector2(worldScreen.x, Screen.height - worldScreen.y);
-        // 6px 단위는 원형 감쇠를 충분히 부드럽게 보이게 하면서도 데모 해상도에서 안정적이다.
-        const float tileSize = 6f;
-        float darkRadius = Mathf.Max(tuning.darkSightRadius, tuning.clearSightRadius + .01f);
-        for (float y = 0f; y < Screen.height; y += tileSize)
-        for (float x = 0f; x < Screen.width; x += tileSize)
-        {
-            Vector2 tileCenter = new Vector2(x + tileSize * .5f, y + tileSize * .5f);
-            float distanceInWorld = Vector2.Distance(tileCenter, playerScreen) / pixelsPerWorld;
-            float alpha = Mathf.SmoothStep(0f, tuning.outerDarkness,
-                Mathf.InverseLerp(tuning.clearSightRadius, darkRadius, distanceInWorld));
-            if (alpha <= .005f) continue;
-            GUI.color = new Color(0f, 0f, 0f, alpha);
-            GUI.DrawTexture(new Rect(x, y, tileSize + 1f, tileSize + 1f), Texture2D.whiteTexture);
-        }
-        GUI.color = Color.white;
-    }
-
     private void DrawHeader()
     {
         GUI.skin.label.fontSize = 17;
@@ -75,6 +48,16 @@ public class DungeonDemoHud : MonoBehaviour
         GUI.Label(new Rect(16, 14, 740, 25), "DUNGEON SWEEPER  ·  비전투 회수 작업 데모");
         string contract = TownProgress.HasAcceptedContract ? $"  |  의뢰: {TownProgress.ContractTargetName} +{TownProgress.ActiveContractBonus}G" : string.Empty;
         GUI.Label(new Rect(16, 39, 900, 24), $"{DungeonLayoutFactory.LayoutName}  |  회수 가치 {run.Inventory.TotalValue}G{contract}    |    [WASD] 이동 / [Space] 대시 / [E] 상호작용");
+    }
+
+    private void DrawHealth()
+    {
+        if (run.PlayerHealth == null) return;
+        float ratio = run.PlayerHealth.Maximum <= 0 ? 0f : (float)run.PlayerHealth.Current / run.PlayerHealth.Maximum;
+        Rect background = new Rect(16f, 68f, 230f, 22f);
+        GUI.color = new Color(.08f, .08f, .1f, .92f); GUI.DrawTexture(background, Texture2D.whiteTexture);
+        GUI.color = Color.Lerp(danger, mint, ratio); GUI.DrawTexture(new Rect(background.x + 2f, background.y + 2f, (background.width - 4f) * ratio, background.height - 4f), Texture2D.whiteTexture);
+        GUI.color = Color.white; GUI.Label(background, $"  체력 {run.PlayerHealth.Current} / {run.PlayerHealth.Maximum}");
     }
 
     private void DrawMinimap()

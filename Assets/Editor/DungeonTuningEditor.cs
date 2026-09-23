@@ -9,6 +9,11 @@ public sealed class DungeonTuningEditor : Editor
     public override void OnInspectorGUI()
     {
         DrawDefaultInspector();
+        DungeonTuning tuning = (DungeonTuning)target;
+        if (tuning.darkSightRadius <= tuning.clearSightRadius)
+            EditorGUILayout.HelpBox("Dark Sight Radius는 Clear Sight Radius보다 커야 원형 그라데이션이 정상적으로 보입니다.", MessageType.Error);
+        if (tuning.outerDarkness >= .95f && tuning.darkSightRadius - tuning.clearSightRadius < 3f)
+            EditorGUILayout.HelpBox("바깥 어둠이 거의 완전한 검정이고 감쇠 구간도 좁아 화면 대부분이 갑자기 어두워집니다. Outer Darkness 0.75~0.9, 반경 차이 4 이상을 권장합니다.", MessageType.Warning);
         EditorGUILayout.Space(12f);
         EditorGUILayout.LabelField("수치 조절 가이드", EditorStyles.boldLabel);
 
@@ -26,6 +31,8 @@ public sealed class DungeonTuningEditor : Editor
             "높이면 벽에 가리지 않은 적이 더 먼 거리에서 플레이어를 발견합니다. 낮추면 가까이 접근해야 추적을 시작합니다.");
         Help("Hearing Range / Investigation Seconds",
             "Hearing Range를 높이면 해체 실패 소리를 듣는 적의 범위가 넓어집니다. Investigation Seconds를 높이면 적이 소리 난 시체를 더 오래 조사합니다.");
+        Help("Player Move / Dash",
+            "Move Speed는 평상시 속도, Dash Speed는 대시 속도입니다. Dash Duration은 대시 유지 시간, Dash Cooldown은 다시 사용할 때까지의 대기 시간입니다.");
     }
 
     private static void Help(string title, string text)

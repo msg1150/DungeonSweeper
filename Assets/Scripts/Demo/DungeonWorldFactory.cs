@@ -4,8 +4,7 @@ using UnityEngine;
 public sealed class DungeonWorldFactory
 {
     private readonly Sprite fallbackSprite;
-    private readonly Sprite corpseSprite;
-    private readonly Sprite enemySprite;
+    private readonly Sprite[] corpseSprites;
     private readonly Sprite portalSprite;
 
     public DungeonWorldFactory()
@@ -14,22 +13,26 @@ public sealed class DungeonWorldFactory
         texture.SetPixel(0, 0, Color.white);
         texture.Apply();
         fallbackSprite = Sprite.Create(texture, new Rect(0, 0, 1, 1), new Vector2(.5f, .5f), 1f);
-        corpseSprite = Resources.Load<Sprite>("Sprites/corpse");
-        enemySprite = Resources.Load<Sprite>("Sprites/enemy-goblin");
+        corpseSprites = CasualArtLibrary.LoadSheet("Sprites/Monsters/corpse-sheet", 3, 1, 180f, true);
         portalSprite = Resources.Load<Sprite>("Sprites/escape-portal");
     }
 
-    public CorpseRunData CreateCorpse(string name, Vector2 position, DismantleDifficulty difficulty, params LootDefinition[] loot)
+    public CorpseRunData CreateCorpse(string name, Vector2 position, DismantleDifficulty difficulty, int monsterIndex, params LootDefinition[] loot)
     {
-        GameObject root = CreateSprite(name, position, new Vector2(1.7f, 1.7f), corpseSprite, Color.white, 2, false);
+        Sprite corpse = corpseSprites.Length == 0 ? fallbackSprite : corpseSprites[Mathf.Clamp(monsterIndex, 0, corpseSprites.Length - 1)];
+        GameObject root = CreateSprite(name, position, new Vector2(.4f, .4f), corpse, Color.white, 2, false);
         return new CorpseRunData(root, name, difficulty, loot);
     }
 
-    public EnemyAgent CreateEnemy(string name, Transform player, Vector2 pointA, Vector2 pointB)
+    public EnemyAgent CreateEnemy(MonsterDefinition definition, Transform player, Vector2 pointA, Vector2 pointB)
     {
-        GameObject root = CreateSprite(name, pointA, new Vector2(1.2f, 1.2f), enemySprite, Color.white, 3, true);
+        // 프레임 원본은 512px 정사각형이므로 0.55 배율에서 플레이어와 비슷한 월드 크기가 된다.
+        GameObject root = CreateSprite($"배회 {definition.displayName}", pointA, new Vector2(.55f, .55f), fallbackSprite, Color.white, 3, true);
+        SpriteRenderer renderer = root.GetComponent<SpriteRenderer>();
+        MonsterVisualAnimator visual = root.AddComponent<MonsterVisualAnimator>();
+        visual.Initialize(definition.spriteSheetResource, renderer);
         EnemyAgent enemy = root.AddComponent<EnemyAgent>();
-        enemy.Initialize(player, pointA, pointB);
+        enemy.Initialize(player, pointA, pointB, definition, visual);
         return enemy;
     }
 

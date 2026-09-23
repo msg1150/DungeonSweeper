@@ -7,7 +7,8 @@ public static class DungeonTestBootstrap
     private static void CreateVerticalSlice()
     {
         string sceneName = SceneManager.GetActiveScene().name;
-        if ((sceneName != "Dungeon_Test" && sceneName != "Dungeon") || Object.FindAnyObjectByType<DungeonRunController>() != null)
+        GameFlowConfig flow = GameFlowConfig.Active;
+        if ((sceneName != flow.dungeonTestSceneName && sceneName != flow.dungeonSceneName) || Object.FindAnyObjectByType<DungeonRunController>() != null)
             return;
 
         new GameObject("Dungeon Test Demo").AddComponent<DungeonRunController>();

@@ -16,7 +16,13 @@ MonoBehaviour:
   fogWorldSize: 48
   clearSightRadius: 3
   darkSightRadius: 5
-  outerDarkness: 1
+  outerDarkness: 0.9
+  playerMaxHealth: 100
+  playerHitInvulnerability: 0.55
+  playerMoveSpeed: 5
+  playerDashSpeed: 12
+  playerDashDuration: 0.15
+  playerDashCooldown: 1
   patrolSpeed: 1.05
   chaseSpeed: 2.15
   detectionRange: 3.8

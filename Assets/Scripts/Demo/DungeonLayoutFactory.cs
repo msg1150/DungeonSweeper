@@ -9,6 +9,17 @@ public static class DungeonLayoutFactory
     private const float CellSize = 1.45f;
     private static readonly bool[,] floor = new bool[Columns, Rows];
     private static int layoutIndex;
+    private static Sprite floorSprite;
+    private static Sprite wallSprite;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetRuntimeState()
+    {
+        floorSprite = null;
+        wallSprite = null;
+        RuntimeSprite.Reset();
+        System.Array.Clear(floor, 0, floor.Length);
+    }
 
     public static Vector2 Entrance => CellCenter(2, 1);
     public static int Width => Columns;
@@ -20,6 +31,8 @@ public static class DungeonLayoutFactory
         if (GameObject.Find("Runtime Dungeon Layout") != null) return;
         System.Array.Clear(floor, 0, floor.Length);
         BuildFloorPlan();
+        floorSprite = CasualArtLibrary.LoadFull("Sprites/Environment/dungeon-floor-casual", 100f);
+        wallSprite = CasualArtLibrary.LoadFull("Sprites/Environment/dungeon-wall-casual", 100f);
         GameObject root = new GameObject("Runtime Dungeon Layout");
 
         for (int x = 0; x < Columns; x++)
@@ -161,9 +174,12 @@ public static class DungeonLayoutFactory
         tile.transform.position = position;
         tile.transform.localScale = new Vector3(CellSize, CellSize, 1f);
         SpriteRenderer renderer = tile.AddComponent<SpriteRenderer>();
-        renderer.sprite = RuntimeSprite.Value;
-        renderer.color = new Color(.38f, .43f, .48f, 1f);
+        renderer.sprite = SafeSprite(floorSprite);
+        renderer.color = Color.white;
         renderer.sortingOrder = 0;
+        if (renderer.sprite == null) return;
+        float unit = Mathf.Max(.01f, renderer.sprite.bounds.size.x);
+        tile.transform.localScale = new Vector3(CellSize / unit, CellSize / unit, 1f);
     }
     private static void CreateWall(Transform parent, string name, Vector2 position, Vector2 size)
     {
@@ -174,13 +190,26 @@ public static class DungeonLayoutFactory
         BoxCollider2D collider = wall.AddComponent<BoxCollider2D>();
         collider.size = Vector2.one;
         SpriteRenderer renderer = wall.AddComponent<SpriteRenderer>();
-        renderer.sprite = RuntimeSprite.Value;
-        renderer.color = new Color(.13f, .18f, .24f, 1f);
+        renderer.sprite = SafeSprite(wallSprite);
+        renderer.color = Color.white;
         renderer.sortingOrder = 1;
+        if (renderer.sprite == null) return;
+        Vector2 bounds = renderer.sprite.bounds.size;
+        bounds.x = Mathf.Max(.01f, bounds.x); bounds.y = Mathf.Max(.01f, bounds.y);
+        wall.transform.localScale = new Vector3(size.x / bounds.x, size.y / bounds.y, 1f);
     }
     private static class RuntimeSprite
     {
-        public static readonly Sprite Value = Create();
+        private static Sprite value;
+        public static Sprite Value
+        {
+            get
+            {
+                if (value == null) value = Create();
+                return value;
+            }
+        }
+        public static void Reset() => value = null;
         private static Sprite Create()
         {
             Texture2D texture = new Texture2D(1, 1);
@@ -188,5 +217,12 @@ public static class DungeonLayoutFactory
             texture.Apply();
             return Sprite.Create(texture, new Rect(0, 0, 1, 1), new Vector2(.5f, .5f), 1f);
         }
+    }
+
+    private static Sprite SafeSprite(Sprite candidate)
+    {
+        Sprite result = candidate != null ? candidate : RuntimeSprite.Value;
+        if (result == null) Debug.LogError("Dungeon tile sprite creation failed; using no visual for this tile.");
+        return result;
     }
 }

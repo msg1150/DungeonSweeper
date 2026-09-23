@@ -5,6 +5,8 @@ using UnityEngine;
 public sealed class DungeonTuning : ScriptableObject
 {
     private static DungeonTuning active;
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetActive() => active = null;
     public static DungeonTuning Active
     {
         get
@@ -23,6 +25,14 @@ public sealed class DungeonTuning : ScriptableObject
     [Min(.1f)] public float clearSightRadius = 4.5f;
     [Min(.1f)] public float darkSightRadius = 11f;
     [Range(0f, 1f)] public float outerDarkness = .5f;
+
+    [Header("Player Combat")]
+    [Min(1)] public int playerMaxHealth = 100;
+    [Min(0f)] public float playerHitInvulnerability = .55f;
+    [Min(.1f)] public float playerMoveSpeed = 5f;
+    [Min(.1f)] public float playerDashSpeed = 12f;
+    [Min(.02f)] public float playerDashDuration = .15f;
+    [Min(0f)] public float playerDashCooldown = 1f;
 
     [Header("Monster Movement")]
     [Min(.1f)] public float patrolSpeed = 1.05f;

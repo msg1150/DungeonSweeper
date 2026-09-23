@@ -1,19 +1,27 @@
 using UnityEngine;
 
-/// <summary>방과 복도를 계속 배회하다 플레이어를 발견하면 추적하는 비전투 위협.</summary>
+/// <summary>배회/추적/공격 상태와 타격 시점만 담당한다.</summary>
 public class EnemyAgent : MonoBehaviour
 {
     private Transform player;
     private Vector2 roamTarget;
-    private float catchCooldown;
+    private float attackCooldown;
+    private float attackTimer;
+    private bool damageApplied;
+    private MonsterDefinition definition;
+    private MonsterVisualAnimator visual;
+    private PlayerHealth playerHealth;
     private float nextRoamDecision;
     private Vector2 investigationTarget;
     private float investigationUntil;
     private bool wasChasing;
 
-    public void Initialize(Transform target, Vector2 a, Vector2 b)
+    public void Initialize(Transform target, Vector2 a, Vector2 b, MonsterDefinition data, MonsterVisualAnimator animator)
     {
         player = target;
+        playerHealth = target.GetComponent<PlayerHealth>();
+        definition = data;
+        visual = animator;
         roamTarget = b;
         nextRoamDecision = Random.Range(1.5f, 3.5f);
     }
@@ -28,7 +36,21 @@ public class EnemyAgent : MonoBehaviour
 
     private void Update()
     {
-        if (player == null || DungeonRunController.Instance == null) return;
+        if (player == null || definition == null || DungeonRunController.Instance == null || Time.timeScale == 0f) return;
+
+        if (attackTimer > 0f)
+        {
+            attackTimer -= Time.deltaTime;
+            float progress = 1f - attackTimer / definition.attackAnimationSeconds;
+            visual.Tick(true, progress, false, player.position - transform.position);
+            if (!damageApplied && progress >= .5f)
+            {
+                damageApplied = true;
+                if (Vector2.Distance(transform.position, player.position) <= definition.attackRange + .25f && HasClearSight(player.position))
+                    playerHealth.TakeDamage(definition.attackDamage);
+            }
+            return;
+        }
 
         float distance = Vector2.Distance(transform.position, player.position);
         bool isChasing = distance < DungeonTuning.Active.detectionRange && HasClearSight(player.position);
@@ -42,14 +64,18 @@ public class EnemyAgent : MonoBehaviour
         Vector2 target = isChasing ? player.position : isInvestigating ? investigationTarget : roamTarget;
         Vector2 destination = DungeonLayoutFactory.GetNextPathPoint(transform.position, target);
         float speed = isChasing ? DungeonTuning.Active.chaseSpeed : DungeonTuning.Active.patrolSpeed;
+        Vector2 before = transform.position;
         transform.position = Vector2.MoveTowards(transform.position, destination, speed * Time.deltaTime);
+        Vector2 velocity = (Vector2)transform.position - before;
+        visual.Tick(false, 0f, velocity.sqrMagnitude > .00001f, velocity);
         wasChasing = isChasing;
 
-        if (catchCooldown > 0f) catchCooldown -= Time.deltaTime;
-        if (isChasing && distance < .58f && catchCooldown <= 0f)
+        if (attackCooldown > 0f) attackCooldown -= Time.deltaTime;
+        if (isChasing && distance <= definition.attackRange && attackCooldown <= 0f)
         {
-            catchCooldown = 2f;
-            DungeonRunController.Instance.NotifyPlayerCaught();
+            attackCooldown = definition.attackCooldown;
+            attackTimer = definition.attackAnimationSeconds;
+            damageApplied = false;
         }
     }
 

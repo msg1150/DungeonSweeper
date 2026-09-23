@@ -38,6 +38,13 @@ public static class TownProgress
         HasAcceptedContract = false;
     }
 
+    public static void FailRun()
+    {
+        LastRunGold = 0;
+        LastContractBonus = 0;
+        HasAcceptedContract = false;
+    }
+
     public static bool TryBuySupplyKit()
     {
         const int cost = 25;

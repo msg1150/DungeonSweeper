@@ -1,16 +1,10 @@
 fileFormatVersion: 2
-guid: 83278a385a4f442dabdb9fdc3fc5f277
+guid: c615c86191c74265a5406a082701b91a
 TextureImporter:
-  internalIDToNameTable: []
-  externalObjects: {}
   serializedVersion: 13
-  mipmaps:
-    mipMapMode: 0
-    enableMipMap: 0
+  mipmaps: {enableMipMap: 0}
   isReadable: 1
   textureType: 0
-  spritePivot: {x: 0.5, y: 0.5}
-  spriteGenerateFallbackPhysicsShape: 0
   alphaUsage: 1
   alphaIsTransparency: 1
   sRGBTexture: 1

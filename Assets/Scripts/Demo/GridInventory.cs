@@ -64,6 +64,14 @@ public sealed class GridInventory
         return true;
     }
 
+    public void Clear()
+    {
+        System.Array.Clear(cells, 0, cells.Length);
+        items.Clear();
+        TotalValue = 0;
+        nextId = 1;
+    }
+
     private void FillCells(LootDefinition loot, int startX, int startY, int id)
     {
         foreach (Vector2Int cell in loot.OccupiedCells)
