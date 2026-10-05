@@ -20,11 +20,18 @@ public sealed class PlayerMovement : MonoBehaviour, IPlayerMotionState
     public event Action DashStarted;
     public event Action DashEnded;
 
-    private void Awake() { body = GetComponent<Rigidbody2D>(); input = new KeyboardPlayerInputSource(); }
+    private void Awake()
+    {
+        body = GetComponent<Rigidbody2D>();
+        body.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+        body.interpolation = RigidbodyInterpolation2D.Interpolate;
+        input = new KeyboardPlayerInputSource();
+    }
 
     private void Update()
     {
         if (!movementEnabled) return;
+        if (GameShell.IsGameplayInputBlocked) { moveInput = Vector2.zero; return; }
         moveInput = input.ReadMove();
         if (moveInput != Vector2.zero) lastMoveDirection = moveInput;
         TickDash();
@@ -32,7 +39,7 @@ public sealed class PlayerMovement : MonoBehaviour, IPlayerMotionState
 
     private void FixedUpdate()
     {
-        if (!movementEnabled) { body.linearVelocity = Vector2.zero; return; }
+        if (!movementEnabled || GameShell.IsGameplayInputBlocked) { body.linearVelocity = Vector2.zero; return; }
         DungeonTuning tuning = DungeonTuning.Active;
         body.linearVelocity = IsDashing ? dashDirection * tuning.playerDashSpeed : moveInput * tuning.playerMoveSpeed;
     }
@@ -64,10 +71,37 @@ public sealed class PlayerMovement : MonoBehaviour, IPlayerMotionState
 
     public void SetMovementEnabled(bool enabled)
     {
+        if (body == null) body = GetComponent<Rigidbody2D>();
         movementEnabled = enabled;
         if (enabled) return;
         moveInput = Vector2.zero;
         body.linearVelocity = Vector2.zero;
+        EndDash();
+    }
+
+    public PlayerMotionSaveData Capture() => new()
+    {
+        isDashing = IsDashing, dashSeconds = Mathf.Max(0f, dashTimeRemaining),
+        cooldownSeconds = Mathf.Max(0f, dashCooldownRemaining), dashDirection = dashDirection,
+        lastDirection = lastMoveDirection
+    };
+
+    public void Restore(PlayerMotionSaveData state)
+    {
+        if (state == null) return; // Earlier protected saves did not store movement timers.
+        if (!state.IsValid()) throw new ArgumentException("Invalid saved player movement.");
+        IsDashing = state.isDashing;
+        dashTimeRemaining = state.dashSeconds;
+        dashCooldownRemaining = state.cooldownSeconds;
+        dashDirection = state.dashDirection;
+        lastMoveDirection = state.lastDirection;
+        moveInput = Vector2.zero;
+    }
+
+    private void OnDisable()
+    {
+        moveInput = Vector2.zero;
+        if (body != null) body.linearVelocity = Vector2.zero;
         EndDash();
     }
 }

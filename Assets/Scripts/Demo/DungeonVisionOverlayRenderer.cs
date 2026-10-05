@@ -31,7 +31,7 @@ public sealed class DungeonVisionOverlayRenderer : MonoBehaviour
         rect.offsetMin = Vector2.zero;
         rect.offsetMax = Vector2.zero;
 
-        Shader shader = Shader.Find("DungeonSweeper/VisionOverlay");
+        Shader shader = Resources.Load<Shader>("VisionOverlay");
         if (shader == null) { Debug.LogError("VisionOverlay shader was not found."); root.SetActive(false); return; }
         overlay.material = new Material(shader);
         image.material = overlay.material;

@@ -5,10 +5,22 @@ using UnityEngine;
 public static class CasualArtLibrary
 {
     private static readonly Dictionary<string, Sprite[]> sheets = new();
+    private static Sprite whiteSprite;
+
+    public static Sprite WhiteSprite
+    {
+        get
+        {
+            if (whiteSprite != null) return whiteSprite;
+            Texture2D texture = new Texture2D(1, 1) { filterMode = FilterMode.Point };
+            texture.SetPixel(0, 0, Color.white); texture.Apply();
+            return whiteSprite = Sprite.Create(texture, new Rect(0, 0, 1, 1), new Vector2(.5f, .5f), 1f);
+        }
+    }
 
     // Domain Reload가 꺼져 있어도 이전 Play 세션의 파괴된 Unity 객체를 재사용하지 않는다.
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-    private static void ResetCache() => sheets.Clear();
+    private static void ResetCache() { sheets.Clear(); whiteSprite = null; }
 
     public static Sprite LoadFull(string path, float pixelsPerUnit = 100f)
     {
@@ -21,11 +33,15 @@ public static class CasualArtLibrary
 
     private static Sprite[] LoadSheetInternal(string path, int columns, int rows, float pixelsPerUnit, bool removeBackdrop, float pivotY)
     {
+        if (columns < 1 || rows < 1 || columns > 128 || rows > 128 || pixelsPerUnit <= 0f
+            || float.IsNaN(pixelsPerUnit) || float.IsInfinity(pixelsPerUnit))
+            throw new System.ArgumentException("Invalid sprite sheet dimensions or pixel scale.");
         string key = $"{path}:{columns}:{rows}:{pixelsPerUnit}:{removeBackdrop}:{pivotY}";
         if (sheets.TryGetValue(key, out Sprite[] cached) && cached != null && cached.Length > 0 && cached[0] != null) return cached;
         sheets.Remove(key);
         Texture2D source = Resources.Load<Texture2D>(path);
         if (source == null) return System.Array.Empty<Sprite>();
+        if (columns > source.width || rows > source.height) return System.Array.Empty<Sprite>();
         Texture2D texture = source;
         if (removeBackdrop)
         {
@@ -47,16 +63,21 @@ public static class CasualArtLibrary
     /// <summary>Texture Importer의 Read/Write 설정과 무관하게 GPU 복사를 통해 읽기 가능한 사본을 만든다.</summary>
     public static Texture2D CreateReadableCopy(Texture2D source)
     {
+        if (source == null) throw new System.ArgumentNullException(nameof(source));
         RenderTexture temporary = RenderTexture.GetTemporary(source.width, source.height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
         RenderTexture previous = RenderTexture.active;
-        Graphics.Blit(source, temporary);
-        RenderTexture.active = temporary;
-        Texture2D copy = new Texture2D(source.width, source.height, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
-        copy.ReadPixels(new Rect(0, 0, source.width, source.height), 0, 0, false);
-        copy.Apply(false, false);
-        RenderTexture.active = previous;
-        RenderTexture.ReleaseTemporary(temporary);
-        return copy;
+        Texture2D copy = null;
+        try
+        {
+            Graphics.Blit(source, temporary);
+            RenderTexture.active = temporary;
+            copy = new Texture2D(source.width, source.height, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear };
+            copy.ReadPixels(new Rect(0, 0, source.width, source.height), 0, 0, false);
+            copy.Apply(false, false);
+            return copy;
+        }
+        catch { if (copy != null) Object.Destroy(copy); throw; }
+        finally { RenderTexture.active = previous; RenderTexture.ReleaseTemporary(temporary); }
     }
 
     // 배경과 연결된 픽셀만 제거하므로 눈동자·외곽선 같은 검은 내부 디테일은 보존된다.

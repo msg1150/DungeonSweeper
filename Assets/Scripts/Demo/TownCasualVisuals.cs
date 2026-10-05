@@ -16,6 +16,9 @@ public static class TownCasualVisuals
         }
     }
 
+    public static void RefreshBackground() => SetBackgroundCover("Town Ground",
+        CasualArtLibrary.LoadFull("Sprites/Environment/town-casual", 100f));
+
     private static void SetBackgroundCover(string objectName, Sprite sprite)
     {
         GameObject obj = GameObject.Find(objectName);

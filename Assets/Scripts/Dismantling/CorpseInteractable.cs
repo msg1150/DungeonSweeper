@@ -1,16 +1,16 @@
 using UnityEngine;
 
 /// <summary>
-/// ´øÀü¿¡ Á¸ÀçÇÏ´Â ¸ó½ºÅÍ ½ÃÃ¼ÀÇ »óÈ£ÀÛ¿ëÀ» ´ã´çÇÕ´Ï´Ù.
+/// ë˜ì „ì— ì¡´ì¬í•˜ëŠ” ëª¬ìŠ¤í„° ì‹œì²´ì˜ ìƒí˜¸ì‘ìš©ì„ ë‹´ë‹¹í•©ë‹ˆë‹¤.
 /// 
-/// ÇöÀç´Â ÇÃ·¹ÀÌ¾î°¡ »óÈ£ÀÛ¿ëÇÏ¸é
-/// ÇØÃ¼ UI¸¦ ¿©´Â ¿ªÇÒ¸¸ ¼öÇàÇÕ´Ï´Ù.
+/// í˜„ì¬ëŠ” í”Œë ˆì´ì–´ê°€ ìƒí˜¸ì‘ìš©í•˜ë©´
+/// í•´ì²´ UIë¥¼ ì—¬ëŠ” ì—­í• ë§Œ ìˆ˜í–‰í•©ë‹ˆë‹¤.
 /// </summary>
 public class CorpseInteractable : MonoBehaviour, IInteractable
 {
     [Header("Corpse")]
     [SerializeField]
-    private string corpseName = "°íºí¸° ½ÃÃ¼";
+    private string corpseName = "ê³ ë¸”ë¦° ì‹œì²´";
 
     public void Interact()
     {
@@ -22,6 +22,6 @@ public class CorpseInteractable : MonoBehaviour, IInteractable
 
     public string GetInteractionText()
     {
-        return $"{corpseName} ÇØÃ¼";
+        return $"{corpseName} í•´ì²´";
     }
 }

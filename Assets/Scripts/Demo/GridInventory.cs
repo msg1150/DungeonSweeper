@@ -36,13 +36,17 @@ public sealed class GridInventory
         int id = nextId++;
         items.Add(new StoredLoot(id, loot, new Vector2Int(startX, startY)));
         FillCells(loot, startX, startY, id);
-        TotalValue += Mathf.RoundToInt(loot.Value * DungeonTuning.Active.lootValueMultiplier);
+        double multiplier = DungeonTuning.Active.lootValueMultiplier;
+        if (double.IsNaN(multiplier) || double.IsInfinity(multiplier)) multiplier = 1d;
+        double value = System.Math.Round(loot.Value * System.Math.Max(0d, multiplier));
+        int reward = (int)System.Math.Min(int.MaxValue, System.Math.Max(0d, value));
+        TotalValue = (int)System.Math.Min(int.MaxValue, (long)TotalValue + reward);
         return true;
     }
 
     public bool CanPlace(LootDefinition loot, int startX, int startY)
     {
-        if (startX < 0 || startY < 0 || startX + loot.Width > Width || startY + loot.Height > Height)
+        if (loot == null || startX < 0 || startY < 0 || startX > Width - loot.Width || startY > Height - loot.Height)
             return false;
         foreach (Vector2Int cell in loot.OccupiedCells)
             if (cells[startX + cell.x, startY + cell.y] != 0) return false;
@@ -70,6 +74,23 @@ public sealed class GridInventory
         items.Clear();
         TotalValue = 0;
         nextId = 1;
+    }
+
+    public List<StoredLootSaveData> Capture()
+    {
+        List<StoredLootSaveData> result = new();
+        foreach (StoredLoot item in items)
+            result.Add(new StoredLootSaveData { loot = LootSaveData.Capture(item.Definition), position = item.Position });
+        return result;
+    }
+
+    public void Restore(List<StoredLootSaveData> savedItems, int totalValue)
+    {
+        Clear();
+        foreach (StoredLootSaveData item in savedItems)
+            if (!TryPlace(item.loot.Restore(), item.position.x, item.position.y))
+                throw new System.ArgumentException("Saved inventory has an invalid placement.");
+        TotalValue = Mathf.Max(0, totalValue);
     }
 
     private void FillCells(LootDefinition loot, int startX, int startY, int id)

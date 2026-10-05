@@ -11,6 +11,7 @@ public static class GameConfigAssetBootstrap
     {
         Ensure<GameFlowConfig>("Assets/Resources/GameFlowConfig.asset");
         Ensure<PlayerVisualProfile>("Assets/Resources/PlayerVisualProfile.asset");
+        Ensure<MainMenuPresentationConfig>("Assets/Resources/MainMenuPresentation.asset");
     }
 
     private static void Ensure<T>(string path) where T : ScriptableObject

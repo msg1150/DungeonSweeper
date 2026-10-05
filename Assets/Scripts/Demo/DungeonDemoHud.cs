@@ -12,14 +12,15 @@ public class DungeonDemoHud : MonoBehaviour
     private int draggingStoredItemId;
     private Vector2 dragMousePosition;
     private Rect bagGrid;
-    private bool[,] discovered;
     private bool legacyFogRemoved;
+    private Vector2 pendingLootScroll;
 
     public void Initialize(DungeonRunController controller) => run = controller;
 
     private void OnGUI()
     {
-        if (run == null) return;
+        if (run == null || GameShell.IsGameplayInputBlocked) return;
+        using var gui = new GameGuiScope(true);
         RemoveLegacyWorldFog();
         DrawHeader();
         DrawHealth();
@@ -30,6 +31,16 @@ public class DungeonDemoHud : MonoBehaviour
         DrawToast();
         if (run.ActiveSession != null) DrawSkillCheck(run.ActiveSession);
         if (run.HasEscaped) DrawResult();
+    }
+
+    private void Update()
+    {
+        if (run == null || !run.IsLootPlacementOpen || GameShell.IsGameplayInputBlocked)
+        {
+            draggingLootIndex = -1;
+            draggingStoredItemId = 0;
+            if (run == null || !run.IsLootPlacementOpen) { rotatedLoot.Clear(); pendingLootScroll = Vector2.zero; }
+        }
     }
 
     private void RemoveLegacyWorldFog()
@@ -53,6 +64,8 @@ public class DungeonDemoHud : MonoBehaviour
     private void DrawHealth()
     {
         if (run.PlayerHealth == null) return;
+        GUI.skin.label.fontSize = 14;
+        GUI.skin.label.alignment = TextAnchor.MiddleLeft;
         float ratio = run.PlayerHealth.Maximum <= 0 ? 0f : (float)run.PlayerHealth.Current / run.PlayerHealth.Maximum;
         Rect background = new Rect(16f, 68f, 230f, 22f);
         GUI.color = new Color(.08f, .08f, .1f, .92f); GUI.DrawTexture(background, Texture2D.whiteTexture);
@@ -63,19 +76,14 @@ public class DungeonDemoHud : MonoBehaviour
     private void DrawMinimap()
     {
         if (run.Player == null) return;
-        if (discovered == null) discovered = new bool[DungeonLayoutFactory.Width, DungeonLayoutFactory.Height];
         Vector2Int playerCell = DungeonLayoutFactory.WorldToCell(run.Player.position);
-        for (int x = 0; x < DungeonLayoutFactory.Width; x++)
-        for (int y = 0; y < DungeonLayoutFactory.Height; y++)
-            if (DungeonLayoutFactory.IsWalkableCell(x, y) && Mathf.Abs(x - playerCell.x) + Mathf.Abs(y - playerCell.y) <= 3)
-                discovered[x, y] = true;
 
         const float cell = 7f;
         float width = DungeonLayoutFactory.Width * cell;
         float height = DungeonLayoutFactory.Height * cell;
-        Rect panel = new Rect(Screen.width - width - 30f, 155f, width + 16f, height + 38f);
+        Rect panel = new Rect(GameGuiScope.Width - width - 30f, 210f, width + 16f, height + 38f);
         GUI.color = new Color(.02f, .035f, .06f, .9f);
-        GUI.Box(panel, GUIContent.none);
+        GUI.DrawTexture(panel, Texture2D.whiteTexture);
         GUI.color = Color.white;
         GUI.skin.label.fontSize = 13;
         GUI.skin.label.alignment = TextAnchor.UpperLeft;
@@ -83,7 +91,7 @@ public class DungeonDemoHud : MonoBehaviour
         for (int x = 0; x < DungeonLayoutFactory.Width; x++)
         for (int y = 0; y < DungeonLayoutFactory.Height; y++)
         {
-            if (!discovered[x, y]) continue;
+            if (!run.IsCellDiscovered(x, y)) continue;
             Rect tile = new Rect(panel.x + 8f + x * cell, panel.y + 28f + (DungeonLayoutFactory.Height - 1 - y) * cell, cell - 1f, cell - 1f);
             GUI.color = new Vector2Int(x, y) == playerCell ? mint : new Color(.3f, .43f, .52f);
             GUI.DrawTexture(tile, Texture2D.whiteTexture);
@@ -94,7 +102,7 @@ public class DungeonDemoHud : MonoBehaviour
     private void DrawInventory()
     {
         const float cell = 24f;
-        float x = Screen.width - 160f;
+        float x = GameGuiScope.Width - 160f;
         float y = 18f;
         GUI.color = Color.white;
         GUI.Label(new Rect(x, y, 145f, 23f), "작업 가방  5 × 4");
@@ -126,13 +134,13 @@ public class DungeonDemoHud : MonoBehaviour
     private void DrawLootPlacementModal()
     {
         GUI.color = new Color(0f, 0f, 0f, .68f);
-        GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+        GUI.DrawTexture(new Rect(0, 0, GameGuiScope.Width, GameGuiScope.Height), Texture2D.whiteTexture);
         const float panelWidth = 800f;
         const float panelHeight = 500f;
-        float panelX = (Screen.width - panelWidth) * .5f;
-        float panelY = (Screen.height - panelHeight) * .5f;
+        float panelX = (GameGuiScope.Width - panelWidth) * .5f;
+        float panelY = (GameGuiScope.Height - panelHeight) * .5f;
         GUI.color = new Color(.035f, .055f, .09f, .99f);
-        GUI.Box(new Rect(panelX, panelY, panelWidth, panelHeight), string.Empty);
+        GUI.DrawTexture(new Rect(panelX, panelY, panelWidth, panelHeight), Texture2D.whiteTexture);
         GUI.color = mint;
         GUI.skin.label.alignment = TextAnchor.MiddleCenter;
         GUI.skin.label.fontSize = 25;
@@ -178,17 +186,18 @@ public class DungeonDemoHud : MonoBehaviour
         GUI.skin.label.alignment = TextAnchor.UpperLeft;
         GUI.skin.label.fontSize = 18;
         GUI.Label(new Rect(x, y - 30f, 350f, 24f), $"회수한 전리품  {run.PendingLootItems.Count}개");
-
+        pendingLootScroll = GUI.BeginScrollView(new Rect(x, y, 365f, 350f), pendingLootScroll,
+            new Rect(0f, 0f, 345f, run.PendingLootItems.Count * 132f));
         for (int i = 0; i < run.PendingLootItems.Count; i++)
         {
             LootDefinition loot = run.PendingLootItems[i];
-            Rect card = new Rect(x, y + i * 132f, 350f, 115f);
+            Rect card = new Rect(0f, i * 132f, 345f, 115f);
             bool rotated = rotatedLoot.Contains(loot);
             LootDefinition displayLoot = rotated ? loot.RotatedClockwise() : loot;
             int width = displayLoot.Width;
             int height = displayLoot.Height;
             GUI.color = i == draggingLootIndex ? new Color(.28f, .38f, .5f, 1f) : new Color(.12f, .16f, .24f, 1f);
-            GUI.Box(card, string.Empty);
+            GUI.DrawTexture(card, Texture2D.whiteTexture);
             GUI.color = Color.white;
             GUI.skin.label.fontSize = 18;
             GUI.Label(new Rect(card.x + 14f, card.y + 12f, 195f, 25f), loot.Name);
@@ -208,18 +217,27 @@ public class DungeonDemoHud : MonoBehaviour
             Rect rotateButton = new Rect(card.x + 14f, card.y + 72f, 66f, 26f);
             Rect discardButton = new Rect(card.x + 87f, card.y + 72f, 70f, 26f);
             if (GUI.Button(rotateButton, "회전")) ToggleRotation(loot);
-            if (GUI.Button(discardButton, "포기")) run.DiscardPendingLoot(i);
-            HandleDragStart(i, card, rotateButton, discardButton);
+            if (GUI.Button(discardButton, "포기"))
+            {
+                rotatedLoot.Remove(loot);
+                run.DiscardPendingLoot(i);
+                draggingLootIndex = -1; draggingStoredItemId = 0;
+                break;
+            }
+            HandleDragStart(i, card, rotateButton, discardButton, new Vector2(x, y) - pendingLootScroll, new Rect(x, y, 345f, 350f));
         }
+        GUI.EndScrollView();
     }
 
-    private void HandleDragStart(int index, Rect card, Rect rotateButton, Rect discardButton)
+    private void HandleDragStart(int index, Rect card, Rect rotateButton, Rect discardButton, Vector2 screenOffset, Rect viewport)
     {
         Event current = Event.current;
         if (current.type != EventType.MouseDown || current.button != 0 || !card.Contains(current.mousePosition)) return;
+        if (!viewport.Contains(current.mousePosition + screenOffset)) return;
         if (rotateButton.Contains(current.mousePosition) || discardButton.Contains(current.mousePosition)) return;
         draggingLootIndex = index;
-        dragMousePosition = current.mousePosition;
+        draggingStoredItemId = 0;
+        dragMousePosition = current.mousePosition + screenOffset;
         current.Use();
     }
 
@@ -228,6 +246,7 @@ public class DungeonDemoHud : MonoBehaviour
         Event current = Event.current;
         if (current.type != EventType.MouseDown || current.button != 0 || !cell.Contains(current.mousePosition)) return;
         draggingStoredItemId = itemId;
+        draggingLootIndex = -1;
         dragMousePosition = current.mousePosition;
         current.Use();
     }
@@ -248,7 +267,7 @@ public class DungeonDemoHud : MonoBehaviour
         {
             int column = Mathf.FloorToInt((current.mousePosition.x - bagGrid.x) / 54f);
             int row = Mathf.FloorToInt((current.mousePosition.y - bagGrid.y) / 54f);
-            if (draggingLootIndex >= 0)
+            if (draggingLootIndex >= 0 && draggingLootIndex < run.PendingLootItems.Count)
             {
                 LootDefinition loot = run.PendingLootItems[draggingLootIndex];
                 run.TryPlacePendingLoot(draggingLootIndex, column, row, rotatedLoot.Contains(loot));
@@ -290,7 +309,6 @@ public class DungeonDemoHud : MonoBehaviour
         float cellHeight = area.height / loot.Height;
         foreach (Vector2Int cell in loot.OccupiedCells)
         {
-            GUI.color = Color.white;
             GUI.DrawTexture(new Rect(area.x + cell.x * cellWidth, area.y + cell.y * cellHeight,
                 cellWidth - 3f, cellHeight - 3f), Texture2D.whiteTexture);
         }
@@ -303,7 +321,7 @@ public class DungeonDemoHud : MonoBehaviour
         if (string.IsNullOrEmpty(prompt)) return;
         GUI.skin.label.alignment = TextAnchor.MiddleCenter;
         GUI.color = new Color(1f, .86f, .35f);
-        GUI.Label(new Rect(Screen.width * .5f - 230f, Screen.height - 78, 460f, 26f), prompt);
+        GUI.Label(new Rect(GameGuiScope.Width * .5f - 230f, GameGuiScope.Height - 78, 460f, 26f), prompt);
     }
 
     private void DrawToast()
@@ -311,16 +329,16 @@ public class DungeonDemoHud : MonoBehaviour
         if (string.IsNullOrEmpty(run.Toast)) return;
         GUI.color = new Color(.85f, .96f, 1f);
         GUI.skin.label.alignment = TextAnchor.UpperLeft;
-        GUI.Label(new Rect(16, Screen.height - 42, Screen.width - 32, 28), run.Toast);
+        GUI.Label(new Rect(16, GameGuiScope.Height - 42, GameGuiScope.Width - 32, 28), run.Toast);
     }
 
     private void DrawSkillCheck(DismantleSession session)
     {
         float width = 560f;
-        float x = (Screen.width - width) * .5f;
-        float y = Screen.height - 220f;
+        float x = (GameGuiScope.Width - width) * .5f;
+        float y = GameGuiScope.Height - 220f;
         GUI.color = new Color(.025f, .04f, .07f, .96f);
-        GUI.Box(new Rect(x, y, width, 180), string.Empty);
+        GUI.DrawTexture(new Rect(x, y, width, 180), Texture2D.whiteTexture);
         GUI.color = Color.white;
         GUI.skin.label.alignment = TextAnchor.MiddleCenter;
         GUI.skin.label.fontSize = 19;
@@ -338,14 +356,14 @@ public class DungeonDemoHud : MonoBehaviour
     private void DrawResult()
     {
         GUI.color = new Color(.02f, .04f, .07f, .94f);
-        GUI.Box(new Rect(Screen.width * .5f - 250f, Screen.height * .5f - 95f, 500f, 190f), string.Empty);
+        GUI.DrawTexture(new Rect(GameGuiScope.Width * .5f - 250f, GameGuiScope.Height * .5f - 95f, 500f, 190f), Texture2D.whiteTexture);
         GUI.color = mint;
         GUI.skin.label.alignment = TextAnchor.MiddleCenter;
         GUI.skin.label.fontSize = 29;
-        GUI.Label(new Rect(Screen.width * .5f - 230f, Screen.height * .5f - 56f, 460f, 40f), "RUN COMPLETE");
+        GUI.Label(new Rect(GameGuiScope.Width * .5f - 230f, GameGuiScope.Height * .5f - 56f, 460f, 40f), "RUN COMPLETE");
         GUI.color = Color.white;
         GUI.skin.label.fontSize = 18;
-        GUI.Label(new Rect(Screen.width * .5f - 225f, Screen.height * .5f - 5f, 450f, 54f), $"{run.Inventory.TotalValue}G 상당의 전리품을 회수했습니다.\n[E]를 눌러 마을로 돌아갑니다.");
+        GUI.Label(new Rect(GameGuiScope.Width * .5f - 225f, GameGuiScope.Height * .5f - 5f, 450f, 54f), $"{run.Inventory.TotalValue}G 상당의 전리품을 회수했습니다.\n[E]를 눌러 마을로 돌아갑니다.");
     }
 
     private static Color LootColor(int id) => Color.HSVToRGB((id * .19f) % 1f, .62f, .9f);

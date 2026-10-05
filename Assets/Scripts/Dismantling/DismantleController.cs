@@ -2,18 +2,21 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// ÇØÃ¼ ÀÛ¾÷ÀÇ ÀüÃ¼ »óÅÂ¸¦ °ü¸®ÇÕ´Ï´Ù.
+/// í•´ì²´ ì‘ì—…ì˜ ì „ì²´ ìƒíƒœë¥¼ ê´€ë¦¬í•©ë‹ˆë‹¤.
 /// 
-/// ÇöÀç ´Ü°è¿¡¼­´Â
-/// - ÇØÃ¼ UI ¿­±â
-/// - ÇØÃ¼ UI ´İ±â
-/// ¸¸ ´ã´çÇÕ´Ï´Ù.
+/// í˜„ì¬ ë‹¨ê³„ì—ì„œëŠ”
+/// - í•´ì²´ UI ì—´ê¸°
+/// - í•´ì²´ UI ë‹«ê¸°
+/// ë§Œ ë‹´ë‹¹í•©ë‹ˆë‹¤.
 /// 
-/// ´ÙÀ½ ´Ü°è¿¡¼­ Skill Check ·ÎÁ÷À» ¿©±â¿¡ Ãß°¡ÇÕ´Ï´Ù.
+/// ë‹¤ìŒ ë‹¨ê³„ì—ì„œ Skill Check ë¡œì§ì„ ì—¬ê¸°ì— ì¶”ê°€í•©ë‹ˆë‹¤.
 /// </summary>
 public class DismantleController : MonoBehaviour
 {
     public static DismantleController Instance { get; private set; }
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetInstance() => Instance = null;
 
     [Header("UI")]
     [SerializeField]
@@ -29,6 +32,7 @@ public class DismantleController : MonoBehaviour
 
     private void Awake()
     {
+        if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
 
         if (dismantlePanel != null)
@@ -39,13 +43,13 @@ public class DismantleController : MonoBehaviour
 
     private void Update()
     {
-        if (!isDismantling)
+        if (!isDismantling || GameShell.IsGameplayInputBlocked || Time.timeScale <= 0f)
             return;
 
         if (Keyboard.current == null)
             return;
 
-        // ÇØÃ¼ ÀÛ¾÷ Ãë¼Ò
+        // í•´ì²´ ì‘ì—… ì·¨ì†Œ
         if (Keyboard.current.escapeKey.wasPressedThisFrame)
         {
             CloseDismantle();
@@ -53,23 +57,24 @@ public class DismantleController : MonoBehaviour
     }
 
     /// <summary>
-    /// ÇØÃ¼ ÀÛ¾÷À» ½ÃÀÛÇÕ´Ï´Ù.
+    /// í•´ì²´ ì‘ì—…ì„ ì‹œì‘í•©ë‹ˆë‹¤.
     /// </summary>
     public void OpenDismantle()
     {
-        if (isDismantling)
+        if (isDismantling || !isActiveAndEnabled || GameShell.IsGameplayInputBlocked
+            || dismantlePanel == null || playerMovement == null)
             return;
 
         isDismantling = true;
 
         dismantlePanel.SetActive(true);
 
-        // ÇØÃ¼ Áß¿¡´Â ÇÃ·¹ÀÌ¾î ÀÌµ¿À» ¸·½À´Ï´Ù.
+        // í•´ì²´ ì¤‘ì—ëŠ” í”Œë ˆì´ì–´ ì´ë™ì„ ë§‰ìŠµë‹ˆë‹¤.
         playerMovement.SetMovementEnabled(false);
     }
 
     /// <summary>
-    /// ÇØÃ¼ ÀÛ¾÷À» Á¾·áÇÕ´Ï´Ù.
+    /// í•´ì²´ ì‘ì—…ì„ ì¢…ë£Œí•©ë‹ˆë‹¤.
     /// </summary>
     public void CloseDismantle()
     {
@@ -78,8 +83,11 @@ public class DismantleController : MonoBehaviour
 
         isDismantling = false;
 
-        dismantlePanel.SetActive(false);
+        if (dismantlePanel != null) dismantlePanel.SetActive(false);
 
-        playerMovement.SetMovementEnabled(true);
+        if (playerMovement != null) playerMovement.SetMovementEnabled(true);
     }
+
+    private void OnDisable() => CloseDismantle();
+    private void OnDestroy() { if (Instance == this) Instance = null; }
 }

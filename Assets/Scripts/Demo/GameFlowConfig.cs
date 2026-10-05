@@ -5,9 +5,12 @@ public sealed class GameFlowConfig : ScriptableObject
 {
     private static GameFlowConfig active;
     [Header("Scenes")]
+    public string mainMenuSceneName = "MainMenu";
     public string townSceneName = "Town";
     public string dungeonSceneName = "Dungeon";
     public string dungeonTestSceneName = "Dungeon_Test";
+    [Header("Save Slots")]
+    [Min(1)] public int manualSaveSlotCount = 10;
     [Header("Interaction Ranges")]
     [Min(.1f)] public float corpseRange = 1.25f;
     [Min(.1f)] public float exitRange = 1.15f;

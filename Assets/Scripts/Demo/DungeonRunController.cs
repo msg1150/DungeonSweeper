@@ -9,8 +9,10 @@ public class DungeonRunController : MonoBehaviour
     public static DungeonRunController Instance { get; private set; }
 
     private readonly List<CorpseRunData> corpses = new();
+    private readonly List<EnemyAgent> enemies = new();
     private readonly GridInventory inventory = new();
     private readonly List<LootDefinition> pendingLoot = new();
+    private readonly HashSet<Vector2Int> discoveredCells = new();
     private PlayerMovement movement;
     private Rigidbody2D playerBody;
     private Transform player;
@@ -22,28 +24,37 @@ public class DungeonRunController : MonoBehaviour
     private string toast;
     private float toastTimer;
     private bool hasEscaped;
+    private bool isDead;
     private bool lootPlacementOpen;
 
     public GridInventory Inventory => inventory;
     public DismantleSession ActiveSession => dismantleSession;
     public string ActiveCorpseName => activeCorpse?.Name;
-    public string Toast => toast;
+    public string Toast => toastTimer > 0f ? toast : null;
     public bool HasEscaped => hasEscaped;
+    public bool IsRunActive => enabled && !hasEscaped && !isDead;
     public Transform Player => player;
     public IReadOnlyList<LootDefinition> PendingLootItems => pendingLoot;
     public LootDefinition PendingLoot => pendingLoot.Count > 0 ? pendingLoot[0] : null;
     public bool IsLootPlacementOpen => lootPlacementOpen;
     public PlayerHealth PlayerHealth => playerHealth;
 
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetInstance() => Instance = null;
+
     private void Awake()
     {
+        if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
-        FindExistingPlayer();
+        DungeonSaveData saved = GameSession.TakeDungeonSave();
+        if (!FindExistingPlayer()) return;
         ClearLegacyDungeonGeometry();
-        DungeonLayoutFactory.CreateLayout();
+        DungeonLayoutFactory.CreateLayout(saved?.layoutIndex ?? -1);
         DungeonVisionFog legacyWorldFog = FindAnyObjectByType<DungeonVisionFog>();
         if (legacyWorldFog != null) legacyWorldFog.gameObject.SetActive(false);
-        BuildDemoWorld();
+        if (saved == null) BuildDemoWorld();
+        else RestoreWorld(saved);
+        DiscoverAroundPlayer();
 
         DungeonDemoHud hud = new GameObject("Dungeon Demo HUD").AddComponent<DungeonDemoHud>();
         hud.Initialize(this);
@@ -52,14 +63,13 @@ public class DungeonRunController : MonoBehaviour
 
     private void Update()
     {
-        if (toastTimer > 0f) toastTimer -= Time.deltaTime;
-        if (Keyboard.current == null) return;
+        if (toastTimer > 0f) toastTimer -= Time.unscaledDeltaTime;
+        if (isDead || GameShell.IsGameplayInputBlocked || Keyboard.current == null) return;
         if (hasEscaped)
         {
             if (Keyboard.current.eKey.wasPressedThisFrame)
             {
-                TownProgress.BankRun(inventory.TotalValue, inventory.ContainsShape(TownProgress.ContractTarget));
-                SceneManager.LoadScene(GameFlowConfig.Active.townSceneName);
+                if (!GameSession.ReturnToTown(out string error)) Say(error, 999f);
             }
             return;
         }
@@ -76,14 +86,28 @@ public class DungeonRunController : MonoBehaviour
             TryInteract();
     }
 
-    private void FindExistingPlayer()
+    private void LateUpdate() { if (IsRunActive) DiscoverAroundPlayer(); }
+
+    public bool IsCellDiscovered(int x, int y) => discoveredCells.Contains(new Vector2Int(x, y));
+
+    private void DiscoverAroundPlayer()
+    {
+        if (player == null) return;
+        Vector2Int center = DungeonLayoutFactory.WorldToCell(player.position);
+        for (int x = Mathf.Max(0, center.x - 3); x <= Mathf.Min(DungeonLayoutFactory.Width - 1, center.x + 3); x++)
+        for (int y = Mathf.Max(0, center.y - 3); y <= Mathf.Min(DungeonLayoutFactory.Height - 1, center.y + 3); y++)
+            if (DungeonLayoutFactory.IsWalkableCell(x, y) && Mathf.Abs(x - center.x) + Mathf.Abs(y - center.y) <= 3)
+                discoveredCells.Add(new Vector2Int(x, y));
+    }
+
+    private bool FindExistingPlayer()
     {
         movement = FindAnyObjectByType<PlayerMovement>();
         if (movement == null)
         {
-            Debug.LogError("Dungeon_Test requires its existing PlayerMovement component.");
+            Debug.LogError("The dungeon scene requires a PlayerMovement component.");
             enabled = false;
-            return;
+            return false;
         }
 
         player = movement.transform;
@@ -102,6 +126,7 @@ public class DungeonRunController : MonoBehaviour
         if (oldInteractor != null) oldInteractor.enabled = false;
         DismantleController oldDismantle = FindAnyObjectByType<DismantleController>();
         if (oldDismantle != null) oldDismantle.enabled = false;
+        return true;
     }
 
     // Dungeon_Test에 남아 있던 테스트용 벽/배경은 새 런타임 레이아웃과 겹치므로 사용하지 않는다.
@@ -134,7 +159,7 @@ public class DungeonRunController : MonoBehaviour
             DismantleDifficulty difficulty = monster.attackStyle == MonsterAttackStyle.ClubSwing ? new DismantleDifficulty(4, 3, 1.12f, .16f) : standard;
             corpses.Add(factory.CreateCorpse($"{monster.displayName} 시체", DungeonLayoutFactory.RandomFloorPosition(5f + i * 6f), difficulty, i, monster.RollLoot()));
             DungeonLayoutFactory.RandomPatrolPoints(7f + i * 5f, out Vector2 a, out Vector2 b);
-            factory.CreateEnemy(monster, player, a, b);
+            enemies.Add(factory.CreateEnemy(monster, player, a, b));
         }
 
         factory.CreateExitMarker("입구", entrance, new Color(.25f, .55f, 1f), false);
@@ -149,7 +174,8 @@ public class DungeonRunController : MonoBehaviour
         if (corpse != null)
         {
             activeCorpse = corpse;
-            dismantleSession = new DismantleSession(corpse.Difficulty);
+            // Cancelling pauses this corpse's work; it does not erase damage or progress.
+            dismantleSession = corpse.Session;
             movement.SetMovementEnabled(false);
             Say($"{corpse.Name} 해체 시작. 초록색 영역에서 [E]를 누르세요.");
             return;
@@ -187,6 +213,7 @@ public class DungeonRunController : MonoBehaviour
         }
         if (Keyboard.current.escapeKey.wasPressedThisFrame)
         {
+            GameShell.ConsumeGameplayEscape();
             EndDismantling("작업을 중단했습니다.");
             return;
         }
@@ -210,6 +237,7 @@ public class DungeonRunController : MonoBehaviour
         }
         else if (dismantleSession.IsDestroyed)
         {
+            GameSession.RequestAutosave();
             activeCorpse.MarkProcessed();
             EndDismantling("시체가 완전히 훼손되어 전리품을 잃었습니다.");
         }
@@ -235,7 +263,7 @@ public class DungeonRunController : MonoBehaviour
 
     public void NotifyPlayerCaught()
     {
-        if (hasEscaped) return;
+        if (!IsRunActive) return;
         if (dismantleSession != null) EndDismantling("몬스터가 접근해 작업을 취소했습니다!");
         player.position = entrance + new Vector2(.7f, 0f);
         if (playerBody != null) playerBody.linearVelocity = Vector2.zero;
@@ -244,12 +272,14 @@ public class DungeonRunController : MonoBehaviour
 
     public void HandlePlayerDeath()
     {
-        if (hasEscaped) return;
+        if (!IsRunActive) return;
+        isDead = true;
+        movement.SetMovementEnabled(false);
         Time.timeScale = 1f;
         pendingLoot.Clear();
         inventory.Clear();
         TownProgress.FailRun();
-        SceneManager.LoadScene(GameFlowConfig.Active.townSceneName);
+        if (!GameSession.ReturnToTown(out string error)) Say(error, 999f);
     }
 
     public string GetContextPrompt()
@@ -264,7 +294,7 @@ public class DungeonRunController : MonoBehaviour
 
     public bool TryPlacePendingLoot(int lootIndex, int gridX, int gridY, bool rotated)
     {
-        if (lootIndex < 0 || lootIndex >= pendingLoot.Count) return false;
+        if (!IsRunActive || !lootPlacementOpen || lootIndex < 0 || lootIndex >= pendingLoot.Count) return false;
         LootDefinition loot = pendingLoot[lootIndex];
         LootDefinition placement = rotated ? loot.RotatedClockwise() : loot;
         if (!inventory.TryPlace(placement, gridX, gridY))
@@ -279,7 +309,7 @@ public class DungeonRunController : MonoBehaviour
 
     public void DiscardPendingLoot(int lootIndex)
     {
-        if (lootIndex < 0 || lootIndex >= pendingLoot.Count) return;
+        if (!IsRunActive || !lootPlacementOpen || lootIndex < 0 || lootIndex >= pendingLoot.Count) return;
         LootDefinition loot = pendingLoot[lootIndex];
         pendingLoot.RemoveAt(lootIndex);
         if (pendingLoot.Count == 0) CloseLootPlacement($"{loot.Name}을(를) 포기했습니다.");
@@ -287,6 +317,7 @@ public class DungeonRunController : MonoBehaviour
 
     public bool TryMoveStoredLoot(int itemId, int gridX, int gridY)
     {
+        if (!IsRunActive) return false;
         if (!inventory.TryMove(itemId, gridX, gridY))
         {
             Say("그 위치에는 전리품을 옮길 수 없습니다.");
@@ -297,9 +328,12 @@ public class DungeonRunController : MonoBehaviour
 
     private void FinishRun(string message)
     {
+        if (!IsRunActive) return;
         hasEscaped = true;
         movement.SetMovementEnabled(false);
         if (playerBody != null) playerBody.linearVelocity = Vector2.zero;
+        // Commit the reward when escape succeeds, even if the result screen is closed.
+        TownProgress.BankRun(inventory.TotalValue, inventory.ContainsShape(TownProgress.ContractTarget));
         Say(message, 999f);
     }
 
@@ -314,6 +348,7 @@ public class DungeonRunController : MonoBehaviour
 
     private void FinishLootRoll()
     {
+        GameSession.RequestAutosave();
         if (pendingLoot.Count > 0) OpenLootPlacement();
         else
         {
@@ -328,11 +363,83 @@ public class DungeonRunController : MonoBehaviour
         Time.timeScale = 1f;
         movement.SetMovementEnabled(true);
         Say(message);
+        GameSession.RequestAutosave();
+    }
+
+    public DungeonSaveData CaptureSave()
+    {
+        DungeonSaveData data = new()
+        {
+            layoutIndex = DungeonLayoutFactory.LayoutIndex, health = playerHealth.Current,
+            playerPosition = player.position, specialGate = specialGate,
+            activeCorpseIndex = activeCorpse == null ? -1 : corpses.IndexOf(activeCorpse),
+            lootPlacementOpen = lootPlacementOpen, inventory = inventory.Capture(), totalValue = inventory.TotalValue,
+            discoveredCells = new List<Vector2Int>(discoveredCells), motion = movement.Capture(),
+            invulnerabilitySeconds = playerHealth.RemainingInvulnerability
+        };
+        foreach (CorpseRunData corpse in corpses)
+        {
+            CorpseSaveData state = new()
+            {
+                name = corpse.Name, monsterIndex = corpse.MonsterIndex, position = corpse.Visual.transform.position,
+                requiredSuccesses = corpse.Difficulty.RequiredSuccesses, maxFailures = corpse.Difficulty.MaxFailures,
+                pointerSpeed = corpse.Difficulty.PointerSpeed, windowSize = corpse.Difficulty.SuccessWindowSize,
+                processed = corpse.IsProcessed, session = corpse.CaptureSession()
+            };
+            foreach (LootDefinition loot in corpse.Loot) state.loot.Add(LootSaveData.Capture(loot));
+            data.corpses.Add(state);
+        }
+        foreach (EnemyAgent enemy in enemies) if (enemy != null) data.enemies.Add(enemy.Capture());
+        foreach (LootDefinition loot in pendingLoot) data.pendingLoot.Add(LootSaveData.Capture(loot));
+        return data;
+    }
+
+    private void RestoreWorld(DungeonSaveData data)
+    {
+        DungeonWorldFactory factory = new();
+        foreach (CorpseSaveData state in data.corpses)
+        {
+            List<LootDefinition> loot = new();
+            foreach (LootSaveData item in state.loot) loot.Add(item.Restore());
+            CorpseRunData corpse = factory.CreateCorpse(state.name, state.position,
+                new DismantleDifficulty(state.requiredSuccesses, state.maxFailures, state.pointerSpeed, state.windowSize),
+                state.monsterIndex, loot.ToArray());
+            corpse.RestoreSession(state.session);
+            if (state.processed) corpse.MarkProcessed();
+            corpses.Add(corpse);
+        }
+        foreach (EnemySaveData state in data.enemies)
+        {
+            EnemyAgent enemy = factory.CreateEnemy(state.definition, player, state.position, state.roamTarget);
+            enemy.Restore(state);
+            enemies.Add(enemy);
+        }
+        specialGate = data.specialGate;
+        factory.CreateExitMarker("입구", entrance, new Color(.25f, .55f, 1f), false);
+        factory.CreateExitMarker("특수 탈출 게이트", specialGate, new Color(.75f, .3f, 1f), true);
+        inventory.Restore(data.inventory, data.totalValue);
+        foreach (LootSaveData loot in data.pendingLoot) pendingLoot.Add(loot.Restore());
+        player.position = data.playerPosition;
+        if (playerBody != null) { playerBody.position = data.playerPosition; playerBody.linearVelocity = Vector2.zero; }
+        playerHealth.Restore(data.health, data.invulnerabilitySeconds);
+        movement.Restore(data.motion);
+        if (data.discoveredCells != null) foreach (Vector2Int cell in data.discoveredCells) discoveredCells.Add(cell);
+        if (data.activeCorpseIndex >= 0)
+        {
+            activeCorpse = corpses[data.activeCorpseIndex];
+            dismantleSession = activeCorpse.Session;
+            movement.SetMovementEnabled(false);
+        }
+        if (data.lootPlacementOpen) OpenLootPlacement();
     }
 
     private void OnDestroy()
     {
-        if (lootPlacementOpen) Time.timeScale = 1f;
+        if (Instance == this)
+        {
+            if (lootPlacementOpen) Time.timeScale = 1f;
+            Instance = null;
+        }
     }
 
     private void Say(string message, float duration = 4.5f)

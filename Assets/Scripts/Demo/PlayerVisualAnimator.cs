@@ -51,7 +51,7 @@ public sealed class PlayerVisualAnimator : MonoBehaviour
 
     private void LateUpdate()
     {
-        if (visual == null) return;
+        if (visual == null || Time.timeScale <= 0f || GameShell.IsGameplayInputBlocked) return;
         PlayerVisualProfile profile = PlayerVisualProfile.Active;
         Vector2 velocity = movement != null ? movement.Velocity : body != null ? body.linearVelocity : Vector2.zero;
         if (velocity.x < -.02f) visualRenderer.flipX = true;

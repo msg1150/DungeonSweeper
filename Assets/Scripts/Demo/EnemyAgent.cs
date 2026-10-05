@@ -23,7 +23,7 @@ public class EnemyAgent : MonoBehaviour
         definition = data;
         visual = animator;
         roamTarget = b;
-        nextRoamDecision = Random.Range(1.5f, 3.5f);
+        nextRoamDecision = Time.time + Random.Range(1.5f, 3.5f);
     }
 
     /// <summary>해체 실패 같은 소리를 들으면 마지막 소리 위치를 조사한다.</summary>
@@ -36,7 +36,8 @@ public class EnemyAgent : MonoBehaviour
 
     private void Update()
     {
-        if (player == null || definition == null || DungeonRunController.Instance == null || Time.timeScale == 0f) return;
+        if (player == null || definition == null || DungeonRunController.Instance == null
+            || !DungeonRunController.Instance.IsRunActive || GameShell.IsGameplayInputBlocked || Time.timeScale == 0f) return;
 
         if (attackTimer > 0f)
         {
@@ -94,6 +95,28 @@ public class EnemyAgent : MonoBehaviour
             return false; // 활성화된 레이아웃 벽이 먼저 닿으면 시야가 막힌다.
         }
         return true;
+    }
+
+    public EnemySaveData Capture() => new()
+    {
+        definition = definition, position = transform.position, roamTarget = roamTarget,
+        investigationTarget = investigationTarget, attackCooldown = attackCooldown, attackTimer = attackTimer,
+        roamSeconds = Mathf.Max(0f, nextRoamDecision - Time.time),
+        investigationSeconds = Mathf.Max(0f, investigationUntil - Time.time),
+        damageApplied = damageApplied, wasChasing = wasChasing
+    };
+
+    public void Restore(EnemySaveData state)
+    {
+        transform.position = state.position;
+        roamTarget = state.roamTarget;
+        investigationTarget = state.investigationTarget;
+        attackCooldown = Mathf.Max(0f, state.attackCooldown);
+        attackTimer = Mathf.Max(0f, state.attackTimer);
+        nextRoamDecision = Time.time + Mathf.Max(0f, state.roamSeconds);
+        investigationUntil = Time.time + Mathf.Max(0f, state.investigationSeconds);
+        damageApplied = state.damageApplied;
+        wasChasing = state.wasChasing;
     }
 
 }

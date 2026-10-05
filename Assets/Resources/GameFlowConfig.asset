@@ -12,6 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 091f6a8f0ad45094a8d6a40ca38406da, type: 3}
   m_Name: GameFlowConfig
   m_EditorClassIdentifier: Assembly-CSharp::GameFlowConfig
+  mainMenuSceneName: MainMenu
+  manualSaveSlotCount: 10
   townSceneName: Town
   dungeonSceneName: Dungeon
   dungeonTestSceneName: Dungeon_Test

@@ -10,6 +10,8 @@ public class TownHubController : MonoBehaviour
     private Transform guild;
     private Transform supplyShop;
     private string toast;
+    private float toastTimer;
+    private int viewportWidth, viewportHeight;
 
     private void Awake()
     {
@@ -19,42 +21,51 @@ public class TownHubController : MonoBehaviour
         guild = GameObject.Find("Salvager Guild")?.transform;
         supplyShop = GameObject.Find("Supply Shop")?.transform;
         if (player != null) PlayerVisualAnimator.Ensure(player.gameObject);
+        if (player != null && GameSession.TakeTownPosition(out Vector2 restoredPosition))
+        {
+            player.position = restoredPosition;
+            Rigidbody2D body = player.GetComponent<Rigidbody2D>();
+            if (body != null) body.position = restoredPosition;
+        }
     }
 
     private void Update()
     {
-        if (player == null || Keyboard.current == null || !Keyboard.current.eKey.wasPressedThisFrame) return;
+        if (toastTimer > 0f) toastTimer -= Time.unscaledDeltaTime;
+        if (GameShell.IsGameplayInputBlocked || player == null || Keyboard.current == null || !Keyboard.current.eKey.wasPressedThisFrame) return;
         GameFlowConfig flow = GameFlowConfig.Active;
         if (IsNear(dungeonEntrance, flow.townGateRange))
         {
-            SceneManager.LoadScene(flow.dungeonSceneName);
+            if (!GameSession.EnterDungeon(out string error)) Say(error);
             return;
         }
         if (IsNear(guild, flow.townGuildRange))
         {
-            toast = TownProgress.AcceptContract()
+            Say(TownProgress.AcceptContract()
                 ? $"의뢰 수락: {TownProgress.ContractTargetName} 회수 시 +{TownProgress.ActiveContractBonus}G"
-                : $"진행 중 의뢰: {TownProgress.ContractTargetName} 회수 시 +{TownProgress.ActiveContractBonus}G";
+                : $"진행 중 의뢰: {TownProgress.ContractTargetName} 회수 시 +{TownProgress.ActiveContractBonus}G");
             return;
         }
         if (IsNear(supplyShop, flow.townShopRange))
-            toast = TownProgress.TryBuySupplyKit() ? "해체 보급 도구를 구매했습니다." : "보급 도구는 25G입니다. 회수품을 정산하세요.";
+            Say(TownProgress.TryBuySupplyKit() ? "해체 보급 도구를 구매했습니다." : "보급 도구는 25G입니다. 회수품을 정산하세요.");
     }
 
     private void OnGUI()
     {
-        DrawPanel(new Rect(18, 16, 520, TownProgress.LastRunGold > 0 || TownProgress.HasAcceptedContract ? 108 : 56));
+        if (GameShell.IsGameplayInputBlocked) return;
+        using var gui = new GameGuiScope(true);
+        DrawPanel(new Rect(18, 16, 520, 72 + (TownProgress.LastRunGold > 0 ? 30 : 0) + (TownProgress.HasAcceptedContract ? 30 : 0)));
         GUI.skin.label.alignment = TextAnchor.UpperLeft;
-        GUI.skin.label.fontSize = 20;
+        GUI.skin.label.fontSize = 18;
         GUI.color = Color.white;
-        GUI.Label(new Rect(34, 27, 480, 27), $"마을 금고  {TownProgress.Gold}G    |    해체 보급 도구  {TownProgress.SupplyKits}");
+        GUI.Label(new Rect(34, 27, 480, 30), $"마을 금고  {TownProgress.Gold}G    |    해체 보급 도구  {TownProgress.SupplyKits}");
         if (TownProgress.LastRunGold > 0)
-            GUI.Label(new Rect(34, 54, 480, 25), TownProgress.LastContractBonus > 0 ? $"최근 정산  +{TownProgress.LastRunGold}G  (의뢰 보너스 +{TownProgress.LastContractBonus}G)" : $"최근 회수 정산  +{TownProgress.LastRunGold}G");
+            GUI.Label(new Rect(34, 60, 480, 30), TownProgress.LastContractBonus > 0 ? $"최근 정산  +{TownProgress.LastRunGold}G  (의뢰 보너스 +{TownProgress.LastContractBonus}G)" : $"최근 회수 정산  +{TownProgress.LastRunGold}G");
         if (TownProgress.HasAcceptedContract)
-            GUI.Label(new Rect(34, TownProgress.LastRunGold > 0 ? 79 : 54, 480, 25), $"진행 의뢰  {TownProgress.ContractTargetName} 회수  |  보너스 +{TownProgress.ActiveContractBonus}G");
-        if (!string.IsNullOrEmpty(toast))
+            GUI.Label(new Rect(34, TownProgress.LastRunGold > 0 ? 90 : 60, 480, 30), $"진행 의뢰  {TownProgress.ContractTargetName} 회수  |  보너스 +{TownProgress.ActiveContractBonus}G");
+        if (toastTimer > 0f && !string.IsNullOrEmpty(toast))
         {
-            Rect toastRect = new Rect(Screen.width * .5f - 340f, Screen.height * .72f, 680f, 68f);
+            Rect toastRect = new Rect(GameGuiScope.Width * .5f - 340f, GameGuiScope.Height * .72f, 680f, 68f);
             DrawPanel(toastRect);
             GUI.skin.label.alignment = TextAnchor.MiddleCenter;
             GUI.skin.label.fontSize = 23;
@@ -72,7 +83,7 @@ public class TownHubController : MonoBehaviour
         else if (IsNear(supplyShop, flow.townShopRange)) prompt = "[E] 해체 보급 도구 구매 (25G · 던전에서 R로 성공 1회)";
         if (prompt != null)
         {
-            Rect promptRect = new Rect(Screen.width * .5f - 260f, Screen.height - 108f, 520f, 58f);
+            Rect promptRect = new Rect(GameGuiScope.Width * .5f - 260f, GameGuiScope.Height - 108f, 520f, 58f);
             DrawPanel(promptRect, new Color(.16f, .11f, .04f, .94f));
             GUI.color = new Color(1f, .89f, .38f);
             GUI.Label(promptRect, prompt);
@@ -81,11 +92,24 @@ public class TownHubController : MonoBehaviour
 
     private bool IsNear(Transform target, float range) => player != null && target != null && Vector2.Distance(player.position, target.position) < range;
 
+    private void LateUpdate()
+    {
+        if (viewportWidth == Screen.width && viewportHeight == Screen.height) return;
+        viewportWidth = Screen.width; viewportHeight = Screen.height;
+        TownCasualVisuals.RefreshBackground();
+    }
+
+    private void Say(string message)
+    {
+        toast = message;
+        toastTimer = 4.5f;
+    }
+
     private static void DrawPanel(Rect rect, Color? color = null)
     {
         Color previous = GUI.color;
         GUI.color = color ?? new Color(.035f, .055f, .09f, .92f);
-        GUI.Box(rect, GUIContent.none);
+        GUI.DrawTexture(rect, Texture2D.whiteTexture);
         GUI.color = previous;
     }
 }

@@ -2,8 +2,8 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// ÇÃ·¹ÀÌ¾î ÁÖº¯¿¡¼­ °¡Àå °¡±î¿î »óÈ£ÀÛ¿ë ¿ÀºêÁ§Æ®¸¦ Ã£¾Æ
-/// E Å° ÀÔ·Â ½Ã »óÈ£ÀÛ¿ëÀ» ½ÇÇàÇÕ´Ï´Ù.
+/// í”Œë ˆì´ì–´ ì£¼ë³€ì—ì„œ ê°€ì¥ ê°€ê¹Œìš´ ìƒí˜¸ì‘ìš© ì˜¤ë¸Œì íŠ¸ë¥¼ ì°¾ì•„
+/// E í‚¤ ì…ë ¥ ì‹œ ìƒí˜¸ì‘ìš©ì„ ì‹¤í–‰í•©ë‹ˆë‹¤.
 /// </summary>
 public class PlayerInteractor : MonoBehaviour
 {
@@ -16,10 +16,10 @@ public class PlayerInteractor : MonoBehaviour
 
     private void Update()
     {
-        if (Keyboard.current == null)
+        if (GameShell.IsGameplayInputBlocked || Time.timeScale <= 0f || Keyboard.current == null)
             return;
 
-        // EÅ°¸¦ ´­·¶À» ¶§¸¸ ÁÖº¯ ¿ÀºêÁ§Æ®¸¦ °Ë»öÇÕ´Ï´Ù.
+        // Eí‚¤ë¥¼ ëˆŒë €ì„ ë•Œë§Œ ì£¼ë³€ ì˜¤ë¸Œì íŠ¸ë¥¼ ê²€ìƒ‰í•©ë‹ˆë‹¤.
         if (Keyboard.current.eKey.wasPressedThisFrame)
         {
             TryInteract();
@@ -50,8 +50,8 @@ public class PlayerInteractor : MonoBehaviour
                 result.transform.position
             );
 
-            // ¿©·¯ ¿ÀºêÁ§Æ®°¡ ¹üÀ§ ¾È¿¡ ÀÖ´Ù¸é
-            // °¡Àå °¡±î¿î °ÍÀ» ¼±ÅÃÇÕ´Ï´Ù.
+            // ì—¬ëŸ¬ ì˜¤ë¸Œì íŠ¸ê°€ ë²”ìœ„ ì•ˆì— ìˆë‹¤ë©´
+            // ê°€ì¥ ê°€ê¹Œìš´ ê²ƒì„ ì„ íƒí•©ë‹ˆë‹¤.
             if (distance < closestDistance)
             {
                 closestDistance = distance;
@@ -63,7 +63,7 @@ public class PlayerInteractor : MonoBehaviour
     }
 
     /// <summary>
-    /// Scene ºä¿¡¼­ »óÈ£ÀÛ¿ë ¹üÀ§¸¦ È®ÀÎÇÏ±â À§ÇÑ GizmoÀÔ´Ï´Ù.
+    /// Scene ë·°ì—ì„œ ìƒí˜¸ì‘ìš© ë²”ìœ„ë¥¼ í™•ì¸í•˜ê¸° ìœ„í•œ Gizmoì…ë‹ˆë‹¤.
     /// </summary>
     private void OnDrawGizmosSelected()
     {

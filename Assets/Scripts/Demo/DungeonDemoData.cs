@@ -29,6 +29,7 @@ public sealed class LootDefinition
 
     private LootDefinition(string name, int value, LootShape shape, Vector2Int[] cells)
     {
+        if (value < 0) throw new System.ArgumentOutOfRangeException(nameof(value));
         Name = name;
         Value = value;
         Shape = shape;
@@ -55,6 +56,8 @@ public sealed class LootDefinition
 
     private static Vector2Int[] CreateRectangle(int width, int height)
     {
+        if (width < 1 || height < 1 || width > 100 || height > 100 || (long)width * height > 1024)
+            throw new System.ArgumentOutOfRangeException(nameof(width), "Unsupported loot dimensions.");
         Vector2Int[] cells = new Vector2Int[width * height];
         int index = 0;
         for (int y = 0; y < height; y++)
@@ -74,7 +77,15 @@ public sealed class LootDefinition
             minY = Mathf.Min(minY, cell.y);
         }
         Vector2Int[] normalized = new Vector2Int[cells.Length];
-        for (int i = 0; i < cells.Length; i++) normalized[i] = cells[i] - new Vector2Int(minX, minY);
+        if (cells.Length > 1024) throw new System.ArgumentException("Too many loot cells.");
+        HashSet<Vector2Int> unique = new();
+        for (int i = 0; i < cells.Length; i++)
+        {
+            long x = (long)cells[i].x - minX, y = (long)cells[i].y - minY;
+            if (x > 100 || y > 100 || !unique.Add(new Vector2Int((int)x, (int)y)))
+                throw new System.ArgumentException("Invalid or duplicate loot cell.");
+            normalized[i] = new Vector2Int((int)x, (int)y);
+        }
         return normalized;
     }
 }
@@ -102,6 +113,11 @@ public sealed class CorpseRunData
     public DismantleDifficulty Difficulty { get; }
     public IReadOnlyList<LootDefinition> Loot { get; }
     public bool IsProcessed { get; private set; }
+    public int MonsterIndex { get; set; }
+    private DismantleSession session;
+    public DismantleSession Session => session ??= new DismantleSession(Difficulty);
+    public DismantleSaveData CaptureSession() => session?.Capture();
+    public void RestoreSession(DismantleSaveData state) => session = state == null ? null : DismantleSession.Restore(Difficulty, state);
 
     public CorpseRunData(GameObject visual, string name, DismantleDifficulty difficulty, params LootDefinition[] loot)
     {
@@ -124,7 +140,7 @@ public sealed class DismantleSession
     public int Successes { get; private set; }
     public int Failures { get; private set; }
     public float PointerPosition { get; private set; }
-    public float WindowStart { get; }
+    public float WindowStart { get; private set; }
     public bool IsInSuccessWindow => PointerPosition >= WindowStart && PointerPosition <= WindowStart + Difficulty.SuccessWindowSize;
     public bool IsComplete => Successes >= Difficulty.RequiredSuccesses;
     public bool IsDestroyed => Failures >= Difficulty.MaxFailures;
@@ -149,12 +165,31 @@ public sealed class DismantleSession
 
     public void RegisterAttempt()
     {
+        if (IsComplete || IsDestroyed) return;
         if (IsInSuccessWindow) Successes++;
         else Failures++;
     }
 
     public void AddSupplySuccess()
     {
-        if (!IsComplete) Successes++;
+        if (!IsComplete && !IsDestroyed) Successes++;
+    }
+
+    public DismantleSaveData Capture() => new()
+    {
+        successes = Successes, failures = Failures, pointer = PointerPosition,
+        windowStart = WindowStart, direction = direction
+    };
+
+    public static DismantleSession Restore(DismantleDifficulty difficulty, DismantleSaveData state)
+    {
+        return new DismantleSession(difficulty)
+        {
+            Successes = Mathf.Clamp(state.successes, 0, difficulty.RequiredSuccesses),
+            Failures = Mathf.Clamp(state.failures, 0, difficulty.MaxFailures),
+            PointerPosition = Mathf.Clamp01(state.pointer),
+            WindowStart = Mathf.Clamp(state.windowStart, 0f, 1f - difficulty.SuccessWindowSize),
+            direction = state.direction < 0f ? -1f : 1f
+        };
     }
 }

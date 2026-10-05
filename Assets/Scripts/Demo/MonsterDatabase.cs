@@ -17,9 +17,9 @@ public sealed class MonsterLootEntry
 
     public LootDefinition Roll()
     {
-        if (UnityEngine.Random.value > dropChance) return null;
-        int low = Mathf.Min(minPrice, maxPrice);
-        int high = Mathf.Max(minPrice, maxPrice);
+        if (float.IsNaN(dropChance) || dropChance <= 0f || (dropChance < 1f && UnityEngine.Random.value >= dropChance)) return null;
+        int low = Mathf.Clamp(Mathf.Min(minPrice, maxPrice), 0, int.MaxValue - 1);
+        int high = Mathf.Clamp(Mathf.Max(minPrice, maxPrice), low, int.MaxValue - 1);
         return new LootDefinition(lootName, width, height, UnityEngine.Random.Range(low, high + 1), shape);
     }
 }
@@ -40,8 +40,10 @@ public sealed class MonsterDefinition
     public LootDefinition[] RollLoot()
     {
         List<LootDefinition> result = new();
+        if (loot == null) return result.ToArray();
         foreach (MonsterLootEntry entry in loot)
         {
+            if (entry == null) continue;
             LootDefinition rolled = entry.Roll();
             if (rolled != null) result.Add(rolled);
         }

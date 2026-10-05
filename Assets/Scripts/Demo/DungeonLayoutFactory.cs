@@ -15,22 +15,23 @@ public static class DungeonLayoutFactory
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetRuntimeState()
     {
+        layoutIndex = 0;
         floorSprite = null;
         wallSprite = null;
-        RuntimeSprite.Reset();
         System.Array.Clear(floor, 0, floor.Length);
     }
 
     public static Vector2 Entrance => CellCenter(2, 1);
     public static int Width => Columns;
     public static int Height => Rows;
+    public static int LayoutIndex => layoutIndex;
     public static string LayoutName => new[] { "갈림길 저장고", "고리형 회랑", "계단식 묘실" }[layoutIndex];
 
-    public static void CreateLayout()
+    public static void CreateLayout(int savedLayoutIndex = -1)
     {
         if (GameObject.Find("Runtime Dungeon Layout") != null) return;
         System.Array.Clear(floor, 0, floor.Length);
-        BuildFloorPlan();
+        BuildFloorPlan(savedLayoutIndex);
         floorSprite = CasualArtLibrary.LoadFull("Sprites/Environment/dungeon-floor-casual", 100f);
         wallSprite = CasualArtLibrary.LoadFull("Sprites/Environment/dungeon-wall-casual", 100f);
         GameObject root = new GameObject("Runtime Dungeon Layout");
@@ -50,19 +51,33 @@ public static class DungeonLayoutFactory
 
     public static Vector2 RandomGateSpawn()
     {
-        List<Vector2> candidates = new List<Vector2>();
-        for (int x = 0; x < Columns; x++)
-        for (int y = 0; y < Rows; y++)
-            if (floor[x, y] && Vector2.Distance(CellCenter(x, y), Entrance) > 16f) candidates.Add(CellCenter(x, y));
-        return candidates[Random.Range(0, candidates.Count)];
+        return RandomFloorPosition(16f);
     }
 
     public static Vector2 RandomFloorPosition(float minimumDistance)
     {
         List<Vector2> candidates = new List<Vector2>();
+        List<Vector2> available = new List<Vector2>();
+        float farthestDistance = 0f;
         for (int x = 0; x < Columns; x++)
         for (int y = 0; y < Rows; y++)
-            if (floor[x, y] && Vector2.Distance(CellCenter(x, y), Entrance) >= minimumDistance) candidates.Add(CellCenter(x, y));
+        {
+            if (!floor[x, y]) continue;
+            Vector2 position = CellCenter(x, y);
+            float distance = Vector2.Distance(position, Entrance);
+            available.Add(position);
+            farthestDistance = Mathf.Max(farthestDistance, distance);
+            if (distance >= minimumDistance) candidates.Add(position);
+        }
+
+        // Extra monster types may request a distance beyond the map's bounds.
+        // Keep their spawns in the deeper part of the available layout instead.
+        if (candidates.Count == 0)
+            foreach (Vector2 position in available)
+                if (Vector2.Distance(position, Entrance) >= farthestDistance * .75f)
+                    candidates.Add(position);
+
+        if (candidates.Count == 0) return Entrance;
         return candidates[Random.Range(0, candidates.Count)];
     }
 
@@ -116,9 +131,9 @@ public static class DungeonLayoutFactory
         return CellCenter(step.x, step.y);
     }
 
-    private static void BuildFloorPlan()
+    private static void BuildFloorPlan(int savedLayoutIndex)
     {
-        layoutIndex = Random.Range(0, 3);
+        layoutIndex = savedLayoutIndex >= 0 && savedLayoutIndex < 3 ? savedLayoutIndex : Random.Range(0, 3);
         AddRoom(0, 0, 4, 3); // 모든 템플릿은 같은 시작 방을 공유한다.
         if (layoutIndex == 0) BuildForkVault();
         else if (layoutIndex == 1) BuildRingCorridor();
@@ -196,32 +211,13 @@ public static class DungeonLayoutFactory
         if (renderer.sprite == null) return;
         Vector2 bounds = renderer.sprite.bounds.size;
         bounds.x = Mathf.Max(.01f, bounds.x); bounds.y = Mathf.Max(.01f, bounds.y);
+        // Collider coordinates use the same local space as the sprite.
+        collider.size = bounds;
         wall.transform.localScale = new Vector3(size.x / bounds.x, size.y / bounds.y, 1f);
     }
-    private static class RuntimeSprite
-    {
-        private static Sprite value;
-        public static Sprite Value
-        {
-            get
-            {
-                if (value == null) value = Create();
-                return value;
-            }
-        }
-        public static void Reset() => value = null;
-        private static Sprite Create()
-        {
-            Texture2D texture = new Texture2D(1, 1);
-            texture.SetPixel(0, 0, Color.white);
-            texture.Apply();
-            return Sprite.Create(texture, new Rect(0, 0, 1, 1), new Vector2(.5f, .5f), 1f);
-        }
-    }
-
     private static Sprite SafeSprite(Sprite candidate)
     {
-        Sprite result = candidate != null ? candidate : RuntimeSprite.Value;
+        Sprite result = candidate != null ? candidate : CasualArtLibrary.WhiteSprite;
         if (result == null) Debug.LogError("Dungeon tile sprite creation failed; using no visual for this tile.");
         return result;
     }

@@ -9,10 +9,7 @@ public sealed class DungeonWorldFactory
 
     public DungeonWorldFactory()
     {
-        Texture2D texture = new Texture2D(1, 1) { filterMode = FilterMode.Point };
-        texture.SetPixel(0, 0, Color.white);
-        texture.Apply();
-        fallbackSprite = Sprite.Create(texture, new Rect(0, 0, 1, 1), new Vector2(.5f, .5f), 1f);
+        fallbackSprite = CasualArtLibrary.WhiteSprite;
         corpseSprites = CasualArtLibrary.LoadSheet("Sprites/Monsters/corpse-sheet", 3, 1, 180f, true);
         portalSprite = Resources.Load<Sprite>("Sprites/escape-portal");
     }
@@ -21,7 +18,7 @@ public sealed class DungeonWorldFactory
     {
         Sprite corpse = corpseSprites.Length == 0 ? fallbackSprite : corpseSprites[Mathf.Clamp(monsterIndex, 0, corpseSprites.Length - 1)];
         GameObject root = CreateSprite(name, position, new Vector2(.4f, .4f), corpse, Color.white, 2, false);
-        return new CorpseRunData(root, name, difficulty, loot);
+        return new CorpseRunData(root, name, difficulty, loot) { MonsterIndex = monsterIndex };
     }
 
     public EnemyAgent CreateEnemy(MonsterDefinition definition, Transform player, Vector2 pointA, Vector2 pointB)

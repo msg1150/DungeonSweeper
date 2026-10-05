@@ -43,7 +43,7 @@ public sealed class MonsterDatabaseEditor : Editor
                 EditorGUILayout.PropertyField(item.FindPropertyRelative("maxPrice"), new GUIContent("최대"), GUILayout.MinWidth(80));
                 EditorGUILayout.PropertyField(item.FindPropertyRelative("width"), new GUIContent("가로"), GUILayout.MinWidth(70));
                 EditorGUILayout.PropertyField(item.FindPropertyRelative("height"), new GUIContent("세로"), GUILayout.MinWidth(70));
-                if (GUILayout.Button("-", GUILayout.Width(24))) { loot.DeleteArrayElementAtIndex(j); break; }
+                if (GUILayout.Button("-", GUILayout.Width(24))) { loot.DeleteArrayElementAtIndex(j); EditorGUILayout.EndHorizontal(); break; }
                 EditorGUILayout.EndHorizontal();
             }
             if (GUILayout.Button("+ 전리품 추가")) loot.InsertArrayElementAtIndex(loot.arraySize);
