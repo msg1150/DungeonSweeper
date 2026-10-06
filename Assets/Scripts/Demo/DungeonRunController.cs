@@ -7,6 +7,9 @@ using UnityEngine.SceneManagement;
 public class DungeonRunController : MonoBehaviour
 {
     public static DungeonRunController Instance { get; private set; }
+    [Tooltip("Direct scene play override. Town entries use the selected catalog dungeon; saves restore their recorded dungeon.")]
+    public DungeonDefinition dungeonDefinition;
+    private string activeDungeonId;
 
     private readonly List<CorpseRunData> corpses = new();
     private readonly List<EnemyAgent> enemies = new();
@@ -38,6 +41,7 @@ public class DungeonRunController : MonoBehaviour
     public LootDefinition PendingLoot => pendingLoot.Count > 0 ? pendingLoot[0] : null;
     public bool IsLootPlacementOpen => lootPlacementOpen;
     public PlayerHealth PlayerHealth => playerHealth;
+    public string DungeonName => dungeonDefinition != null ? dungeonDefinition.displayName : DungeonLayoutFactory.LayoutName;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetInstance() => Instance = null;
@@ -47,11 +51,26 @@ public class DungeonRunController : MonoBehaviour
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
         DungeonSaveData saved = GameSession.TakeDungeonSave();
+        DungeonDefinition pending = GameSession.TakeDungeonDefinition();
+        if (saved == null)
+        {
+            string error = null;
+            dungeonDefinition = pending != null ? pending : dungeonDefinition != null ? dungeonDefinition : DungeonCatalog.Active?.Pick(out error);
+            if (dungeonDefinition == null || !dungeonDefinition.IsValid(out error)
+                || DungeonCatalog.Active?.FindDungeon(dungeonDefinition.dungeonId) != dungeonDefinition)
+            {
+                Debug.LogError(error ?? "Register the dungeon in Resources/DungeonCatalog.");
+                enabled = false;
+                return;
+            }
+            activeDungeonId = dungeonDefinition.dungeonId;
+        }
+        else { activeDungeonId = saved.dungeonId; dungeonDefinition = DungeonCatalog.Active?.FindDungeon(activeDungeonId); }
         Vector2Int bagSize = saved == null ? TownProgress.BagSize : new(saved.ResolvedWidth, saved.ResolvedHeight);
         inventory = new GridInventory(bagSize.x, bagSize.y);
         if (!FindExistingPlayer()) return;
         ClearLegacyDungeonGeometry();
-        DungeonLayoutFactory.CreateLayout(saved?.layoutIndex ?? -1);
+        DungeonLayoutFactory.CreateLayout(saved?.layoutIndex ?? dungeonDefinition.layoutIndex);
         DungeonVisionFog legacyWorldFog = FindAnyObjectByType<DungeonVisionFog>();
         if (legacyWorldFog != null) legacyWorldFog.gameObject.SetActive(false);
         if (saved == null) BuildDemoWorld();
@@ -150,22 +169,17 @@ public class DungeonRunController : MonoBehaviour
     private void BuildDemoWorld()
     {
         DungeonWorldFactory factory = new DungeonWorldFactory();
-        DismantleDifficulty standard = new DismantleDifficulty(3, 3, .95f, .22f);
 
         CorpseInteractable existing = FindAnyObjectByType<CorpseInteractable>();
         if (existing != null) existing.gameObject.SetActive(false);
-        List<MonsterDefinition> monsters = MonsterDatabase.Active.monsters;
-        for (int i = 0; i < monsters.Count; i++)
-        {
-            MonsterDefinition monster = monsters[i];
-            DismantleDifficulty difficulty = monster.attackStyle == MonsterAttackStyle.ClubSwing ? new DismantleDifficulty(4, 3, 1.12f, .16f) : standard;
-            corpses.Add(factory.CreateCorpse($"{monster.displayName} 시체", DungeonLayoutFactory.RandomFloorPosition(5f + i * 6f), difficulty, i, monster.RollLoot()));
-            DungeonLayoutFactory.RandomPatrolPoints(7f + i * 5f, out Vector2 a, out Vector2 b);
-            enemies.Add(factory.CreateEnemy(monster, player, a, b));
-        }
+        List<MonsterPrefab> monsters = dungeonDefinition.ExpandMonsters();
+        List<CorpsePrefab> corpsePrefabs = dungeonDefinition.ExpandCorpses();
+        DungeonPopulationPlan population = DungeonPopulationPlan.Create(corpsePrefabs.Count, monsters);
+        for (int i = 0; i < corpsePrefabs.Count; i++) corpses.Add(corpsePrefabs[i].Spawn(population.Corpses[i]));
+        for (int i = 0; i < monsters.Count; i++) enemies.Add(monsters[i].Spawn(player, population.Enemies[i], population.PatrolTargets[i]));
 
         factory.CreateExitMarker("입구", entrance, new Color(.25f, .55f, 1f), false);
-        specialGate = DungeonLayoutFactory.RandomGateSpawn();
+        specialGate = population.Gate;
         factory.CreateExitMarker("특수 탈출 게이트", specialGate, new Color(.75f, .3f, 1f), true);
 
     }
@@ -260,7 +274,7 @@ public class DungeonRunController : MonoBehaviour
     private static void AlertNearbyMonsters(Vector2 noisePosition)
     {
         foreach (EnemyAgent enemy in FindObjectsByType<EnemyAgent>())
-            enemy.HearNoise(noisePosition, DungeonTuning.Active.hearingRange);
+            enemy.HearNoise(noisePosition);
     }
 
     public void NotifyPlayerCaught()
@@ -371,7 +385,7 @@ public class DungeonRunController : MonoBehaviour
     {
         DungeonSaveData data = new()
         {
-            layoutIndex = DungeonLayoutFactory.LayoutIndex, health = playerHealth.Current,
+            dungeonId = activeDungeonId, layoutIndex = DungeonLayoutFactory.LayoutIndex, health = playerHealth.Current,
             bagWidth = inventory.Columns, bagHeight = inventory.Rows,
             playerPosition = player.position, specialGate = specialGate,
             activeCorpseIndex = activeCorpse == null ? -1 : corpses.IndexOf(activeCorpse),
@@ -383,7 +397,7 @@ public class DungeonRunController : MonoBehaviour
         {
             CorpseSaveData state = new()
             {
-                name = corpse.Name, monsterIndex = corpse.MonsterIndex, position = corpse.Visual.transform.position,
+                prefabId = corpse.PrefabId, name = corpse.Name, monsterIndex = corpse.MonsterIndex, position = corpse.Visual.transform.position,
                 requiredSuccesses = corpse.Difficulty.RequiredSuccesses, maxFailures = corpse.Difficulty.MaxFailures,
                 pointerSpeed = corpse.Difficulty.PointerSpeed, windowSize = corpse.Difficulty.SuccessWindowSize,
                 processed = corpse.IsProcessed, session = corpse.CaptureSession()
@@ -403,7 +417,9 @@ public class DungeonRunController : MonoBehaviour
         {
             List<LootDefinition> loot = new();
             foreach (LootSaveData item in state.loot) loot.Add(item.Restore());
-            CorpseRunData corpse = factory.CreateCorpse(state.name, state.position,
+            CorpseRunData corpse = !string.IsNullOrEmpty(state.prefabId)
+                ? DungeonCatalog.Active.FindCorpse(state.prefabId).Spawn(state.position, state)
+                : factory.CreateCorpse(state.name, state.position,
                 new DismantleDifficulty(state.requiredSuccesses, state.maxFailures, state.pointerSpeed, state.windowSize),
                 state.monsterIndex, loot.ToArray());
             corpse.RestoreSession(state.session);
@@ -412,7 +428,9 @@ public class DungeonRunController : MonoBehaviour
         }
         foreach (EnemySaveData state in data.enemies)
         {
-            EnemyAgent enemy = factory.CreateEnemy(state.definition, player, state.position, state.roamTarget);
+            EnemyAgent enemy = !string.IsNullOrEmpty(state.prefabId)
+                ? DungeonCatalog.Active.FindMonster(state.prefabId).Spawn(player, state.position, state.roamTarget, state.definition)
+                : factory.CreateEnemy(state.definition, player, state.position, state.roamTarget);
             enemy.Restore(state);
             enemies.Add(enemy);
         }

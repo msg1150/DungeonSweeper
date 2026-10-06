@@ -121,6 +121,7 @@ public sealed class DismantleSaveData
 [Serializable]
 public sealed class CorpseSaveData
 {
+    public string prefabId;
     public string name;
     public int monsterIndex, requiredSuccesses, maxFailures;
     public float pointerSpeed, windowSize;
@@ -133,10 +134,14 @@ public sealed class CorpseSaveData
 [Serializable]
 public sealed class EnemySaveData
 {
+    public string prefabId;
     public MonsterDefinition definition;
     public Vector2 position, roamTarget, investigationTarget;
     public float attackCooldown, attackTimer, roamSeconds, investigationSeconds;
     public bool damageApplied, wasChasing;
+    public int patrolStateVersion;
+    public Vector2 previousPatrolOrigin;
+    public bool hasPreviousPatrolOrigin, wasInvestigating;
 }
 
 [Serializable]
@@ -156,6 +161,7 @@ public sealed class PlayerMotionSaveData
 [Serializable]
 public sealed class DungeonSaveData
 {
+    public string dungeonId;
     public int bagWidth, bagHeight;
     public int ResolvedWidth => bagWidth == 0 ? GridInventory.Width : bagWidth;
     public int ResolvedHeight => bagHeight == 0 ? GridInventory.Height : bagHeight;
@@ -173,6 +179,8 @@ public sealed class DungeonSaveData
 
     public bool IsValid()
     {
+        if (!string.IsNullOrEmpty(dungeonId) && (!LootKinds.ValidId(dungeonId)
+            || DungeonCatalog.Active?.FindDungeon(dungeonId) == null)) return false;
         if (layoutIndex < 0 || layoutIndex > 2 || health <= 0 || totalValue < 0
             || !GameSaveData.Finite(playerPosition) || !GameSaveData.Finite(specialGate)
             || corpses == null || enemies == null || inventory == null || pendingLoot == null
@@ -210,6 +218,8 @@ public sealed class DungeonSaveData
                 || corpse.requiredSuccesses < 1 || corpse.maxFailures < 1
                 || !Finite(corpse.pointerSpeed) || corpse.pointerSpeed <= 0
                 || !Finite(corpse.windowSize) || corpse.windowSize <= 0 || corpse.windowSize > 1) return false;
+            if (!string.IsNullOrEmpty(corpse.prefabId) && (!LootKinds.ValidId(corpse.prefabId)
+                || DungeonCatalog.Active?.FindCorpse(corpse.prefabId) == null)) return false;
             foreach (LootSaveData loot in corpse.loot) if (loot == null || !loot.IsValid()) return false;
             DismantleSaveData session = corpse.session;
             if (session != null && (session.successes < 0 || session.failures < 0
@@ -224,13 +234,19 @@ public sealed class DungeonSaveData
         }
         if (lootPlacementOpen != (pendingLoot.Count > 0)) return false;
         foreach (EnemySaveData enemy in enemies)
-            if (enemy?.definition == null || !GameSaveData.Finite(enemy.position) || !GameSaveData.Finite(enemy.roamTarget)
+        {
+            if (enemy?.definition == null || !enemy.definition.IsValid() || !GameSaveData.Finite(enemy.position) || !GameSaveData.Finite(enemy.roamTarget)
                 || !GameSaveData.Finite(enemy.investigationTarget) || !Finite(enemy.attackCooldown)
                 || !Finite(enemy.attackTimer) || !Finite(enemy.roamSeconds) || !Finite(enemy.investigationSeconds)
-                || string.IsNullOrWhiteSpace(enemy.definition.spriteSheetResource)
+                || enemy.patrolStateVersion < 0 || enemy.patrolStateVersion > 1
+                || (enemy.hasPreviousPatrolOrigin && !GameSaveData.Finite(enemy.previousPatrolOrigin))
                 || !Finite(enemy.definition.attackAnimationSeconds) || enemy.definition.attackAnimationSeconds <= 0f
                 || !Finite(enemy.definition.attackRange) || enemy.definition.attackRange <= 0f
                 || !Finite(enemy.definition.attackCooldown) || enemy.definition.attackCooldown < 0f) return false;
+            if (!string.IsNullOrEmpty(enemy.prefabId) && (!LootKinds.ValidId(enemy.prefabId)
+                || DungeonCatalog.Active?.FindMonster(enemy.prefabId) == null)) return false;
+            if (string.IsNullOrEmpty(enemy.prefabId) && string.IsNullOrWhiteSpace(enemy.definition.spriteSheetResource)) return false;
+        }
         return true;
     }
     private static bool Finite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);

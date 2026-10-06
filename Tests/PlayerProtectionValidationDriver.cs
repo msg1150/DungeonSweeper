@@ -72,12 +72,27 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
             Check(stored.town.bagLevel == 1 && stored.town.warehouse.Count == 1 && stored.town.warehouse[0].quantity == 3
                 && stored.town.warehouse[0].unitPrice == 90 && stored.town.saleLockedKinds.Contains(LootKinds.GoblinHide),
                 "warehouse quantities price tiers sale locks and bag upgrades survive process restart");
+            Check(GameSession.LoadSlot(8, out _), "restart continues the protected town slot");
+            while (!Ready("Town")) { CheckTime(); yield return null; }
+            Call(Shell, "OnApplicationFocus", true); Call(Shell, "Resume");
+            Check(GameSession.EnterDungeon(out _, DungeonCatalog.Active.dungeons[1]), "restart enters the first dungeon after continuing town");
+            while (!Ready("Dungeon")) { CheckTime(); yield return null; }
+            Call(Shell, "OnApplicationFocus", true); Call(Shell, "OpenPause");
+            var restartedRun = DungeonRunController.Instance;
+            Check(restartedRun.PlayerHealth.Current == restartedRun.PlayerHealth.Maximum
+                && Vector2.Distance(restartedRun.Player.position, DungeonLayoutFactory.Entrance) < .2f
+                && DungeonLayoutFactory.LayoutIndex == 1, "restart starts at chosen entrance with full health");
+            DungeonPrefabChecks.CheckLive(Check);
+            Check(GameSession.LoadSlot(8, out _), "restart restores quit state after entry regression check");
+            while (!Ready("Town")) { CheckTime(); yield return null; }
             Finish(true); yield break;
         }
         Check(!Debug.isDebugBuild, "validation uses a non-development Windows build");
         Check(Ready("MainMenu") && Shell != null && !GameSession.HasActiveGame, "release starts in main menu");
         SaveProtectionChecks.Run(Check);
         ReleaseLogicChecks.Run(Check);
+        DungeonPopulationChecks.RunLayouts(Check);
+        DungeonPrefabChecks.RunAuthoring(Check);
         if (capture)
         {
             var display = GameSettings.Copy(); display.width = 1280; display.height = 720; display.fullscreen = false;
@@ -93,8 +108,10 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         while (!Ready("Town")) { CheckTime(); yield return null; }
         yield return null;
         Check(TownProgress.Gold == 0 && TownProgress.SupplyKits == 0, "release town starts with fresh progress");
+        Call(Shell, "OnApplicationFocus", true);
         Call(Shell, "Resume");
         TownEconomyChecks.Run(Check);
+        FocusPauseChecks.Run(Check);
         TownProgress.Restore(new TownProgressData { gold = 250 });
         Check(TownProgress.TryBuySupplyKit() && TownProgress.Gold == 225, "release supply transaction");
         TownProgress.AcceptContract();
@@ -106,8 +123,15 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         Check(!(bool)Call(Shell, "SaveBeforeLeaving") && Time.timeScale == 1f,
             "quit during loading defers exit without pausing the incoming scene");
         Call(Shell, "ShowNotice", string.Empty);
+        Call(Shell, "OnApplicationFocus", false);
         while (!Ready("Dungeon")) { CheckTime(); yield return null; }
         yield return null;
+        Check(Time.timeScale == 0f && !GameShell.IsMenuOpen, "release background scene load pauses without a menu");
+        Call(Shell, "OnApplicationFocus", true);
+        Check(Time.timeScale == 1f, "release background scene resumes on focus return");
+        DungeonPopulationChecks.CheckLivePopulation(Check);
+        DungeonPrefabChecks.CheckLive(Check);
+        DungeonPopulationChecks.RunPatrol(Check);
         DungeonRunController run = DungeonRunController.Instance;
         Check(run != null && run.IsRunActive && Resources.Load<Shader>("VisionOverlay") != null, "release dungeon and vision shader exist");
         Check(GameSaveService.TryLoad(-1, out var entry, out _) && entry.area == SaveArea.Dungeon, "dungeon entry checkpoint persisted");
@@ -140,8 +164,11 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         yield return null;
         run = DungeonRunController.Instance;
         Check(run.IsLootPlacementOpen && Time.timeScale == 0f && run.PendingLootItems.Count == 6, "release restores six-item loot modal and pause");
-        Call(Shell, "OnApplicationFocus", false); Call(Shell, "OpenPause"); Call(Shell, "Resume");
-        Check(Time.timeScale == 0f, "focus pause and repeated pause preserve loot pause");
+        Call(Shell, "OnApplicationFocus", false); Call(Shell, "OnApplicationFocus", true);
+        Check(Time.timeScale == 0f && run.IsLootPlacementOpen && !GameShell.IsMenuOpen,
+            "focus return keeps loot placement paused without a menu");
+        Call(Shell, "OpenPause"); Call(Shell, "OpenPause"); Call(Shell, "Resume");
+        Check(Time.timeScale == 0f, "repeated manual pause preserves loot pause");
         yield return null;
         Snapshot("release-loot-modal");
         yield return null; yield return null;
@@ -180,10 +207,11 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         yield return null;
         Check(Vector2.Distance(UnityEngine.Object.FindAnyObjectByType<PlayerMovement>().transform.position, townPosition) < .01f,
             "town return restores remembered position");
-        Call(Shell, "OnApplicationFocus", false); Call(Shell, "OpenPause");
-        Check(Time.timeScale == 0f && GameShell.IsGameplayInputBlocked, "release focus loss pauses gameplay");
-        Call(Shell, "Resume");
-        Check(Time.timeScale == 1f, "repeated pause does not lose resume time scale");
+        Call(Shell, "OnApplicationFocus", false); Call(Shell, "OnApplicationFocus", false);
+        Check(Time.timeScale == 0f && GameShell.IsGameplayInputBlocked && !GameShell.IsMenuOpen,
+            "release focus loss silently pauses gameplay");
+        Call(Shell, "OnApplicationFocus", true);
+        Check(Time.timeScale == 1f && !GameShell.IsMenuOpen, "release focus return automatically resumes");
         Check(TownProgress.TrySubmitContract(out _) && TownProgress.Gold == 345 && TownProgress.WarehouseCount == 1,
             "release guild submission consumes recovered quest loot and rewards once");
         Check(TownProgress.TrySellOne(TownProgress.GetStacks("goblin.tooth")[0].id, out _) && TownProgress.Gold == 415,
@@ -205,8 +233,9 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
             smallTown.width = 1280; smallTown.height = 720; GameSettings.Apply(smallTown, false);
             while (Screen.width != 1280 || Screen.height != 720) { CheckTime(); yield return null; }
         }
-        Call(Shell, "OnApplicationFocus", false); Call(Shell, "Resume");
-        Check(Time.timeScale == 0f && TownCommercePanel.IsOpen, "focus pause preserves warehouse pause");
+        Call(Shell, "OnApplicationFocus", false); Call(Shell, "OnApplicationFocus", true);
+        Check(Time.timeScale == 0f && TownCommercePanel.IsOpen && !GameShell.IsMenuOpen,
+            "focus return preserves warehouse pause without a menu");
         commerce.Close(); commerce.Open(TownFacility.Market); yield return null;
         Snapshot("release-market"); yield return null; yield return null;
         commerce.Close(); commerce.Open(TownFacility.Upgrades); yield return null;
@@ -256,6 +285,26 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         Check(TownProgress.TrySellOne(TownProgress.GetStacks("goblin.tooth")[0].id, out _), "release final manual sale");
         Check(GameSession.Save(8, out _), "release persistent slot written");
         Check(TownProgress.Gold == 466, "latest quit state prepared");
+        var populationTrials = DungeonPopulationChecks.CheckFreshEntries(Check, CheckTime, layout =>
+        {
+            if (!capture) return;
+            Camera.main.GetComponent<DungeonCameraFollow>().enabled = false;
+            Camera.main.transform.position = new Vector3(0, 0, -10);
+            Camera.main.orthographicSize = 10f;
+            var overlay = UnityEngine.Object.FindAnyObjectByType<DungeonVisionOverlayRenderer>();
+            if (overlay != null) overlay.gameObject.SetActive(false);
+            UnityEngine.Object.FindAnyObjectByType<DungeonDemoHud>().enabled = false;
+            Snapshot("release-spawn-layout-" + layout);
+        });
+        while (populationTrials.MoveNext()) yield return populationTrials.Current;
+        var configuredTrials = DungeonPrefabChecks.CheckConfiguredEntries(Check, CheckTime);
+        while (configuredTrials.MoveNext()) yield return configuredTrials.Current;
+        var continueTrials = ContinueEntryChecks.Run(Check, CheckTime);
+        while (continueTrials.MoveNext()) yield return continueTrials.Current;
+        Check(GameSession.LoadSlot(8, out _), "fresh-entry trials restore the original quit state");
+        while (!Ready("Town")) { CheckTime(); yield return null; }
+        yield return null;
+        Check(TownProgress.Gold == 466, "quit state remains unchanged after fresh-entry trials");
         Finish(false);
     }
 

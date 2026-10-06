@@ -19,7 +19,7 @@ public sealed class MonsterDatabaseEditor : Editor
     {
         serializedObject.Update();
         SerializedProperty monsters = serializedObject.FindProperty("monsters");
-        EditorGUILayout.HelpBox("몬스터 행과 전리품 행을 자유롭게 추가/제거할 수 있습니다. 확률은 0~1(0.35 = 35%), 가격은 최소~최대 범위에서 매번 결정됩니다.", MessageType.Info);
+        EditorGUILayout.HelpBox("기존 저장 호환과 기본 콘텐츠 생성용 데이터입니다. 새 던전의 능력치는 Assets/Prefabs/Monsters, 해체·드롭은 Assets/Prefabs/Corpses, 던전별 생성 수는 Resources/Dungeons에서 수정하세요.", MessageType.Info);
         for (int i = 0; i < monsters.arraySize; i++)
         {
             SerializedProperty m = monsters.GetArrayElementAtIndex(i);

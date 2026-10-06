@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f47fbe53a2dc4ed59136f72041d6b734, type: 3}
+  m_Name: DungeonCatalog
+  m_EditorClassIdentifier: Assembly-CSharp::DungeonCatalog
+  dungeons:
+  - {fileID: 11400000, guid: c4b12c31f724a1141b7ff1f59a9ab7d7, type: 2}
+  - {fileID: 11400000, guid: a1f5fe0dae4708248897d5254e23027d, type: 2}
+  - {fileID: 11400000, guid: bf6e96fe360c9504c842be8eb1078515, type: 2}
+  monsterPrefabs:
+  - {fileID: 51470085052934561, guid: 40cff418e9740b44a986da3b15d8db97, type: 3}
+  - {fileID: 5377609509600981122, guid: 88ea69e2ceec1814fb527b4f7842956f, type: 3}
+  - {fileID: 1790920542060373180, guid: 66a99c8a4fccf244f9499b1b8875905e, type: 3}
+  corpsePrefabs:
+  - {fileID: 1689500788646296613, guid: 10b87e3f2a1416c4d8572220c32624a1, type: 3}
+  - {fileID: 7823492119419530324, guid: 1680d2777235b1948bd9bbc113d11795, type: 3}
+  - {fileID: 5555483854383871316, guid: 056208bae4f3c4e47b214abe3d25d0b4, type: 3}

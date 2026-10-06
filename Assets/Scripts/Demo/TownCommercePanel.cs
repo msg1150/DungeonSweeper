@@ -38,7 +38,7 @@ public sealed class TownCommercePanel : MonoBehaviour
     private void OnDestroy() { if (instance == this) instance = null; }
     private void Update()
     {
-        if (open && !GameShell.IsMenuOpen && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame) Close();
+        if (open && !GameShell.IsMenuOpen && !GameShell.IsFocusInputBlocked && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame) Close();
     }
     private static void Panel(Rect rect, Color color) { GUI.color = color; GUI.DrawTexture(rect, Texture2D.whiteTexture); GUI.color = Color.white; }
     private static void Text(Rect rect, string value, int size = 17)
@@ -49,6 +49,7 @@ public sealed class TownCommercePanel : MonoBehaviour
     {
         if (!open || GameShell.IsMenuOpen) return;
         using var gui = new GameGuiScope(true);
+        GUI.enabled &= !GameShell.IsFocusInputBlocked;
         GUI.skin.button.fontSize = 16;
         Panel(new Rect(0, 0, 1280, 720), new Color(0, 0, 0, .7f));
         Panel(new Rect(150, 64, 980, 592), new Color(.035f, .055f, .09f, .99f));

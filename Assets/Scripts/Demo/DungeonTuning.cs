@@ -35,7 +35,9 @@ public sealed class DungeonTuning : ScriptableObject
     [Min(0f)] public float playerDashCooldown = 1f;
 
     [Header("Monster Movement")]
-    [Min(.1f)] public float patrolSpeed = 1.05f;
+    [Min(.1f)] public float patrolSpeed = 1.35f;
+    [Min(1f)] public float patrolTravelDistance = 10f;
+    [Min(0f)] public float patrolArrivalPause = .75f;
     [Min(.1f)] public float chaseSpeed = 2.15f;
     [Min(.1f)] public float detectionRange = 3.8f;
     [Min(.1f)] public float hearingRange = 8f;

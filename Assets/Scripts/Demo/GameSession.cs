@@ -10,6 +10,7 @@ public static class GameSession
     public static bool AutosavePending { get; private set; }
     public static double PlaySeconds { get; private set; }
     private static DungeonSaveData pendingDungeon;
+    private static DungeonDefinition pendingDefinition;
     private static bool restoreTownPosition, hasTownPosition, saveAfterSceneLoad;
     private static Vector2 townPosition;
     private static readonly List<string> completedEvents = new();
@@ -20,6 +21,7 @@ public static class GameSession
         HasActiveGame = IsLoading = AutosavePending = restoreTownPosition = hasTownPosition = saveAfterSceneLoad = false;
         PlaySeconds = 0;
         pendingDungeon = null;
+        pendingDefinition = null;
         completedEvents.Clear();
     }
 
@@ -48,7 +50,9 @@ public static class GameSession
         hasTownPosition = data.hasTownPosition;
         townPosition = data.townPosition;
         restoreTownPosition = data.area == SaveArea.Town && hasTownPosition;
-        pendingDungeon = data.dungeon;
+        // Unity's inline serialization can materialize an empty dungeon object in town saves.
+        // The saved area, not object presence, decides whether a run should be restored.
+        pendingDungeon = data.area == SaveArea.Dungeon ? data.dungeon : null;
         if (data.completedEvents != null) completedEvents.AddRange(data.completedEvents);
         Time.timeScale = 1f;
         SceneManager.LoadScene(scene);
@@ -60,10 +64,17 @@ public static class GameSession
         if (!HasActiveGame) HasActiveGame = true;
     }
 
-    public static bool EnterDungeon(out string error)
+    public static bool EnterDungeon(out string error, DungeonDefinition definition = null)
     {
         string scene = GameFlowConfig.Active.dungeonSceneName;
         if (!CanTravel(scene, out error)) return false;
+        if (definition == null) definition = DungeonCatalog.Active?.Pick(out error);
+        if (definition == null) { error ??= "던전 카탈로그 설정이 없습니다."; return false; }
+        if (DungeonCatalog.Active?.FindDungeon(definition.dungeonId) != definition)
+        { error = "선택한 던전을 Resources/DungeonCatalog에 등록하세요."; return false; }
+        if (!definition.IsValid(out error)) return false;
+        pendingDungeon = null; // Entering from town always starts a new run.
+        pendingDefinition = definition;
         PlayerMovement player = Object.FindAnyObjectByType<PlayerMovement>();
         if (player != null) RememberTownPosition(player.transform.position);
         BeginTravel(scene);
@@ -74,6 +85,8 @@ public static class GameSession
     {
         string scene = GameFlowConfig.Active.townSceneName;
         if (!CanTravel(scene, out error)) return false;
+        pendingDungeon = null;
+        pendingDefinition = null;
         restoreTownPosition = hasTownPosition;
         BeginTravel(scene);
         return true;
@@ -109,6 +122,13 @@ public static class GameSession
     {
         DungeonSaveData result = pendingDungeon;
         pendingDungeon = null;
+        return result;
+    }
+
+    public static DungeonDefinition TakeDungeonDefinition()
+    {
+        DungeonDefinition result = pendingDefinition;
+        pendingDefinition = null;
         return result;
     }
 

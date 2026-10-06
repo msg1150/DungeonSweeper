@@ -8,12 +8,14 @@ public readonly struct GameGuiScope : IDisposable
     private readonly Matrix4x4 matrix;
     private readonly Color color;
     private readonly Font font;
+    private readonly bool enabled;
     private readonly TextAnchor labelAlignment;
     private readonly int labelSize, buttonSize;
 
     public GameGuiScope(bool scale)
     {
         matrix = GUI.matrix; color = GUI.color; font = GUI.skin.font;
+        enabled = GUI.enabled;
         labelAlignment = GUI.skin.label.alignment;
         labelSize = GUI.skin.label.fontSize; buttonSize = GUI.skin.button.fontSize;
         Font gameFont = GameShell.UiFont;
@@ -30,6 +32,7 @@ public readonly struct GameGuiScope : IDisposable
     public void Dispose()
     {
         GUI.matrix = matrix; GUI.color = color; GUI.skin.font = font;
+        GUI.enabled = enabled;
         GUI.skin.label.alignment = labelAlignment;
         GUI.skin.label.fontSize = labelSize; GUI.skin.button.fontSize = buttonSize;
     }

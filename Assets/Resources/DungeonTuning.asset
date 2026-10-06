@@ -23,7 +23,9 @@ MonoBehaviour:
   playerDashSpeed: 12
   playerDashDuration: 0.15
   playerDashCooldown: 1
-  patrolSpeed: 1.05
+  patrolSpeed: 1.35
+  patrolTravelDistance: 10
+  patrolArrivalPause: 0.75
   chaseSpeed: 2.15
   detectionRange: 3.8
   hearingRange: 8

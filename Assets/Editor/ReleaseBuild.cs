@@ -45,9 +45,10 @@ public sealed class ReleaseBuildValidator : IPreprocessBuildWithReport
         {
             foreach (float value in new[] { tuning.lootValueMultiplier, tuning.clearSightRadius, tuning.darkSightRadius,
                 tuning.playerMoveSpeed, tuning.playerDashSpeed, tuning.playerDashDuration, tuning.patrolSpeed,
-                tuning.chaseSpeed, tuning.detectionRange, tuning.hearingRange, tuning.investigationSeconds })
+                tuning.chaseSpeed, tuning.detectionRange, tuning.hearingRange, tuning.investigationSeconds, tuning.patrolTravelDistance })
                 if (!Positive(value)) issues.Add("Movement, economy and vision tuning must be finite and positive.");
             if (tuning.playerMaxHealth < 1 || !Nonnegative(tuning.playerDashCooldown) || !Nonnegative(tuning.playerHitInvulnerability)
+                || !Nonnegative(tuning.patrolArrivalPause)
                 || !Nonnegative(tuning.outerDarkness) || tuning.outerDarkness > 1f || tuning.darkSightRadius <= tuning.clearSightRadius)
                 issues.Add("Invalid health, cooldown or vision tuning.");
         }
@@ -57,29 +58,24 @@ public sealed class ReleaseBuildValidator : IPreprocessBuildWithReport
         if (profile == null) issues.Add("Missing player visual profile.");
         else if (profile.columns < 1 || profile.rows < 1 || !Positive(profile.walkFramesPerSecond)
             || !Positive(profile.dashFramesPerSecond) || !Positive(profile.visualScale)) issues.Add("Invalid player animation profile.");
-        MonsterDatabase database = Resources.Load<MonsterDatabase>("MonsterDatabase");
         HashSet<string> lootKinds = new();
-        if (database?.monsters == null || database.monsters.Count == 0) issues.Add("At least one monster definition is required.");
+        DungeonCatalog catalog = Resources.Load<DungeonCatalog>("DungeonCatalog");
+        if (catalog == null) issues.Add("Missing Resources/DungeonCatalog.");
         else
         {
-            HashSet<string> ids = new();
-            foreach (MonsterDefinition monster in database.monsters)
+            issues.AddRange(catalog.CollectIssues());
+            if (catalog.monsterPrefabs != null) foreach (var prefab in catalog.monsterPrefabs)
+                if (prefab != null) ValidatePrefab(prefab.gameObject, prefab.IsValid(), issues);
+            if (catalog.corpsePrefabs != null) foreach (var prefab in catalog.corpsePrefabs)
+                if (prefab != null) ValidatePrefab(prefab.gameObject, prefab.IsValid(), issues);
+            if (catalog.dungeons != null) foreach (var dungeon in catalog.dungeons)
             {
-                if (monster == null) { issues.Add("Null monster definition."); continue; }
-                if (string.IsNullOrWhiteSpace(monster.id) || !ids.Add(monster.id)) issues.Add("Monster IDs must be unique and nonempty.");
-                if (monster.attackDamage < 1 || !Positive(monster.attackRange) || !Nonnegative(monster.attackCooldown)
-                    || !Positive(monster.attackAnimationSeconds) || !Enum.IsDefined(typeof(MonsterAttackStyle), monster.attackStyle))
-                    issues.Add("Invalid monster attack settings: " + monster.id);
-                if (string.IsNullOrWhiteSpace(monster.spriteSheetResource) || Resources.Load<Texture2D>(monster.spriteSheetResource) == null)
-                    issues.Add("Missing monster sprite sheet: " + monster.id);
-                if (monster.loot == null) { issues.Add("Missing monster loot list: " + monster.id); continue; }
-                foreach (MonsterLootEntry loot in monster.loot)
+                if (dungeon == null) continue;
+                if (dungeon.corpses != null) foreach (var row in dungeon.corpses)
                 {
-                    if (loot != null) lootKinds.Add(loot.kindId ?? "");
-                    if (loot == null || !LootKinds.ValidId(loot.kindId) || !Nonnegative(loot.dropChance) || loot.dropChance > 1f || loot.minPrice < 0
-                        || loot.maxPrice < loot.minPrice || loot.maxPrice == int.MaxValue || loot.width < 1 || loot.height < 1
-                        || loot.width > GridInventory.Width || loot.height > GridInventory.Height
-                        || !Enum.IsDefined(typeof(LootShape), loot.shape)) issues.Add("Invalid loot entry: " + monster.id);
+                    if (row?.prefab == null) continue;
+                    if (row.count > 0 && row.prefab.loot != null) foreach (var loot in row.prefab.loot)
+                        if (loot != null && loot.dropChance > 0f) lootKinds.Add(loot.kindId ?? "");
                 }
             }
         }
@@ -117,6 +113,9 @@ public sealed class ReleaseBuildValidator : IPreprocessBuildWithReport
                         issues.Add("Town scene requires a hub controller.");
                     if (scene.name == flow.dungeonSceneName && !objects.Any(item => item.GetComponent<DungeonRunController>() != null))
                         issues.Add("Dungeon scene requires a run controller.");
+                    foreach (var run in objects.Select(item => item.GetComponent<DungeonRunController>()).Where(item => item != null))
+                        if (run.dungeonDefinition != null && (catalog == null || catalog.FindDungeon(run.dungeonDefinition.dungeonId) != run.dungeonDefinition))
+                            issues.Add("Direct-play dungeon override must be registered in DungeonCatalog: " + path);
                 }
             }
             finally { if (opened && scene.isLoaded) EditorSceneManager.CloseScene(scene, true); }
@@ -125,6 +124,12 @@ public sealed class ReleaseBuildValidator : IPreprocessBuildWithReport
     }
 
     public static string[] EnabledScenes() => EditorBuildSettings.scenes.Where(scene => scene.enabled).Select(scene => scene.path).ToArray();
+    private static void ValidatePrefab(GameObject prefab, bool valid, List<string> issues)
+    {
+        if (!PrefabUtility.IsPartOfPrefabAsset(prefab) || !valid || !prefab.activeSelf
+            || prefab.GetComponentsInChildren<Transform>(true).Any(item => GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(item.gameObject) > 0))
+            issues.Add("Invalid monster/corpse prefab asset: " + prefab.name);
+    }
     private static bool Positive(float value) => Nonnegative(value) && value > 0f;
     private static bool Nonnegative(float value) => !float.IsNaN(value) && !float.IsInfinity(value) && value >= 0f;
 }

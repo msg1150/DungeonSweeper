@@ -59,7 +59,7 @@ public class DungeonDemoHud : MonoBehaviour
         GUI.color = Color.white;
         GUI.Label(new Rect(16, 14, 740, 25), "DUNGEON SWEEPER  ·  비전투 회수 작업 데모");
         string contract = TownProgress.HasAcceptedContract ? $"  |  의뢰: {TownProgress.ContractTargetName} +{TownProgress.ActiveContractBonus}G" : string.Empty;
-        GUI.Label(new Rect(16, 39, 900, 24), $"{DungeonLayoutFactory.LayoutName}  |  회수 가치 {run.Inventory.TotalValue}G{contract}    |    [WASD] 이동 / [Space] 대시 / [E] 상호작용");
+        GUI.Label(new Rect(16, 39, 900, 24), $"{run.DungeonName}  |  회수 가치 {run.Inventory.TotalValue}G{contract}    |    [WASD] 이동 / [Space] 대시 / [E] 상호작용");
     }
 
     private void DrawHealth()

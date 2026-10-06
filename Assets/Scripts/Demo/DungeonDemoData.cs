@@ -120,6 +120,7 @@ public sealed class CorpseRunData
     public IReadOnlyList<LootDefinition> Loot { get; }
     public bool IsProcessed { get; private set; }
     public int MonsterIndex { get; set; }
+    public string PrefabId { get; set; }
     private DismantleSession session;
     public DismantleSession Session => session ??= new DismantleSession(Difficulty);
     public DismantleSaveData CaptureSession() => session?.Capture();

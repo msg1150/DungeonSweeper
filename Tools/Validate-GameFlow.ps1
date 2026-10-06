@@ -10,8 +10,15 @@ if (-not (Test-Path -LiteralPath $UnityEditorPath)) { throw 'Unity editor execut
 
 $taskValidationRoot = Join-Path $taskProjectRoot '.utmp/UnityValidation'
 New-Item -ItemType Directory -Path "$taskValidationRoot/Assets/Editor", "$taskValidationRoot/ProjectSettings", "$taskValidationRoot/Packages" -Force | Out-Null
-foreach ($taskFolder in @('Scripts', 'Resources', 'Scenes', 'Settings', 'Editor')) {
+# Remove only the obsolete prefab copy left by earlier validations; preserve saves and profiling results.
+$taskOldPrefabRoot = [IO.Path]::GetFullPath((Join-Path $taskValidationRoot 'Assets/Resources/Prefabs'))
+if (-not $taskOldPrefabRoot.StartsWith(([IO.Path]::GetFullPath($taskValidationRoot) + [IO.Path]::DirectorySeparatorChar), [StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid isolated prefab cleanup path.' }
+if (Test-Path -LiteralPath $taskOldPrefabRoot) { Remove-Item -LiteralPath $taskOldPrefabRoot -Recurse -Force }
+if (Test-Path -LiteralPath ($taskOldPrefabRoot + '.meta')) { Remove-Item -LiteralPath ($taskOldPrefabRoot + '.meta') -Force }
+foreach ($taskFolder in @('Scripts', 'Resources', 'Prefabs', 'Scenes', 'Settings', 'Editor')) {
     Copy-Item -LiteralPath (Join-Path $taskProjectRoot "Assets/$taskFolder") -Destination "$taskValidationRoot/Assets" -Recurse -Force
+    $taskFolderMeta = Join-Path $taskProjectRoot "Assets/$taskFolder.meta"
+    if (Test-Path -LiteralPath $taskFolderMeta) { Copy-Item -LiteralPath $taskFolderMeta -Destination "$taskValidationRoot/Assets" -Force }
 }
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'ProjectSettings') -Destination $taskValidationRoot -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Packages/manifest.json'), (Join-Path $taskProjectRoot 'Packages/packages-lock.json') -Destination "$taskValidationRoot/Packages" -Force
@@ -20,6 +27,10 @@ Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/ValidationRuntimeDrive
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/SaveProtectionChecks.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/SaveProtectionChecks.cs" -Force
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/ReleaseLogicChecks.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/ReleaseLogicChecks.cs" -Force
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/TownEconomyChecks.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/TownEconomyChecks.cs" -Force
+Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/FocusPauseChecks.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/FocusPauseChecks.cs" -Force
+Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/DungeonPopulationChecks.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/DungeonPopulationChecks.cs" -Force
+Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/DungeonPrefabChecks.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/DungeonPrefabChecks.cs" -Force
+Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/ContinueEntryChecks.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/ContinueEntryChecks.cs" -Force
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/PlayerProtectionValidationBuild.cs') -Destination "$taskValidationRoot/Assets/Editor/PlayerProtectionValidationBuild.cs" -Force
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/PlayerProtectionValidationDriver.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/PlayerProtectionValidationDriver.cs" -Force
 
@@ -70,7 +81,7 @@ if ($CheckPlayerProtection -or $CaptureScreens) {
         Write-Output $taskPlayerText
     }
     if ($CaptureScreens) {
-        foreach ($taskCapture in @('release-main-menu', 'release-town', 'release-dungeon', 'release-loot-modal', 'release-loot-scrolled', 'release-loot-small', 'release-warehouse', 'release-warehouse-small', 'release-market', 'release-bag-upgrade', 'release-expanded-bag')) {
+        foreach ($taskCapture in @('release-main-menu', 'release-town', 'release-dungeon', 'release-loot-modal', 'release-loot-scrolled', 'release-loot-small', 'release-warehouse', 'release-warehouse-small', 'release-market', 'release-bag-upgrade', 'release-expanded-bag', 'release-spawn-layout-0', 'release-spawn-layout-1', 'release-spawn-layout-2')) {
             $taskCapturePath = Join-Path $taskValidationRoot ($taskCapture + '.png')
             if (-not (Test-Path -LiteralPath $taskCapturePath)) { throw "Release screen capture missing: $taskCapturePath" }
         }

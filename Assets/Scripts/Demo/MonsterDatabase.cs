@@ -16,6 +16,11 @@ public sealed class MonsterLootEntry
     [Min(1)] public int width = 1;
     [Min(1)] public int height = 1;
 
+    public bool IsValid() => LootKinds.ValidId(kindId) && !string.IsNullOrWhiteSpace(lootName)
+        && MonsterDefinition.Nonnegative(dropChance) && dropChance <= 1f && minPrice >= 0 && maxPrice >= minPrice
+        && maxPrice < int.MaxValue && width >= 1 && height >= 1 && width <= GridInventory.Width
+        && height <= GridInventory.Height && Enum.IsDefined(typeof(LootShape), shape);
+
     public LootDefinition Roll()
     {
         if (float.IsNaN(dropChance) || dropChance <= 0f || (dropChance < 1f && UnityEngine.Random.value >= dropChance)) return null;
@@ -36,7 +41,21 @@ public sealed class MonsterDefinition
     [Min(.1f)] public float attackRange = .9f;
     [Min(.1f)] public float attackCooldown = 1.4f;
     [Min(.1f)] public float attackAnimationSeconds = .6f;
+    // Old saves lack this flag and continue using their original global movement tuning.
+    [HideInInspector] public bool hasMovementStats;
+    [Min(.01f)] public float patrolSpeed = 1.35f, chaseSpeed = 2.15f, detectionRange = 3.8f, hearingRange = 8f;
+    [Min(.01f)] public float investigationSeconds = 6f, patrolTravelDistance = 10f;
+    [Min(0f)] public float patrolArrivalPause = .75f;
+    [HideInInspector]
     public List<MonsterLootEntry> loot = new();
+
+    public bool IsValid() => LootKinds.ValidId(id) && !string.IsNullOrWhiteSpace(displayName)
+        && attackDamage >= 1 && Positive(attackRange) && Nonnegative(attackCooldown) && Positive(attackAnimationSeconds)
+        && Enum.IsDefined(typeof(MonsterAttackStyle), attackStyle)
+        && (!hasMovementStats || (Positive(patrolSpeed) && Positive(chaseSpeed) && Positive(detectionRange)
+            && Positive(hearingRange) && Positive(investigationSeconds) && Positive(patrolTravelDistance) && Nonnegative(patrolArrivalPause)));
+    public static bool Positive(float value) => Nonnegative(value) && value > 0f;
+    public static bool Nonnegative(float value) => !float.IsNaN(value) && !float.IsInfinity(value) && value >= 0f;
 
     public LootDefinition[] RollLoot()
     {
@@ -71,14 +90,29 @@ public sealed class MonsterDatabase : ScriptableObject
 
     public void ResetDefaults()
     {
-        monsters = new List<MonsterDefinition>
+        monsters = CreateDefaults();
+    }
+
+    public List<MonsterDefinition> GetSpawnDefinitions()
+    {
+        var result = new List<MonsterDefinition>();
+        if (monsters != null) foreach (var monster in monsters) if (monster != null) result.Add(monster);
+        if (result.Count > 0) return result;
+        Debug.LogWarning("MonsterDatabase has no spawn definitions. Using the default three monsters for this run.");
+        return CreateDefaults();
+    }
+
+    private static List<MonsterDefinition> CreateDefaults()
+    {
+        var defaults = new List<MonsterDefinition>
         {
             Make("goblin", "고블린", "Sprites/Monsters/goblin-sheet", MonsterAttackStyle.DaggerSlash, 14, .85f, "고블린 이빨", LootShape.Tooth, .8f, 30, 80, "낡은 단검", LootShape.Dagger, .35f, 100, 220),
             Make("slime", "슬라임", "Sprites/Monsters/slime-sheet", MonsterAttackStyle.BodySlam, 10, 1.05f, "슬라임 젤", LootShape.Gel, .9f, 25, 70, "슬라임 핵", LootShape.Core, .25f, 120, 300),
             Make("orc", "오크", "Sprites/Monsters/orc-sheet", MonsterAttackStyle.ClubSwing, 24, 1.15f, "두꺼운 가죽", LootShape.Hide, .7f, 100, 240, "오크 엄니", LootShape.Horn, .4f, 180, 360)
         };
-        monsters[0].loot.Add(new MonsterLootEntry { kindId = LootKinds.GoblinHide, lootName = "고블린 가죽",
+        defaults[0].loot.Add(new MonsterLootEntry { kindId = LootKinds.GoblinHide, lootName = "고블린 가죽",
             shape = LootShape.Hide, dropChance = .65f, minPrice = 40, maxPrice = 90, width = 2 });
+        return defaults;
     }
 
     private static MonsterDefinition Make(string id, string name, string path, MonsterAttackStyle style, int damage, float range,

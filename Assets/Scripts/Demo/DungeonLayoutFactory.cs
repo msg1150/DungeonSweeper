@@ -81,31 +81,97 @@ public static class DungeonLayoutFactory
         return candidates[Random.Range(0, candidates.Count)];
     }
 
-    public static Vector2 RandomRoamPosition(Vector2 origin)
+    public static Vector2 RandomRoamPosition(Vector2 origin, Vector2? previousOrigin = null, float? minimumOverride = null)
     {
         List<Vector2> candidates = new List<Vector2>();
+        List<Vector2> distant = new List<Vector2>();
+        var distances = ReachableDistances(ToFloorCell(origin));
+        float minimum = minimumOverride ?? DungeonTuning.Active.patrolTravelDistance;
+        Vector2 farthest = origin;
+        float farthestDistance = -1f;
         for (int x = 0; x < Columns; x++)
         for (int y = 0; y < Rows; y++)
         {
-            if (!floor[x, y]) continue;
-            float distance = Vector2.Distance(CellCenter(x, y), origin);
-            if (distance >= 3f && distance <= 13f) candidates.Add(CellCenter(x, y));
+            if (distances[x, y] < 0) continue;
+            Vector2 point = CellCenter(x, y);
+            float distance = Vector2.Distance(point, origin);
+            if (distance > farthestDistance) { farthest = point; farthestDistance = distance; }
+            if (distance < minimum || distances[x, y] * CellSize < minimum || Vector2.Distance(point, Entrance) < 5f) continue;
+            distant.Add(point);
+            if (!previousOrigin.HasValue || Vector2.Distance(point, previousOrigin.Value) >= minimum * .6f) candidates.Add(point);
         }
-        return candidates.Count > 0 ? candidates[Random.Range(0, candidates.Count)] : RandomFloorPosition(0f);
+        if (candidates.Count == 0) candidates = distant;
+        return candidates.Count > 0 ? candidates[Random.Range(0, candidates.Count)] : farthest;
     }
 
     public static void RandomPatrolPoints(float minimumDistance, out Vector2 pointA, out Vector2 pointB)
     {
         pointA = RandomFloorPosition(minimumDistance);
-        Vector2Int cell = ToFloorCell(pointA);
-        List<Vector2Int> neighbours = new List<Vector2Int>(Neighbours(cell));
-        if (neighbours.Count == 0) { pointB = pointA; return; }
-        Vector2Int next = neighbours[Random.Range(0, neighbours.Count)];
-        pointB = CellCenter(next.x, next.y);
+        pointB = RandomRoamPosition(pointA);
+    }
+
+    public static Vector2 PickSpawnPosition(float minimumDistance, float maximumDistance, IReadOnlyList<Vector2> occupied, float separation)
+    {
+        var distances = ReachableDistances(ToFloorCell(Entrance));
+        var candidates = new List<Vector2>();
+        Vector2 fallback = Entrance;
+        float bestGap = -1f;
+        for (int x = 0; x < Columns; x++)
+        for (int y = 0; y < Rows; y++)
+        {
+            if (distances[x, y] < 0) continue;
+            Vector2 point = CellCenter(x, y);
+            float entranceDistance = Vector2.Distance(point, Entrance);
+            float gap = entranceDistance;
+            if (occupied != null) foreach (Vector2 other in occupied) gap = Mathf.Min(gap, Vector2.Distance(point, other));
+            if (gap > bestGap) { fallback = point; bestGap = gap; }
+            if (entranceDistance >= minimumDistance && entranceDistance <= maximumDistance && gap >= separation) candidates.Add(point);
+        }
+        return candidates.Count > 0 ? candidates[Random.Range(0, candidates.Count)] : fallback;
+    }
+
+    private static int[,] ReachableDistances(Vector2Int start)
+    {
+        var distances = new int[Columns, Rows];
+        for (int x = 0; x < Columns; x++) for (int y = 0; y < Rows; y++) distances[x, y] = -1;
+        var queue = new Queue<Vector2Int>(); queue.Enqueue(start); distances[start.x, start.y] = 0;
+        while (queue.Count > 0)
+        {
+            Vector2Int cell = queue.Dequeue();
+            foreach (Vector2Int next in Neighbours(cell))
+                if (distances[next.x, next.y] < 0) { distances[next.x, next.y] = distances[cell.x, cell.y] + 1; queue.Enqueue(next); }
+        }
+        return distances;
+    }
+
+    public static bool TryBuildPath(Vector2 from, Vector2 destination, List<Vector2> path)
+    {
+        path.Clear();
+        if (!GameSaveData.Finite(from) || !GameSaveData.Finite(destination)) return false;
+        Vector2Int start = ToFloorCell(from), end = ToFloorCell(destination);
+        var queue = new Queue<Vector2Int>();
+        var previous = new Dictionary<Vector2Int, Vector2Int> { [start] = start };
+        queue.Enqueue(start);
+        while (queue.Count > 0)
+        {
+            Vector2Int cell = queue.Dequeue();
+            if (cell == end) break;
+            foreach (Vector2Int next in Neighbours(cell))
+                if (!previous.ContainsKey(next)) { previous[next] = cell; queue.Enqueue(next); }
+        }
+        if (!previous.ContainsKey(end)) return false;
+        Vector2Int step = end;
+        while (step != start) { path.Add(CellCenter(step.x, step.y)); step = previous[step]; }
+        path.Add(CellCenter(start.x, start.y)); path.Reverse();
+        path.Add(IsWalkablePosition(destination) ? destination : CellCenter(end.x, end.y));
+        return true;
     }
 
     public static Vector2Int WorldToCell(Vector2 position) => ToFloorCell(position);
     public static bool IsWalkableCell(int x, int y) => IsFloor(x, y);
+    public static bool IsWalkablePosition(Vector2 position) => GameSaveData.Finite(position) && IsFloor(
+        Mathf.RoundToInt(position.x / CellSize + (Columns - 1) * .5f),
+        Mathf.RoundToInt(position.y / CellSize + (Rows - 1) * .5f));
 
     public static Vector2 CellCenter(int x, int y) => new Vector2((x - (Columns - 1) * .5f) * CellSize, (y - (Rows - 1) * .5f) * CellSize);
 
@@ -138,6 +204,24 @@ public static class DungeonLayoutFactory
         if (layoutIndex == 0) BuildForkVault();
         else if (layoutIndex == 1) BuildRingCorridor();
         else BuildSteppedCrypt();
+    }
+
+    // Compute capacity from reachable cells without changing the active run's geometry.
+    public static int PopulationCapacity(int index)
+    {
+        if (index < 0 || index > 2) return 0;
+        bool[,] previous = (bool[,])floor.Clone();
+        int previousIndex = layoutIndex;
+        try
+        {
+            System.Array.Clear(floor, 0, floor.Length);
+            BuildFloorPlan(index);
+            var reachable = ReachableDistances(new Vector2Int(2, 1));
+            int count = 0;
+            foreach (int distance in reachable) if (distance >= 0) count++;
+            return Mathf.Max(0, count - 2); // Entrance and special gate each reserve one cell.
+        }
+        finally { System.Array.Copy(previous, floor, floor.Length); layoutIndex = previousIndex; }
     }
 
     private static void BuildForkVault()

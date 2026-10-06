@@ -92,6 +92,8 @@ public static class GameFlowSmokeChecks
                     Check(typeof(GameShell).GetField("page", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(mainShell).ToString() == "Main", "main menu page selected");
                     SaveProtectionChecks.Run(Check);
                     ReleaseLogicChecks.Run(Check);
+                    DungeonPopulationChecks.RunLayouts(Check);
+                    DungeonPrefabChecks.RunAuthoring(Check);
                     Next(1);
                     break;
                 case 1:
@@ -99,10 +101,13 @@ public static class GameFlowSmokeChecks
                     Next(2);
                     break;
                 case 2:
+                    // Headless Unity has no focused window; model active play for the town checks.
+                    CallShell("OnApplicationFocus", true);
                     Check(SceneManager.GetActiveScene().name == "Town" && GameSession.HasActiveGame, "new game enters town");
                     Check(TownProgress.Gold == 0 && TownProgress.SupplyKits == 0, "new game has fresh progress");
                     Check(GameSaveService.TryLoad(-1, out var initial, out _), "new game automatically saved");
                     TownEconomyChecks.Run(Check);
+                    FocusPauseChecks.Run(Check);
                     TownProgress.Restore(new TownProgressData { gold = 370 });
                     Check(TownProgress.TryBuySupplyKit(), "purchase supply");
                     Check(GameSession.Save(0, out string townError), "manual town save: " + townError);
@@ -135,11 +140,18 @@ public static class GameFlowSmokeChecks
                     GameSession.RememberTownPosition(UnityEngine.Object.FindAnyObjectByType<PlayerMovement>().transform.position);
                     Check(GameSession.EnterDungeon(out _), "checked dungeon transition starts");
                     Check(GameSession.IsLoading && !GameSession.EnterDungeon(out _), "loading blocks a duplicate transition");
+                    CallShell("OnApplicationFocus", false);
                     Next(4);
                     break;
                 case 4:
+                    Check(Time.timeScale == 0f && !GameShell.IsMenuOpen, "scene loaded without focus stays paused without a menu");
+                    CallShell("OnApplicationFocus", true);
+                    Check(Time.timeScale == 1f, "focus return resumes a scene loaded in the background");
                     var run = DungeonRunController.Instance;
                     Check(run != null && run.IsRunActive, "dungeon starts");
+                    DungeonPopulationChecks.CheckLivePopulation(Check);
+                    DungeonPrefabChecks.CheckLive(Check);
+                    DungeonPopulationChecks.RunPatrol(Check);
                     var layoutRoot = GameObject.Find("Runtime Dungeon Layout");
                     Physics2D.SyncTransforms();
                     foreach (var wall in layoutRoot.GetComponentsInChildren<BoxCollider2D>())
@@ -238,6 +250,18 @@ public static class GameFlowSmokeChecks
                     Check(SceneManager.GetActiveScene().name == "Town" && TownProgress.Gold == 345 && TownProgress.SupplyKits == 1, "selected town progress restored");
                     Check(GameSettings.Current.musicVolume == .25f, "options independent of saves");
                     Check(!GameSession.Capture().completedEvents.Contains("validation_special_event"), "loading restores selected event timeline");
+                    CallShell("Resume");
+                    Check(GameSession.EnterDungeon(out _, DungeonCatalog.Active.dungeons[1]), "continued town enters its first fresh dungeon");
+                    Next(15);
+                    break;
+                case 15:
+                    if (GameSession.IsLoading || SceneManager.GetActiveScene().name != "Dungeon") return;
+                    CallShell("OnApplicationFocus", true); CallShell("OpenPause");
+                    var continuedRun = DungeonRunController.Instance;
+                    Check(continuedRun.PlayerHealth.Current == continuedRun.PlayerHealth.Maximum
+                        && Vector2.Distance(continuedRun.Player.position, DungeonLayoutFactory.Entrance) < .2f
+                        && DungeonLayoutFactory.LayoutIndex == 1, "continued town starts fresh at the chosen dungeon entrance with full health");
+                    DungeonPrefabChecks.CheckLive(Check);
                     Check(GameSession.StartNewGame(out _), "second new game starts");
                     Next(9);
                     break;

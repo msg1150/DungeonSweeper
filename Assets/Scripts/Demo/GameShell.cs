@@ -11,12 +11,13 @@ public sealed class GameShell : MonoBehaviour
     private enum Page { Playing, Main, Pause, Load, Save, Options }
     private static GameShell instance;
     public static bool IsMenuOpen => instance != null && instance.page != Page.Playing;
+    public static bool IsFocusInputBlocked => instance != null && (!instance.hasFocus || instance.blockInputFrame == Time.frameCount);
     public static bool IsGameplayInputBlocked
     {
         get
         {
             if (instance == null) instance = FindAnyObjectByType<GameShell>();
-            return instance != null && (instance.page != Page.Playing || GameSession.IsLoading
+            return instance != null && (!instance.hasFocus || instance.page != Page.Playing || GameSession.IsLoading
                 || instance.blockInputFrame == Time.frameCount || TownCommercePanel.IsOpen);
         }
     }
@@ -24,6 +25,8 @@ public sealed class GameShell : MonoBehaviour
     public static void ConsumeGameplayEscape() { if (instance != null) instance.consumedEscapeFrame = Time.frameCount; }
     private Page page, returnPage;
     private float previousTimeScale = 1f;
+    private bool hasFocus = true, focusPaused;
+    private float focusTimeScale = 1f;
     private bool quitSaved;
     private Scene handledScene;
     private int overwriteSlot = -2;
@@ -67,6 +70,7 @@ public sealed class GameShell : MonoBehaviour
         if (mode == LoadSceneMode.Additive && !scene.Equals(SceneManager.GetActiveScene())) return;
         if (handledScene.Equals(scene)) return;
         handledScene = scene;
+        focusPaused = false;
         StopAllCoroutines();
         page = scene.name == GameFlowConfig.Active.mainMenuSceneName ? Page.Main : Page.Playing;
         overwriteSlot = -2;
@@ -83,6 +87,7 @@ public sealed class GameShell : MonoBehaviour
     {
         yield return null;
         GameSession.FinishSceneLoad();
+        PauseForFocusLoss();
     }
 
     private void Update()
@@ -90,7 +95,9 @@ public sealed class GameShell : MonoBehaviour
         // Also handle active-scene changes initiated by editor tools or other systems.
         Scene activeScene = SceneManager.GetActiveScene();
         if (activeScene.isLoaded && !handledScene.Equals(activeScene)) OnSceneLoaded(activeScene, LoadSceneMode.Single);
+        PauseForFocusLoss();
         GameSession.Tick(Time.unscaledDeltaTime);
+        if (!hasFocus || blockInputFrame == Time.frameCount) return;
         if (Keyboard.current == null || !Keyboard.current.escapeKey.wasPressedThisFrame) return;
         if (consumedEscapeFrame == Time.frameCount) return;
         if (page == Page.Playing && TownCommercePanel.IsOpen) return;
@@ -119,13 +126,32 @@ public sealed class GameShell : MonoBehaviour
 
     private void OnApplicationFocus(bool focused)
     {
-        if (!focused && page == Page.Playing && GameSession.HasActiveGame && !GameSession.IsLoading) OpenPause();
+        bool wasFocused = hasFocus;
+        hasFocus = focused;
+        if (!focused) { PauseForFocusLoss(); return; }
+        if (!wasFocused) blockInputFrame = Time.frameCount;
+        if (!focusPaused) return;
+        focusPaused = false;
+        // Resume only the pause owned by focus loss; existing menus and loot screens keep their pause.
+        if (page == Page.Playing && GameSession.HasActiveGame && !GameSession.IsLoading
+            && !TownCommercePanel.IsOpen && DungeonRunController.Instance?.IsLootPlacementOpen != true && Time.timeScale == 0f)
+            Time.timeScale = focusTimeScale;
+    }
+
+    private void PauseForFocusLoss()
+    {
+        if (hasFocus || focusPaused || page != Page.Playing || !GameSession.HasActiveGame
+            || GameSession.IsLoading || Time.timeScale <= 0f) return;
+        focusTimeScale = Time.timeScale;
+        focusPaused = true;
+        Time.timeScale = 0f;
     }
 
     private void OpenPause()
     {
         if (page != Page.Playing) return;
-        previousTimeScale = Time.timeScale;
+        previousTimeScale = focusPaused ? focusTimeScale : Time.timeScale;
+        focusPaused = false;
         Time.timeScale = 0f;
         page = Page.Pause;
     }
@@ -135,6 +161,7 @@ public sealed class GameShell : MonoBehaviour
         page = Page.Playing;
         blockInputFrame = Time.frameCount;
         Time.timeScale = previousTimeScale;
+        PauseForFocusLoss();
     }
 
     private void OpenSlots(bool save)
@@ -300,7 +327,7 @@ public sealed class GameShell : MonoBehaviour
         GUI.matrix = Matrix4x4.TRS(new Vector3((Screen.width - 1280f * scale) * .5f, (Screen.height - 720f * scale) * .5f, 0),
             Quaternion.identity, new Vector3(scale, scale, 1));
         bool wasEnabled = GUI.enabled;
-        if (overwriteSlot != -2) GUI.enabled = false;
+        GUI.enabled = wasEnabled && !IsFocusInputBlocked && overwriteSlot == -2;
         switch (page)
         {
             case Page.Main: DrawMain(); break;
@@ -312,7 +339,7 @@ public sealed class GameShell : MonoBehaviour
                 if (GameSession.HasActiveGame && Button(new Rect(1120, 648, 140, 42), "메뉴 [Esc]")) OpenPause();
                 break;
         }
-        GUI.enabled = wasEnabled;
+        GUI.enabled = wasEnabled && !IsFocusInputBlocked;
         if (overwriteSlot != -2) DrawOverwriteConfirmation();
         if (!string.IsNullOrEmpty(notice) && Time.unscaledTime < noticeUntil)
         {
@@ -322,6 +349,7 @@ public sealed class GameShell : MonoBehaviour
         GUI.matrix = originalMatrix;
         GUI.color = originalColor;
         GUI.depth = originalDepth;
+        GUI.enabled = wasEnabled;
     }
 
     private void DrawMain()
