@@ -1,0 +1,7 @@
+{
+    "name": "DungeonSweeper.Midterm.Editor",
+    "rootNamespace": "DungeonSweeper.Midterm",
+    "references": ["DungeonSweeper.Midterm.Runtime"],
+    "includePlatforms": ["Editor"],
+    "autoReferenced": false
+}

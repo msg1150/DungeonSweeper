@@ -19,6 +19,9 @@
 # Recordings can get excessive in size
 /[Rr]ecordings/
 
+# Profiler captures are shared separately from the source project.
+/[Pp]rofiler[Cc]aptures/
+
 # Uncomment this line if you wish to ignore the asset store tools plugin
 # /[Aa]ssets/AssetStoreTools*
 
