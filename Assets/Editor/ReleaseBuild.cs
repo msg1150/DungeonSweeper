@@ -58,6 +58,7 @@ public sealed class ReleaseBuildValidator : IPreprocessBuildWithReport
         else if (profile.columns < 1 || profile.rows < 1 || !Positive(profile.walkFramesPerSecond)
             || !Positive(profile.dashFramesPerSecond) || !Positive(profile.visualScale)) issues.Add("Invalid player animation profile.");
         MonsterDatabase database = Resources.Load<MonsterDatabase>("MonsterDatabase");
+        HashSet<string> lootKinds = new();
         if (database?.monsters == null || database.monsters.Count == 0) issues.Add("At least one monster definition is required.");
         else
         {
@@ -73,10 +74,26 @@ public sealed class ReleaseBuildValidator : IPreprocessBuildWithReport
                     issues.Add("Missing monster sprite sheet: " + monster.id);
                 if (monster.loot == null) { issues.Add("Missing monster loot list: " + monster.id); continue; }
                 foreach (MonsterLootEntry loot in monster.loot)
-                    if (loot == null || !Nonnegative(loot.dropChance) || loot.dropChance > 1f || loot.minPrice < 0
+                {
+                    if (loot != null) lootKinds.Add(loot.kindId ?? "");
+                    if (loot == null || !LootKinds.ValidId(loot.kindId) || !Nonnegative(loot.dropChance) || loot.dropChance > 1f || loot.minPrice < 0
                         || loot.maxPrice < loot.minPrice || loot.maxPrice == int.MaxValue || loot.width < 1 || loot.height < 1
                         || loot.width > GridInventory.Width || loot.height > GridInventory.Height
                         || !Enum.IsDefined(typeof(LootShape), loot.shape)) issues.Add("Invalid loot entry: " + monster.id);
+                }
+            }
+        }
+        TownEconomyConfig economy = Resources.Load<TownEconomyConfig>("TownEconomyConfig");
+        if (economy?.bagUpgrades == null) issues.Add("Missing town economy config.");
+        else
+        {
+            int width = GridInventory.Width, height = GridInventory.Height;
+            foreach (var upgrade in economy.bagUpgrades)
+            {
+                if (upgrade == null || !upgrade.IsValid()) { issues.Add("Invalid bag upgrade recipe."); continue; }
+                if (upgrade.width < width || upgrade.height < height || (upgrade.width == width && upgrade.height == height)) issues.Add("Bag upgrades must increase capacity without shrinking dimensions.");
+                foreach (var material in upgrade.materials) if (!lootKinds.Contains(material.kindId)) issues.Add("Bag material has no loot source: " + material.kindId);
+                width = upgrade.width; height = upgrade.height;
             }
         }
         foreach (string path in scenes)

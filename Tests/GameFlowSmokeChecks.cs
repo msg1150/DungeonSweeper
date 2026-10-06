@@ -25,7 +25,8 @@ public static class GameFlowSmokeChecks
         SessionState.SetFloat("DungeonValidation.Deadline", (float)EditorApplication.timeSinceStartup + 240f);
         Application.runInBackground = true;
         EditorSceneManager.OpenScene("Assets/Scenes/MainMenu.unity");
-        Check(ReleaseBuildValidator.CollectIssues().Count == 0, "release scenes and required assets valid");
+        var buildIssues = ReleaseBuildValidator.CollectIssues();
+        Check(buildIssues.Count == 0, "release scenes and required assets valid: " + string.Join("; ", buildIssues));
         int slotCount = GameFlowConfig.Active.manualSaveSlotCount;
         try
         {
@@ -101,8 +102,8 @@ public static class GameFlowSmokeChecks
                     Check(SceneManager.GetActiveScene().name == "Town" && GameSession.HasActiveGame, "new game enters town");
                     Check(TownProgress.Gold == 0 && TownProgress.SupplyKits == 0, "new game has fresh progress");
                     Check(GameSaveService.TryLoad(-1, out var initial, out _), "new game automatically saved");
-                    TownProgress.AcceptContract();
-                    TownProgress.BankRun(250, true);
+                    TownEconomyChecks.Run(Check);
+                    TownProgress.Restore(new TownProgressData { gold = 370 });
                     Check(TownProgress.TryBuySupplyKit(), "purchase supply");
                     Check(GameSession.Save(0, out string townError), "manual town save: " + townError);
                     Check(TownProgress.Gold == 345 && TownProgress.SupplyKits == 1, "town accounting");
@@ -217,7 +218,10 @@ public static class GameFlowSmokeChecks
                     pendingRun.DiscardPendingLoot(0);
                     Check(Time.timeScale == 1f && !pendingRun.IsLootPlacementOpen, "loot completion resumes world");
                     var first = GameSession.Capture();
-                    Check(GameSaveService.TrySave(9, first, out _), "last configured manual slot writable");
+                    Check(GameSaveService.TrySave(9, first, out string lastSlotError), "last configured manual slot writable: " + lastSlotError
+                        + " town=" + first.town.IsValid() + " dungeon=" + first.dungeon?.IsValid() + " health=" + first.dungeon?.health
+                        + " bag=" + first.town.bagLevel + " motion=" + first.dungeon?.motion?.IsValid()
+                        + " value=" + first.dungeon?.totalValue + " items=" + first.dungeon?.inventory.Count);
                     var second = GameSession.Capture(); second.town.gold = 777;
                     Check(GameSaveService.TrySave(9, second, out _), "atomic overwrite keeps backup");
                     File.WriteAllText(Path.Combine(GameSaveService.SaveDirectory, "slot-10.sav"), "{broken");
@@ -263,7 +267,7 @@ public static class GameFlowSmokeChecks
                     break;
                 case 13:
                     if (!EditorApplication.isPlaying || GameSession.IsLoading || SceneManager.GetActiveScene().name != "Town") return;
-                    TownProgress.BankRun(123, false);
+                    TownProgress.Restore(new TownProgressData { gold = 123 });
                     string autoPath = Path.Combine(GameSaveService.SaveDirectory, "autosave.sav");
                     using (var locked = File.Open(autoPath, FileMode.Open, FileAccess.Read, FileShare.None))
                     {

@@ -69,6 +69,9 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
             Check(GameSaveService.TryLoad(8, out var stored, out _) && stored.town.gold == 466, "protected slot survives independent process restart");
             Check(GameSaveService.TryLoad(-1, out var quitSave, out _) && quitSave.town.gold == 466 && quitSave.area == SaveArea.Town,
                 "Windows normal quit persists latest progress");
+            Check(stored.town.bagLevel == 1 && stored.town.warehouse.Count == 1 && stored.town.warehouse[0].quantity == 3
+                && stored.town.warehouse[0].unitPrice == 90 && stored.town.saleLockedKinds.Contains(LootKinds.GoblinHide),
+                "warehouse quantities price tiers sale locks and bag upgrades survive process restart");
             Finish(true); yield break;
         }
         Check(!Debug.isDebugBuild, "validation uses a non-development Windows build");
@@ -91,7 +94,8 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         yield return null;
         Check(TownProgress.Gold == 0 && TownProgress.SupplyKits == 0, "release town starts with fresh progress");
         Call(Shell, "Resume");
-        TownProgress.BankRun(250, false);
+        TownEconomyChecks.Run(Check);
+        TownProgress.Restore(new TownProgressData { gold = 250 });
         Check(TownProgress.TryBuySupplyKit() && TownProgress.Gold == 225, "release supply transaction");
         TownProgress.AcceptContract();
         Vector2 townPosition = UnityEngine.Object.FindAnyObjectByType<PlayerMovement>().transform.position;
@@ -110,6 +114,7 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         Call(Shell, "OpenPause");
         Check(run.Inventory.TryPlace(LootDefinition.CreateShaped("회수품", 50, TownProgress.ContractTarget,
             Vector2Int.zero, Vector2Int.right, Vector2Int.up), 1, 1), "release shaped loot fits inventory");
+        Check(run.Inventory.TryPlace(new LootDefinition("판매용 이빨", 1, 1, 70), 4, 0), "release separately priced trade loot fits inventory");
         run.PlayerHealth.TakeDamage(17);
         run.Player.GetComponent<PlayerMovement>().Restore(new PlayerMotionSaveData { cooldownSeconds = 2f });
         Vector2 entrance = run.Player.position;
@@ -120,7 +125,7 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         yield return null;
         run = DungeonRunController.Instance;
         Call(Shell, "OpenPause");
-        Check(run.PlayerHealth.Current == 83 && run.Inventory.TotalValue == 50, "release restores health and inventory value");
+        Check(run.PlayerHealth.Current == 83 && run.Inventory.TotalValue == 120, "release restores health and inventory value");
         Check(run.CaptureSave().discoveredCells.Count >= exploration && run.Player.GetComponent<PlayerMovement>().Capture().cooldownSeconds > 0f,
             "release restores exploration and dash cooldown");
         Call(Shell, "Resume");
@@ -165,7 +170,8 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         Call(run, "FinishRun", "검증 귀환");
         int banked = TownProgress.Gold;
         Call(run, "FinishRun", "중복 귀환");
-        Check(banked == 395 && TownProgress.Gold == banked && !run.PlayerHealth.TakeDamage(10), "escape banks reward once and prevents later damage");
+        Check(banked == 225 && TownProgress.Gold == banked && TownProgress.WarehouseCount == 2 && run.Inventory.Items.Count == 0
+            && TownProgress.HasAcceptedContract && !run.PlayerHealth.TakeDamage(10), "escape stores loot once without auto-selling or auto-submitting quest");
         yield return null;
         Check(GameSaveService.TryLoad(-1, out var escaped, out _) && escaped.area == SaveArea.Town && escaped.town.gold == banked,
             "escape autosave contains committed town reward");
@@ -178,17 +184,63 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         Check(Time.timeScale == 0f && GameShell.IsGameplayInputBlocked, "release focus loss pauses gameplay");
         Call(Shell, "Resume");
         Check(Time.timeScale == 1f, "repeated pause does not lose resume time scale");
+        Check(TownProgress.TrySubmitContract(out _) && TownProgress.Gold == 345 && TownProgress.WarehouseCount == 1,
+            "release guild submission consumes recovered quest loot and rewards once");
+        Check(TownProgress.TrySellOne(TownProgress.GetStacks("goblin.tooth")[0].id, out _) && TownProgress.Gold == 415,
+            "release market sells recovered item at its preserved price");
+        TownEconomyChecks.ReceiveItems(LootKinds.GoblinHide, "고블린 가죽", LootShape.Hide, 40, 5);
+        TownEconomyChecks.ReceiveItems(LootKinds.GoblinHide, "고블린 가죽", LootShape.Hide, 90, 3);
+        TownProgress.SetSaleLock(LootKinds.GoblinHide, true);
+        var commerce = UnityEngine.Object.FindAnyObjectByType<TownCommercePanel>();
+        commerce.Open(TownFacility.Warehouse); yield return null;
+        Snapshot("release-warehouse"); yield return null; yield return null;
+        if (capture)
+        {
+            var smallTown = GameSettings.Copy(); smallTown.width = 640; smallTown.height = 360;
+            GameSettings.Apply(smallTown, false);
+            float settleUntil = Time.realtimeSinceStartup + .25f;
+            while (Time.realtimeSinceStartup < settleUntil || Screen.width != 640 || Screen.height != 360)
+            { CheckTime(); yield return null; }
+            Snapshot("release-warehouse-small"); yield return null; yield return null;
+            smallTown.width = 1280; smallTown.height = 720; GameSettings.Apply(smallTown, false);
+            while (Screen.width != 1280 || Screen.height != 720) { CheckTime(); yield return null; }
+        }
+        Call(Shell, "OnApplicationFocus", false); Call(Shell, "Resume");
+        Check(Time.timeScale == 0f && TownCommercePanel.IsOpen, "focus pause preserves warehouse pause");
+        commerce.Close(); commerce.Open(TownFacility.Market); yield return null;
+        Snapshot("release-market"); yield return null; yield return null;
+        commerce.Close(); commerce.Open(TownFacility.Upgrades); yield return null;
+        Snapshot("release-bag-upgrade"); yield return null; yield return null;
+        Check(TownProgress.TryUpgradeBag(out _) && TownProgress.Gold == 115 && TownProgress.BagLevel == 1
+            && TownProgress.GetStacks(LootKinds.GoblinHide)[0].unitPrice == 90 && TownProgress.WarehouseCount == 3,
+            "release recipe consumes low-priced materials and gold atomically");
+        commerce.Close(); banked = TownProgress.Gold;
         TownProgress.AcceptContract();
         Check(GameSession.EnterDungeon(out _), "release second dungeon begins");
         while (!Ready("Dungeon")) { CheckTime(); yield return null; }
         yield return null;
         run = DungeonRunController.Instance;
-        run.Inventory.TryPlace(new LootDefinition("잃는 전리품", 1, 1, 999), 0, 0);
+        Check(run.Inventory.Columns == 6 && run.Inventory.Rows == 4
+            && run.Inventory.TryPlace(new LootDefinition("잃는 전리품", 1, 1, 999), 5, 3), "release upgraded bag accepts expanded edge cell");
+        Call(Shell, "OpenPause");
+        Check(GameSession.Save(4, out _) && GameSession.LoadSlot(4, out _), "release upgraded dungeon slot loads");
+        while (!Ready("Dungeon")) { CheckTime(); yield return null; }
+        yield return null; run = DungeonRunController.Instance;
+        Check(run.Inventory.Columns == 6 && run.Inventory.GetCell(5, 3) != 0 && TownProgress.BagLevel == 1,
+            "release upgraded dimensions and edge placement restore together");
+        var expanded = GameSession.Capture(); expanded.dungeon.lootPlacementOpen = true;
+        expanded.dungeon.pendingLoot.Add(LootSaveData.Capture(new LootDefinition("확장 가방 검사용", 1, 1, 15)));
+        Check(GameSaveService.TrySave(4, expanded, out _) && GameSession.LoadSlot(4, out _), "release upgraded loot modal slot loads");
+        while (!Ready("Dungeon")) { CheckTime(); yield return null; }
+        yield return null; run = DungeonRunController.Instance;
+        Snapshot("release-expanded-bag"); yield return null; yield return null;
+        Check(run.IsLootPlacementOpen && run.Inventory.Columns == 6 && Time.timeScale == 0f
+            && run.TryPlacePendingLoot(0, 0, 0, false), "release expanded loot grid places items and restores pause");
         run.PlayerHealth.Restore(1);
         Check(run.PlayerHealth.TakeDamage(2), "release lethal damage applied");
         while (!Ready("Town")) { CheckTime(); yield return null; }
         yield return null;
-        Check(TownProgress.Gold == banked && !TownProgress.HasAcceptedContract && TownProgress.LastRunGold == 0,
+        Check(TownProgress.Gold == banked && !TownProgress.HasAcceptedContract && TownProgress.LastRunGold == 0 && TownProgress.WarehouseCount == 3,
             "death loses unbanked loot and contract without changing banked gold");
         Call(Shell, "Resume");
         string autoPath = Path.Combine(GameSaveService.SaveDirectory, "autosave.sav");
@@ -200,8 +252,9 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         typeof(GameShell).GetField("nextAutosaveAttempt", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(Shell, 0f);
         Call(Shell, "LateUpdate");
         Check(!GameSession.AutosavePending, "release autosave retries after storage recovers");
-        Check(GameSaveService.TrySave(8, new GameSaveData { town = new TownProgressData { gold = 466 } }, out _), "release persistent slot written");
-        TownProgress.BankRun(71, false);
+        TownEconomyChecks.ReceiveItems("goblin.tooth", "정산 검사용", LootShape.Tooth, 351, 1);
+        Check(TownProgress.TrySellOne(TownProgress.GetStacks("goblin.tooth")[0].id, out _), "release final manual sale");
+        Check(GameSession.Save(8, out _), "release persistent slot written");
         Check(TownProgress.Gold == 466, "latest quit state prepared");
         Finish(false);
     }

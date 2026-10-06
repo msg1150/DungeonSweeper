@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 
 /// <summary>마을의 의뢰와 소모품이 실제 던전 결과에 영향을 주도록 유지하는 상태.</summary>
-public static class TownProgress
+public static partial class TownProgress
 {
     private const int ContractBonus = 120;
     private static readonly LootShape[] contractTargets = { LootShape.Dagger, LootShape.Core, LootShape.Hide, LootShape.Horn };
@@ -13,6 +13,7 @@ public static class TownProgress
     public static int LastContractBonus { get; private set; }
     public static bool HasAcceptedContract { get; private set; }
     public static LootShape ContractTarget { get; private set; }
+    public static string ContractKindId => LootKinds.LegacyId(ContractTarget);
     public static int ActiveContractBonus => HasAcceptedContract ? ContractBonus : 0;
     public static string ContractTargetName => ContractTarget switch
     {
@@ -25,26 +26,18 @@ public static class TownProgress
 
     public static bool AcceptContract()
     {
-        if (HasAcceptedContract) return false;
+        if (!InTown || HasAcceptedContract) return false;
         ContractTarget = contractTargets[UnityEngine.Random.Range(0, contractTargets.Length)];
         HasAcceptedContract = true;
         GameSession.RequestAutosave();
         return true;
     }
 
-    public static void BankRun(int recoveredGold, bool contractCompleted)
-    {
-        LastContractBonus = HasAcceptedContract && contractCompleted ? ContractBonus : 0;
-        LastRunGold = AddGold(Mathf.Max(0, recoveredGold), LastContractBonus);
-        Gold = AddGold(Gold, LastRunGold);
-        HasAcceptedContract = false;
-        GameSession.RequestAutosave();
-    }
-
     public static void FailRun()
     {
         LastRunGold = 0;
         LastContractBonus = 0;
+        LastRecoveredCount = LastRecoveredValue = 0;
         HasAcceptedContract = false;
         GameSession.RequestAutosave();
     }
@@ -52,7 +45,7 @@ public static class TownProgress
     public static bool TryBuySupplyKit()
     {
         const int cost = 25;
-        if (Gold < cost || SupplyKits == int.MaxValue) return false;
+        if (!InTown || Gold < cost || SupplyKits == int.MaxValue) return false;
         Gold -= cost;
         SupplyKits++;
         GameSession.RequestAutosave();
@@ -76,12 +69,15 @@ public static class TownProgress
         LastContractBonus = 0;
         HasAcceptedContract = false;
         ContractTarget = LootShape.Dagger;
+        ResetWarehouse();
     }
 
     public static void Restore(TownProgressData data)
     {
+        if (data != null && !data.IsValid()) throw new ArgumentException("Invalid town progression.");
         Reset();
         if (data == null) return;
+        RestoreWarehouse(data);
         Gold = Mathf.Max(0, data.gold);
         SupplyKits = Mathf.Max(0, data.supplyKits);
         LastRunGold = Mathf.Max(0, data.lastRunGold);
@@ -100,8 +96,9 @@ public static class TownProgress
         lastRunGold = LastRunGold,
         lastContractBonus = LastContractBonus,
         hasAcceptedContract = HasAcceptedContract,
-        contractTarget = ContractTarget
+        contractTarget = ContractTarget,
+        bagLevel = BagLevel, lastRecoveredCount = LastRecoveredCount, lastRecoveredValue = LastRecoveredValue,
+        nextWarehouseId = nextWarehouseId, warehouse = CopyWarehouse(), saleLockedKinds = new(saleLocks)
     };
 
-    private static int AddGold(int current, int amount) => (int)Math.Min(int.MaxValue, (long)current + amount);
 }

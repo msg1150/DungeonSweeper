@@ -4,6 +4,15 @@ public static class TownCasualVisuals
 {
     public static void Apply()
     {
+        GameObject warehouse = GameObject.Find("Town Warehouse");
+        if (warehouse == null)
+        {
+            warehouse = new GameObject("Town Warehouse");
+            warehouse.transform.position = new Vector3(-.4f, -2.6f, 0);
+            SpriteRenderer marker = warehouse.AddComponent<SpriteRenderer>();
+            marker.sprite = CasualArtLibrary.WhiteSprite; marker.color = new Color(.2f, .5f, .45f);
+            marker.sortingOrder = 1; warehouse.transform.localScale = new Vector3(1.3f, .8f, 1);
+        }
         Sprite background = CasualArtLibrary.LoadFull("Sprites/Environment/town-casual", 100f);
         Sprite[] structures = CasualArtLibrary.LoadSheet("Sprites/Environment/town-structures", 3, 1, 180f, true);
         SetBackgroundCover("Town Ground", background);

@@ -19,6 +19,7 @@ Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/GameFlowSmokeChecks.cs
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/ValidationRuntimeDriver.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/ValidationRuntimeDriver.cs" -Force
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/SaveProtectionChecks.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/SaveProtectionChecks.cs" -Force
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/ReleaseLogicChecks.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/ReleaseLogicChecks.cs" -Force
+Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/TownEconomyChecks.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/TownEconomyChecks.cs" -Force
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/PlayerProtectionValidationBuild.cs') -Destination "$taskValidationRoot/Assets/Editor/PlayerProtectionValidationBuild.cs" -Force
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/PlayerProtectionValidationDriver.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/PlayerProtectionValidationDriver.cs" -Force
 
@@ -69,7 +70,7 @@ if ($CheckPlayerProtection -or $CaptureScreens) {
         Write-Output $taskPlayerText
     }
     if ($CaptureScreens) {
-        foreach ($taskCapture in @('release-main-menu', 'release-town', 'release-dungeon', 'release-loot-modal', 'release-loot-scrolled', 'release-loot-small')) {
+        foreach ($taskCapture in @('release-main-menu', 'release-town', 'release-dungeon', 'release-loot-modal', 'release-loot-scrolled', 'release-loot-small', 'release-warehouse', 'release-warehouse-small', 'release-market', 'release-bag-upgrade', 'release-expanded-bag')) {
             $taskCapturePath = Join-Path $taskValidationRoot ($taskCapture + '.png')
             if (-not (Test-Path -LiteralPath $taskCapturePath)) { throw "Release screen capture missing: $taskCapturePath" }
         }

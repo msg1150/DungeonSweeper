@@ -35,6 +35,7 @@ public sealed class MonsterDatabaseEditor : Editor
             for (int j = 0; j < loot.arraySize; j++)
             {
                 SerializedProperty item = loot.GetArrayElementAtIndex(j);
+                EditorGUILayout.PropertyField(item.FindPropertyRelative("kindId"), new GUIContent("전리품 종류 ID (이름·아이콘과 독립)"));
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.PropertyField(item.FindPropertyRelative("lootName"), GUIContent.none, GUILayout.MinWidth(100));
                 EditorGUILayout.PropertyField(item.FindPropertyRelative("shape"), GUIContent.none, GUILayout.Width(80));

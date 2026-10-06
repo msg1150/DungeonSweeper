@@ -6,13 +6,23 @@ public sealed class GridInventory
 {
     public const int Width = 5;
     public const int Height = 4;
+    public const int MaximumWidth = 8, MaximumHeight = 8;
+    public int Columns { get; }
+    public int Rows { get; }
 
-    private readonly int[,] cells = new int[Width, Height];
+    private readonly int[,] cells;
     private readonly List<StoredLoot> items = new();
     private int nextId = 1;
 
     public int TotalValue { get; private set; }
     public IReadOnlyList<StoredLoot> Items => items;
+
+    public GridInventory(int width = Width, int height = Height)
+    {
+        if (width < 1 || height < 1 || width > MaximumWidth || height > MaximumHeight)
+            throw new System.ArgumentOutOfRangeException(nameof(width));
+        Columns = width; Rows = height; cells = new int[width, height];
+    }
 
     public int GetCell(int x, int y) => cells[x, y];
 
@@ -32,21 +42,31 @@ public sealed class GridInventory
 
     public bool TryPlace(LootDefinition loot, int startX, int startY)
     {
-        if (!CanPlace(loot, startX, startY)) return false;
-        int id = nextId++;
-        items.Add(new StoredLoot(id, loot, new Vector2Int(startX, startY)));
-        FillCells(loot, startX, startY, id);
+        if (loot == null) return false;
+        return Place(loot, startX, startY, Price(loot));
+    }
+
+    private static int Price(LootDefinition loot)
+    {
         double multiplier = DungeonTuning.Active.lootValueMultiplier;
         if (double.IsNaN(multiplier) || double.IsInfinity(multiplier)) multiplier = 1d;
         double value = System.Math.Round(loot.Value * System.Math.Max(0d, multiplier));
-        int reward = (int)System.Math.Min(int.MaxValue, System.Math.Max(0d, value));
+        return (int)System.Math.Min(int.MaxValue, System.Math.Max(0d, value));
+    }
+
+    private bool Place(LootDefinition loot, int startX, int startY, int reward)
+    {
+        if (!CanPlace(loot, startX, startY)) return false;
+        int id = nextId++;
+        items.Add(new StoredLoot(id, loot, new Vector2Int(startX, startY), reward));
+        FillCells(loot, startX, startY, id);
         TotalValue = (int)System.Math.Min(int.MaxValue, (long)TotalValue + reward);
         return true;
     }
 
     public bool CanPlace(LootDefinition loot, int startX, int startY)
     {
-        if (loot == null || startX < 0 || startY < 0 || startX > Width - loot.Width || startY > Height - loot.Height)
+        if (loot == null || startX < 0 || startY < 0 || startX > Columns - loot.Width || startY > Rows - loot.Height)
             return false;
         foreach (Vector2Int cell in loot.OccupiedCells)
             if (cells[startX + cell.x, startY + cell.y] != 0) return false;
@@ -80,7 +100,8 @@ public sealed class GridInventory
     {
         List<StoredLootSaveData> result = new();
         foreach (StoredLoot item in items)
-            result.Add(new StoredLootSaveData { loot = LootSaveData.Capture(item.Definition), position = item.Position });
+            result.Add(new StoredLootSaveData { loot = LootSaveData.Capture(item.Definition), position = item.Position,
+                hasSaleValue = true, saleValue = item.SaleValue });
         return result;
     }
 
@@ -88,7 +109,8 @@ public sealed class GridInventory
     {
         Clear();
         foreach (StoredLootSaveData item in savedItems)
-            if (!TryPlace(item.loot.Restore(), item.position.x, item.position.y))
+            if (!Place(item.loot.Restore(), item.position.x, item.position.y,
+                item.hasSaleValue ? item.saleValue : Price(item.loot.Restore())))
                 throw new System.ArgumentException("Saved inventory has an invalid placement.");
         TotalValue = Mathf.Max(0, totalValue);
     }
@@ -111,12 +133,14 @@ public sealed class StoredLoot
     public int Id { get; }
     public LootDefinition Definition { get; }
     public Vector2Int Position { get; private set; }
+    public int SaleValue { get; }
 
-    public StoredLoot(int id, LootDefinition definition, Vector2Int position)
+    public StoredLoot(int id, LootDefinition definition, Vector2Int position, int saleValue)
     {
         Id = id;
         Definition = definition;
         Position = position;
+        SaleValue = saleValue;
     }
 
     public void MoveTo(Vector2Int position) => Position = position;

@@ -10,7 +10,7 @@ public class DungeonRunController : MonoBehaviour
 
     private readonly List<CorpseRunData> corpses = new();
     private readonly List<EnemyAgent> enemies = new();
-    private readonly GridInventory inventory = new();
+    private GridInventory inventory;
     private readonly List<LootDefinition> pendingLoot = new();
     private readonly HashSet<Vector2Int> discoveredCells = new();
     private PlayerMovement movement;
@@ -47,6 +47,8 @@ public class DungeonRunController : MonoBehaviour
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
         DungeonSaveData saved = GameSession.TakeDungeonSave();
+        Vector2Int bagSize = saved == null ? TownProgress.BagSize : new(saved.ResolvedWidth, saved.ResolvedHeight);
+        inventory = new GridInventory(bagSize.x, bagSize.y);
         if (!FindExistingPlayer()) return;
         ClearLegacyDungeonGeometry();
         DungeonLayoutFactory.CreateLayout(saved?.layoutIndex ?? -1);
@@ -58,7 +60,7 @@ public class DungeonRunController : MonoBehaviour
 
         DungeonDemoHud hud = new GameObject("Dungeon Demo HUD").AddComponent<DungeonDemoHud>();
         hud.Initialize(this);
-        Say(TownProgress.HasAcceptedContract ? $"의뢰 목표: {TownProgress.ContractTargetName}을 가방에 넣고 탈출하세요." : "입구입니다. 시체를 해체하고 전리품을 가방에 배치해 회수하세요.", 6f);
+        Say(TownProgress.HasAcceptedContract ? $"의뢰 목표: {TownProgress.ContractTargetName}을 회수해 마을 길드에 제출하세요." : "입구입니다. 시체를 해체하고 전리품을 가방에 배치해 회수하세요.", 6f);
     }
 
     private void Update()
@@ -329,11 +331,10 @@ public class DungeonRunController : MonoBehaviour
     private void FinishRun(string message)
     {
         if (!IsRunActive) return;
+        if (!TownProgress.TryReceiveRun(inventory, out string error)) { Say(error, 999f); return; }
         hasEscaped = true;
         movement.SetMovementEnabled(false);
         if (playerBody != null) playerBody.linearVelocity = Vector2.zero;
-        // Commit the reward when escape succeeds, even if the result screen is closed.
-        TownProgress.BankRun(inventory.TotalValue, inventory.ContainsShape(TownProgress.ContractTarget));
         Say(message, 999f);
     }
 
@@ -371,6 +372,7 @@ public class DungeonRunController : MonoBehaviour
         DungeonSaveData data = new()
         {
             layoutIndex = DungeonLayoutFactory.LayoutIndex, health = playerHealth.Current,
+            bagWidth = inventory.Columns, bagHeight = inventory.Rows,
             playerPosition = player.position, specialGate = specialGate,
             activeCorpseIndex = activeCorpse == null ? -1 : corpses.IndexOf(activeCorpse),
             lootPlacementOpen = lootPlacementOpen, inventory = inventory.Capture(), totalValue = inventory.TotalValue,

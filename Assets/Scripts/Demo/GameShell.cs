@@ -10,13 +10,14 @@ public sealed class GameShell : MonoBehaviour
 {
     private enum Page { Playing, Main, Pause, Load, Save, Options }
     private static GameShell instance;
+    public static bool IsMenuOpen => instance != null && instance.page != Page.Playing;
     public static bool IsGameplayInputBlocked
     {
         get
         {
             if (instance == null) instance = FindAnyObjectByType<GameShell>();
             return instance != null && (instance.page != Page.Playing || GameSession.IsLoading
-                || instance.blockInputFrame == Time.frameCount);
+                || instance.blockInputFrame == Time.frameCount || TownCommercePanel.IsOpen);
         }
     }
     private int blockInputFrame = -1, consumedEscapeFrame = -1;
@@ -92,6 +93,7 @@ public sealed class GameShell : MonoBehaviour
         GameSession.Tick(Time.unscaledDeltaTime);
         if (Keyboard.current == null || !Keyboard.current.escapeKey.wasPressedThisFrame) return;
         if (consumedEscapeFrame == Time.frameCount) return;
+        if (page == Page.Playing && TownCommercePanel.IsOpen) return;
         if (overwriteSlot != -2) { overwriteSlot = -2; return; }
         if (page == Page.Playing && GameSession.HasActiveGame)
         {

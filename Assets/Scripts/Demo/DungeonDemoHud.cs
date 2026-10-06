@@ -12,6 +12,7 @@ public class DungeonDemoHud : MonoBehaviour
     private int draggingStoredItemId;
     private Vector2 dragMousePosition;
     private Rect bagGrid;
+    private float bagCell;
     private bool legacyFogRemoved;
     private Vector2 pendingLootScroll;
 
@@ -81,7 +82,8 @@ public class DungeonDemoHud : MonoBehaviour
         const float cell = 7f;
         float width = DungeonLayoutFactory.Width * cell;
         float height = DungeonLayoutFactory.Height * cell;
-        Rect panel = new Rect(GameGuiScope.Width - width - 30f, 210f, width + 16f, height + 38f);
+        float bagHeight = CompactBagCell * run.Inventory.Rows;
+        Rect panel = new Rect(GameGuiScope.Width - width - 30f, Mathf.Max(210f, bagHeight + 120f), width + 16f, height + 38f);
         GUI.color = new Color(.02f, .035f, .06f, .9f);
         GUI.DrawTexture(panel, Texture2D.whiteTexture);
         GUI.color = Color.white;
@@ -99,15 +101,17 @@ public class DungeonDemoHud : MonoBehaviour
         GUI.color = Color.white;
     }
 
+    private float CompactBagCell => Mathf.Min(24f, 144f / run.Inventory.Columns, 144f / run.Inventory.Rows);
+
     private void DrawInventory()
     {
-        const float cell = 24f;
+        float cell = CompactBagCell;
         float x = GameGuiScope.Width - 160f;
         float y = 18f;
         GUI.color = Color.white;
-        GUI.Label(new Rect(x, y, 145f, 23f), "작업 가방  5 × 4");
-        for (int row = 0; row < GridInventory.Height; row++)
-        for (int col = 0; col < GridInventory.Width; col++)
+        GUI.Label(new Rect(x, y, 145f, 23f), $"작업 가방  {run.Inventory.Columns} × {run.Inventory.Rows}");
+        for (int row = 0; row < run.Inventory.Rows; row++)
+        for (int col = 0; col < run.Inventory.Columns; col++)
         {
             int id = run.Inventory.GetCell(col, row);
             GUI.color = id == 0 ? new Color(.12f, .15f, .2f) : LootColor(id);
@@ -121,7 +125,7 @@ public class DungeonDemoHud : MonoBehaviour
         LootDefinition pending = run.PendingLoot;
         if (pending == null)
         {
-            GUI.Label(new Rect(x, y + 126, 150f, 55f), "해체 후 전리품을 직접\n배치할 수 있습니다.");
+            GUI.Label(new Rect(x, y + 35 + cell * run.Inventory.Rows, 150f, 55f), "해체 후 전리품을 직접\n배치할 수 있습니다.");
             return;
         }
 
@@ -156,14 +160,14 @@ public class DungeonDemoHud : MonoBehaviour
 
     private void DrawLargeBag(float x, float y)
     {
-        const float cell = 54f;
-        bagGrid = new Rect(x, y, GridInventory.Width * cell, GridInventory.Height * cell);
+        float cell = bagCell = Mathf.Min(54f, 300f / run.Inventory.Columns, 300f / run.Inventory.Rows);
+        bagGrid = new Rect(x, y, run.Inventory.Columns * cell, run.Inventory.Rows * cell);
         GUI.color = Color.white;
         GUI.skin.label.alignment = TextAnchor.UpperLeft;
         GUI.skin.label.fontSize = 18;
-        GUI.Label(new Rect(x, y - 32f, 300f, 26f), "플레이어 가방  5 × 4");
-        for (int row = 0; row < GridInventory.Height; row++)
-        for (int col = 0; col < GridInventory.Width; col++)
+        GUI.Label(new Rect(x, y - 32f, 300f, 26f), $"플레이어 가방  {run.Inventory.Columns} × {run.Inventory.Rows}");
+        for (int row = 0; row < run.Inventory.Rows; row++)
+        for (int col = 0; col < run.Inventory.Columns; col++)
         {
             int id = run.Inventory.GetCell(col, row);
             Rect cellRect = new Rect(x + col * cell, y + row * cell, cell - 3f, cell - 3f);
@@ -265,8 +269,8 @@ public class DungeonDemoHud : MonoBehaviour
         if (current.type != EventType.MouseUp || current.button != 0) return;
         if (bagGrid.Contains(current.mousePosition))
         {
-            int column = Mathf.FloorToInt((current.mousePosition.x - bagGrid.x) / 54f);
-            int row = Mathf.FloorToInt((current.mousePosition.y - bagGrid.y) / 54f);
+            int column = Mathf.FloorToInt((current.mousePosition.x - bagGrid.x) / bagCell);
+            int row = Mathf.FloorToInt((current.mousePosition.y - bagGrid.y) / bagCell);
             if (draggingLootIndex >= 0 && draggingLootIndex < run.PendingLootItems.Count)
             {
                 LootDefinition loot = run.PendingLootItems[draggingLootIndex];
@@ -285,7 +289,7 @@ public class DungeonDemoHud : MonoBehaviour
         if (loot == null) return;
         bool rotated = draggingLootIndex >= 0 && rotatedLoot.Contains(loot);
         LootDefinition displayLoot = rotated ? loot.RotatedClockwise() : loot;
-        const float cell = 54f;
+        float cell = bagCell;
         GUI.color = new Color(LootColor((int)loot.Shape + 1).r, LootColor((int)loot.Shape + 1).g, LootColor((int)loot.Shape + 1).b, .7f);
         DrawLootShape(displayLoot, new Rect(dragMousePosition.x - 12f, dragMousePosition.y - 12f, displayLoot.Width * cell - 11f, displayLoot.Height * cell - 11f));
     }
@@ -363,7 +367,7 @@ public class DungeonDemoHud : MonoBehaviour
         GUI.Label(new Rect(GameGuiScope.Width * .5f - 230f, GameGuiScope.Height * .5f - 56f, 460f, 40f), "RUN COMPLETE");
         GUI.color = Color.white;
         GUI.skin.label.fontSize = 18;
-        GUI.Label(new Rect(GameGuiScope.Width * .5f - 225f, GameGuiScope.Height * .5f - 5f, 450f, 54f), $"{run.Inventory.TotalValue}G 상당의 전리품을 회수했습니다.\n[E]를 눌러 마을로 돌아갑니다.");
+        GUI.Label(new Rect(GameGuiScope.Width * .5f - 225f, GameGuiScope.Height * .5f - 5f, 450f, 65f), $"전리품 {TownProgress.LastRecoveredCount}개를 창고에 보관했습니다.\n거래소에서 판매하거나 재료로 사용하세요.\n[E]를 눌러 마을로 돌아갑니다.");
     }
 
     private static Color LootColor(int id) => Color.HSVToRGB((id * .19f) % 1f, .62f, .9f);

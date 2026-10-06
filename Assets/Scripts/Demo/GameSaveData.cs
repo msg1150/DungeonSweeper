@@ -11,11 +11,41 @@ public sealed class TownProgressData
     public int gold, supplyKits, lastRunGold, lastContractBonus;
     public bool hasAcceptedContract;
     public LootShape contractTarget = LootShape.Dagger;
+    public int bagLevel, lastRecoveredCount, lastRecoveredValue, nextWarehouseId = 1;
+    public List<WarehouseStackData> warehouse = new();
+    public List<string> saleLockedKinds = new();
 
     public bool IsValid() => version == 1 && gold >= 0 && supplyKits >= 0 && lastRunGold >= 0
         && lastContractBonus >= 0 && lastContractBonus <= 120 && lastContractBonus <= lastRunGold
         && (contractTarget == LootShape.Dagger || contractTarget == LootShape.Core
-            || contractTarget == LootShape.Hide || contractTarget == LootShape.Horn);
+            || contractTarget == LootShape.Hide || contractTarget == LootShape.Horn)
+        && bagLevel >= 0 && bagLevel <= TownEconomyConfig.Active.bagUpgrades.Count && lastRecoveredCount >= 0
+        && lastRecoveredValue >= 0 && ValidWarehouse();
+
+    private bool ValidWarehouse()
+    {
+        if (saleLockedKinds != null)
+        {
+            var kinds = new HashSet<string>();
+            foreach (string kind in saleLockedKinds) if (!LootKinds.ValidId(kind) || !kinds.Add(kind)) return false;
+        }
+        if (warehouse == null || warehouse.Count == 0) return nextWarehouseId >= 0;
+        var ids = new HashSet<int>();
+        foreach (WarehouseStackData stack in warehouse)
+            if (stack == null || stack.id < 1 || stack.id >= nextWarehouseId || !ids.Add(stack.id)
+                || stack.quantity <= 0 || stack.unitPrice < 0 || stack.loot == null || !stack.loot.IsValid()) return false;
+        return true;
+    }
+}
+
+[Serializable]
+public sealed class WarehouseStackData
+{
+    public int id, quantity, unitPrice;
+    public bool saleLocked;
+    public LootSaveData loot;
+    public WarehouseStackData Copy() => new() { id = id, quantity = quantity, unitPrice = unitPrice,
+        saleLocked = saleLocked, loot = LootSaveData.Capture(loot.Restore()) };
 }
 
 [Serializable]
@@ -36,7 +66,10 @@ public sealed class GameSaveData
         if (version != 1 || town == null || !town.IsValid() || double.IsNaN(playSeconds) || double.IsInfinity(playSeconds)
             || playSeconds < 0 || !Enum.IsDefined(typeof(SaveArea), area)) return false;
         if (hasTownPosition && !Finite(townPosition)) return false;
-        return area != SaveArea.Dungeon || (dungeon != null && dungeon.IsValid());
+        if (area != SaveArea.Dungeon) return true;
+        if (dungeon == null || !dungeon.IsValid()) return false;
+        Vector2Int size = TownEconomyConfig.Active.BagSize(town.bagLevel);
+        return dungeon.ResolvedWidth == size.x && dungeon.ResolvedHeight == size.y;
     }
 
     public static bool Finite(Vector2 value) => !float.IsNaN(value.x) && !float.IsInfinity(value.x)
@@ -46,6 +79,7 @@ public sealed class GameSaveData
 [Serializable]
 public sealed class LootSaveData
 {
+    public string kindId;
     public string name;
     public int value;
     public LootShape shape;
@@ -54,18 +88,18 @@ public sealed class LootSaveData
     {
         Vector2Int[] cells = new Vector2Int[loot.OccupiedCells.Count];
         for (int i = 0; i < cells.Length; i++) cells[i] = loot.OccupiedCells[i];
-        return new LootSaveData { name = loot.Name, value = loot.Value, shape = loot.Shape, cells = cells };
+        return new LootSaveData { kindId = loot.KindId, name = loot.Name, value = loot.Value, shape = loot.Shape, cells = cells };
     }
     public bool IsValid()
     {
         if (cells == null || cells.Length == 0 || cells.Length > 1024 || value < 0
-            || !Enum.IsDefined(typeof(LootShape), shape)) return false;
+            || !Enum.IsDefined(typeof(LootShape), shape) || (!string.IsNullOrEmpty(kindId) && !LootKinds.ValidId(kindId))) return false;
         HashSet<Vector2Int> unique = new();
         foreach (Vector2Int cell in cells)
             if (cell.x < 0 || cell.y < 0 || cell.x > 100 || cell.y > 100 || !unique.Add(cell)) return false;
         return true;
     }
-    public LootDefinition Restore() => LootDefinition.CreateShaped(name, value, shape, cells);
+    public LootDefinition Restore() => LootDefinition.CreateIdentified(kindId, name, value, shape, cells);
 }
 
 [Serializable]
@@ -73,6 +107,8 @@ public sealed class StoredLootSaveData
 {
     public LootSaveData loot;
     public Vector2Int position;
+    public bool hasSaleValue;
+    public int saleValue;
 }
 
 [Serializable]
@@ -120,6 +156,9 @@ public sealed class PlayerMotionSaveData
 [Serializable]
 public sealed class DungeonSaveData
 {
+    public int bagWidth, bagHeight;
+    public int ResolvedWidth => bagWidth == 0 ? GridInventory.Width : bagWidth;
+    public int ResolvedHeight => bagHeight == 0 ? GridInventory.Height : bagHeight;
     public int layoutIndex, health, totalValue;
     public Vector2 playerPosition, specialGate;
     public int activeCorpseIndex = -1;
@@ -148,17 +187,22 @@ public sealed class DungeonSaveData
                 if (cell.x < 0 || cell.y < 0 || cell.x >= DungeonLayoutFactory.Width
                     || cell.y >= DungeonLayoutFactory.Height || !unique.Add(cell)) return false;
         }
-        bool[,] occupied = new bool[GridInventory.Width, GridInventory.Height];
+        if ((bagWidth == 0) != (bagHeight == 0) || ResolvedWidth < GridInventory.Width || ResolvedHeight < GridInventory.Height
+            || ResolvedWidth > GridInventory.MaximumWidth || ResolvedHeight > GridInventory.MaximumHeight) return false;
+        bool[,] occupied = new bool[ResolvedWidth, ResolvedHeight];
+        long priceSum = 0; bool priced = true;
         foreach (StoredLootSaveData item in inventory)
         {
-            if (item?.loot == null || !item.loot.IsValid()) return false;
+            if (item?.loot == null || !item.loot.IsValid() || (item.hasSaleValue && item.saleValue < 0)) return false;
+            priced &= item.hasSaleValue; priceSum += item.hasSaleValue ? item.saleValue : 0;
             foreach (Vector2Int cell in item.loot.Restore().OccupiedCells)
             {
                 int x = item.position.x + cell.x, y = item.position.y + cell.y;
-                if (x < 0 || y < 0 || x >= GridInventory.Width || y >= GridInventory.Height || occupied[x, y]) return false;
+                if (x < 0 || y < 0 || x >= ResolvedWidth || y >= ResolvedHeight || occupied[x, y]) return false;
                 occupied[x, y] = true;
             }
         }
+        if (priced && totalValue != Math.Min(int.MaxValue, priceSum)) return false;
         foreach (LootSaveData loot in pendingLoot) if (loot == null || !loot.IsValid()) return false;
         foreach (CorpseSaveData corpse in corpses)
         {

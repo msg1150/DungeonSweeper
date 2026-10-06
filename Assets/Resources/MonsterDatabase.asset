@@ -23,6 +23,7 @@ MonoBehaviour:
     attackAnimationSeconds: 0.6
     loot:
     - lootName: "\uACE0\uBE14\uB9B0 \uC774\uBE68"
+      kindId: goblin.tooth
       shape: 0
       dropChance: 0.8
       minPrice: 30
@@ -30,12 +31,21 @@ MonoBehaviour:
       width: 1
       height: 1
     - lootName: "\uB0A1\uC740 \uB2E8\uAC80"
+      kindId: goblin.dagger
       shape: 1
       dropChance: 0.35
       minPrice: 100
       maxPrice: 220
       width: 1
       height: 3
+    - lootName: "\uACE0\uBE14\uB9B0 \uAC00\uC8FD"
+      kindId: goblin.hide
+      shape: 4
+      dropChance: 0.65
+      minPrice: 40
+      maxPrice: 90
+      width: 2
+      height: 1
   - id: slime
     displayName: "\uC2AC\uB77C\uC784"
     spriteSheetResource: Sprites/Monsters/slime-sheet
@@ -46,6 +56,7 @@ MonoBehaviour:
     attackAnimationSeconds: 0.6
     loot:
     - lootName: "\uC2AC\uB77C\uC784 \uC824"
+      kindId: slime.gel
       shape: 2
       dropChance: 0.9
       minPrice: 25
@@ -53,6 +64,7 @@ MonoBehaviour:
       width: 1
       height: 1
     - lootName: "\uC2AC\uB77C\uC784 \uD575"
+      kindId: slime.core
       shape: 3
       dropChance: 0.25
       minPrice: 120
@@ -69,6 +81,7 @@ MonoBehaviour:
     attackAnimationSeconds: 0.6
     loot:
     - lootName: "\uB450\uAEBC\uC6B4 \uAC00\uC8FD"
+      kindId: orc.hide
       shape: 4
       dropChance: 0.7
       minPrice: 100
@@ -76,6 +89,7 @@ MonoBehaviour:
       width: 1
       height: 1
     - lootName: "\uC624\uD06C \uC5C4\uB2C8"
+      kindId: orc.horn
       shape: 5
       dropChance: 0.4
       minPrice: 180

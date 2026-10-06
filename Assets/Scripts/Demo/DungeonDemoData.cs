@@ -13,6 +13,7 @@ public enum LootShape
 
 public sealed class LootDefinition
 {
+    public string KindId { get; }
     public string Name { get; }
     public int Width { get; }
     public int Height { get; }
@@ -22,14 +23,16 @@ public sealed class LootDefinition
 
     private readonly Vector2Int[] occupiedCells;
 
-    public LootDefinition(string name, int width, int height, int value, LootShape shape = LootShape.Tooth)
-        : this(name, value, shape, CreateRectangle(width, height))
+    public LootDefinition(string name, int width, int height, int value, LootShape shape = LootShape.Tooth, string kindId = null)
+        : this(name, value, shape, CreateRectangle(width, height), kindId)
     {
     }
 
-    private LootDefinition(string name, int value, LootShape shape, Vector2Int[] cells)
+    private LootDefinition(string name, int value, LootShape shape, Vector2Int[] cells, string kindId = null)
     {
         if (value < 0) throw new System.ArgumentOutOfRangeException(nameof(value));
+        KindId = string.IsNullOrEmpty(kindId) ? LootKinds.LegacyId(shape) : kindId;
+        if (!LootKinds.ValidId(KindId)) throw new System.ArgumentException("Invalid loot kind ID.");
         Name = name;
         Value = value;
         Shape = shape;
@@ -46,12 +49,15 @@ public sealed class LootDefinition
         return new LootDefinition(name, value, shape, cells);
     }
 
+    public static LootDefinition CreateIdentified(string kindId, string name, int value, LootShape shape, Vector2Int[] cells)
+        => new(name, value, shape, cells, kindId);
+
     public LootDefinition RotatedClockwise()
     {
         Vector2Int[] rotated = new Vector2Int[occupiedCells.Length];
         for (int i = 0; i < occupiedCells.Length; i++)
             rotated[i] = new Vector2Int(Height - 1 - occupiedCells[i].y, occupiedCells[i].x);
-        return new LootDefinition(Name, Value, Shape, rotated);
+        return new LootDefinition(Name, Value, Shape, rotated, KindId);
     }
 
     private static Vector2Int[] CreateRectangle(int width, int height)

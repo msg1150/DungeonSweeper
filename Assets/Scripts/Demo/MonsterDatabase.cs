@@ -7,6 +7,7 @@ public enum MonsterAttackStyle { BodySlam, DaggerSlash, ClubSwing }
 [Serializable]
 public sealed class MonsterLootEntry
 {
+    public string kindId;
     public string lootName = "전리품";
     public LootShape shape;
     [Range(0f, 1f)] public float dropChance = .6f;
@@ -20,7 +21,7 @@ public sealed class MonsterLootEntry
         if (float.IsNaN(dropChance) || dropChance <= 0f || (dropChance < 1f && UnityEngine.Random.value >= dropChance)) return null;
         int low = Mathf.Clamp(Mathf.Min(minPrice, maxPrice), 0, int.MaxValue - 1);
         int high = Mathf.Clamp(Mathf.Max(minPrice, maxPrice), low, int.MaxValue - 1);
-        return new LootDefinition(lootName, width, height, UnityEngine.Random.Range(low, high + 1), shape);
+        return new LootDefinition(lootName, width, height, UnityEngine.Random.Range(low, high + 1), shape, kindId);
     }
 }
 
@@ -76,6 +77,8 @@ public sealed class MonsterDatabase : ScriptableObject
             Make("slime", "슬라임", "Sprites/Monsters/slime-sheet", MonsterAttackStyle.BodySlam, 10, 1.05f, "슬라임 젤", LootShape.Gel, .9f, 25, 70, "슬라임 핵", LootShape.Core, .25f, 120, 300),
             Make("orc", "오크", "Sprites/Monsters/orc-sheet", MonsterAttackStyle.ClubSwing, 24, 1.15f, "두꺼운 가죽", LootShape.Hide, .7f, 100, 240, "오크 엄니", LootShape.Horn, .4f, 180, 360)
         };
+        monsters[0].loot.Add(new MonsterLootEntry { kindId = LootKinds.GoblinHide, lootName = "고블린 가죽",
+            shape = LootShape.Hide, dropChance = .65f, minPrice = 40, maxPrice = 90, width = 2 });
     }
 
     private static MonsterDefinition Make(string id, string name, string path, MonsterAttackStyle style, int damage, float range,
@@ -83,8 +86,8 @@ public sealed class MonsterDatabase : ScriptableObject
         string lootB, LootShape shapeB, float chanceB, int minB, int maxB)
     {
         MonsterDefinition m = new() { id = id, displayName = name, spriteSheetResource = path, attackStyle = style, attackDamage = damage, attackRange = range };
-        m.loot.Add(new MonsterLootEntry { lootName = lootA, shape = shapeA, dropChance = chanceA, minPrice = minA, maxPrice = maxA });
-        m.loot.Add(new MonsterLootEntry { lootName = lootB, shape = shapeB, dropChance = chanceB, minPrice = minB, maxPrice = maxB, height = shapeB == LootShape.Dagger ? 3 : 1 });
+        m.loot.Add(new MonsterLootEntry { kindId = LootKinds.LegacyId(shapeA), lootName = lootA, shape = shapeA, dropChance = chanceA, minPrice = minA, maxPrice = maxA });
+        m.loot.Add(new MonsterLootEntry { kindId = LootKinds.LegacyId(shapeB), lootName = lootB, shape = shapeB, dropChance = chanceB, minPrice = minB, maxPrice = maxB, height = shapeB == LootShape.Dagger ? 3 : 1 });
         return m;
     }
 }
