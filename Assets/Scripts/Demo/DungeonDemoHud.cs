@@ -7,7 +7,8 @@ public class DungeonDemoHud : MonoBehaviour
     private DungeonRunController run;
     private readonly Color mint = new(.2f, .9f, .62f);
     private readonly Color danger = new(.92f, .27f, .3f);
-    private readonly HashSet<LootDefinition> rotatedLoot = new();
+    // 회전 미리보기는 클릭할 때만 계산한다. IMGUI의 Layout/Repaint마다 도형을 새로 만들지 않는다.
+    private readonly Dictionary<LootDefinition, LootDefinition> rotatedLoot = new();
     private int draggingLootIndex = -1;
     private int draggingStoredItemId;
     private Vector2 dragMousePosition;
@@ -196,8 +197,7 @@ public class DungeonDemoHud : MonoBehaviour
         {
             LootDefinition loot = run.PendingLootItems[i];
             Rect card = new Rect(0f, i * 132f, 345f, 115f);
-            bool rotated = rotatedLoot.Contains(loot);
-            LootDefinition displayLoot = rotated ? loot.RotatedClockwise() : loot;
+            LootDefinition displayLoot = DisplayLoot(loot);
             int width = displayLoot.Width;
             int height = displayLoot.Height;
             GUI.color = i == draggingLootIndex ? new Color(.28f, .38f, .5f, 1f) : new Color(.12f, .16f, .24f, 1f);
@@ -274,7 +274,7 @@ public class DungeonDemoHud : MonoBehaviour
             if (draggingLootIndex >= 0 && draggingLootIndex < run.PendingLootItems.Count)
             {
                 LootDefinition loot = run.PendingLootItems[draggingLootIndex];
-                run.TryPlacePendingLoot(draggingLootIndex, column, row, rotatedLoot.Contains(loot));
+                if (run.TryPlacePendingLoot(draggingLootIndex, column, row, rotatedLoot.ContainsKey(loot))) rotatedLoot.Remove(loot);
             }
             else run.TryMoveStoredLoot(draggingStoredItemId, column, row);
         }
@@ -287,8 +287,7 @@ public class DungeonDemoHud : MonoBehaviour
     {
         LootDefinition loot = GetDraggedLoot();
         if (loot == null) return;
-        bool rotated = draggingLootIndex >= 0 && rotatedLoot.Contains(loot);
-        LootDefinition displayLoot = rotated ? loot.RotatedClockwise() : loot;
+        LootDefinition displayLoot = draggingLootIndex >= 0 ? DisplayLoot(loot) : loot;
         float cell = bagCell;
         GUI.color = new Color(LootColor((int)loot.Shape + 1).r, LootColor((int)loot.Shape + 1).g, LootColor((int)loot.Shape + 1).b, .7f);
         DrawLootShape(displayLoot, new Rect(dragMousePosition.x - 12f, dragMousePosition.y - 12f, displayLoot.Width * cell - 11f, displayLoot.Height * cell - 11f));
@@ -304,8 +303,10 @@ public class DungeonDemoHud : MonoBehaviour
 
     private void ToggleRotation(LootDefinition loot)
     {
-        if (!rotatedLoot.Add(loot)) rotatedLoot.Remove(loot);
+        if (!rotatedLoot.Remove(loot)) rotatedLoot.Add(loot, loot.RotatedClockwise());
     }
+
+    private LootDefinition DisplayLoot(LootDefinition loot) => rotatedLoot.TryGetValue(loot, out var rotated) ? rotated : loot;
 
     private static void DrawLootShape(LootDefinition loot, Rect area)
     {

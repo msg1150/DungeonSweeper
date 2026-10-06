@@ -56,6 +56,8 @@ public static class CasualArtLibrary
         for (int y = 0; y < rows; y++)
         for (int x = 0; x < columns; x++)
             result[y * columns + x] = Sprite.Create(texture, new Rect(x * width, y * height, width, height), new Vector2(.5f, pivotY), pixelsPerUnit);
+        // Resources 원본은 건드리지 않는다. 배경 제거용 사본만 CPU 읽기 버퍼를 비운다.
+        if (texture != source) texture.Apply(false, true);
         sheets[key] = result;
         return result;
     }

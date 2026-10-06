@@ -94,7 +94,7 @@ git clone https://github.com/msg1150/DungeonSweeper.git
 | 에셋 | 수정할 내용 |
 | --- | --- |
 | [GameFlowConfig](Assets/Resources/GameFlowConfig.asset) | 씬 이름, 수동 저장 슬롯 수, 상호작용 거리 |
-| [DungeonTuning](Assets/Resources/DungeonTuning.asset) | 플레이어 이동·대시·체력·시야, 전리품 가치 배율, 기존 저장용 몬스터 이동 기본값 |
+| [DungeonTuning](Assets/Resources/DungeonTuning.asset) | 플레이어 이동·대시·체력·시야, 전리품 가치 배율, 기존 저장용 몬스터 이동 기본값, 풀 보관 한도 |
 | [DungeonCatalog](Assets/Resources/DungeonCatalog.asset) | 입장 가능한 던전 설정과 전체 몬스터·시체 프리팹 등록 목록 |
 | [Dungeons](Assets/Resources/Dungeons) | 던전별 이름·레이아웃·몬스터 배열·시체 배열과 생성 수 |
 | [몬스터 프리팹](Assets/Prefabs/Monsters) | 공통 이동·순찰·감지·청각·공격 능력치와 외형 |
@@ -115,6 +115,12 @@ git clone https://github.com/msg1150/DungeonSweeper.git
 새 종류는 기존 프리팹을 복제해 `Assets/Prefabs/Monsters` 또는 `Assets/Prefabs/Corpses`에 보관하고 고유한 **Prefab Id**를 부여합니다. `DungeonCatalog`의 **Monster Prefabs / Corpse Prefabs**에 먼저 등록한 뒤 던전의 스폰 배열에 연결하세요. 프리팹은 카탈로그의 직접 참조를 통해 빌드에 포함되므로 Resources 폴더에 있을 필요가 없습니다. 새 던전 설정은 **Create → Dungeon Sweeper → Dungeon**으로 만들고 고유 **Dungeon Id**와 레이아웃을 정한 뒤 `DungeonCatalog`의 **Dungeons**에 등록합니다. 현재 마을 게이트는 등록된 던전 중 하나를 무작위로 선택합니다. 특정 던전 테스트는 Dungeon 씬의 `DungeonRunController.dungeonDefinition`에 등록된 에셋을 지정한 뒤 해당 씬에서 직접 Play하거나 `GameSession.EnterDungeon(out error, definition)`을 사용합니다.
 
 불러오기는 저장 당시의 레이아웃·프리팹 ID·개체 수·능력치·시체 난이도·해체 진행·확정 전리품을 복원합니다. 변경된 배열로 다시 스폰하거나 전리품을 다시 뽑지 않습니다. 스폰 배열에서 제거한 종류도 프리팹 에셋과 `DungeonCatalog`의 등록 항목을 유지하면 기존 저장을 복원할 수 있습니다. **배포 후 Dungeon Id / Prefab Id를 바꾸거나 사용된 던전·프리팹 에셋 및 카탈로그 등록을 삭제하면 해당 저장을 불러올 수 없으므로 유지해야 합니다.** 폴더를 옮길 때는 `.meta`도 함께 이동해 참조를 보존하세요. ID가 없는 이전 저장은 기존 생성 방식으로 호환합니다.
+
+### 오브젝트 풀과 최적화
+
+몬스터·시체는 프리팹별 풀에서 대여하고 던전을 나갈 때 반환합니다. 마을 귀환 후 재입장에는 보관된 인스턴스를 재사용하며, 새 런의 능력치·해체 진행·전리품은 별도로 초기화합니다. 메인 화면으로 돌아가면 비활성 풀을 비웁니다.
+
+`DungeonTuning`의 **Pool Capacity Per Prefab**은 기본 32개, **Pool Total Capacity**는 기본 128개입니다. 이는 비활성 인스턴스의 보관 한도이며 던전 스폰 수를 제한하지 않습니다. 0으로 설정하면 반환 시 보관하지 않습니다. 코드 검토 내용, 새 컴포넌트의 초기화 규칙과 측정 범위는 [성능 검토 문서](Docs/PERFORMANCE_REVIEW.md)를 참고하세요.
 
 ### 메뉴 미디어
 
@@ -159,6 +165,7 @@ Unity가 기본 설치 경로에 없으면 `-UnityEditorPath "C:/path/to/Unity.e
 | `Assets/Scripts/Player` | 플레이어 이동과 대시 |
 | `Assets/Scripts/Dismantling`, `Interaction` | 해체와 상호작용 |
 | `Assets/Resources` | 설정 에셋, 셰이더, 스프라이트 |
+| `Assets/Prefabs` | 몬스터·시체 프리팹과 미리보기 에셋 |
 | `Assets/Scenes` | 시작·플레이·개발 테스트 씬 |
 | `Assets/Editor` | 설정 도구와 빌드 검사 |
 | `Tests`, `Tools` | 격리된 실행 검증 코드와 PowerShell 실행 도구 |

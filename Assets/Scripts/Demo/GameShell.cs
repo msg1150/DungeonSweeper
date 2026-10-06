@@ -9,6 +9,7 @@ using UnityEngine.SceneManagement;
 public sealed class GameShell : MonoBehaviour
 {
     private enum Page { Playing, Main, Pause, Load, Save, Options }
+    private static readonly string[] pauseLabels = { "계속하기", "저장하기", "불러오기", "옵션", "메인 화면", "게임종료" };
     private static GameShell instance;
     public static bool IsMenuOpen => instance != null && instance.page != Page.Playing;
     public static bool IsFocusInputBlocked => instance != null && (!instance.hasFocus || instance.blockInputFrame == Time.frameCount);
@@ -369,10 +370,9 @@ public sealed class GameShell : MonoBehaviour
     {
         GUI.Box(new Rect(380, 85, 520, 550), GUIContent.none, panelStyle);
         GUI.Label(new Rect(440, 108, 400, 55), "잠시 쉬어가기", subtitleStyle);
-        string[] labels = { "계속하기", "저장하기", "불러오기", "옵션", "메인 화면", "게임종료" };
-        for (int i = 0; i < labels.Length; i++)
+        for (int i = 0; i < pauseLabels.Length; i++)
         {
-            if (!Button(new Rect(440, 180 + i * 65, 400, 51), labels[i])) continue;
+            if (!Button(new Rect(440, 180 + i * 65, 400, 51), pauseLabels[i])) continue;
             switch (i)
             {
                 case 0: Resume(); break;

@@ -51,6 +51,8 @@ public sealed class ReleaseBuildValidator : IPreprocessBuildWithReport
                 || !Nonnegative(tuning.patrolArrivalPause)
                 || !Nonnegative(tuning.outerDarkness) || tuning.outerDarkness > 1f || tuning.darkSightRadius <= tuning.clearSightRadius)
                 issues.Add("Invalid health, cooldown or vision tuning.");
+            if (tuning.poolCapacityPerPrefab < 0 || tuning.poolTotalCapacity < 0)
+                issues.Add("Actor pool retention capacities must be nonnegative.");
         }
         if (Resources.Load<Shader>("VisionOverlay") == null) issues.Add("Missing Resources/VisionOverlay shader.");
         if (Resources.Load<MainMenuPresentationConfig>("MainMenuPresentation") == null) issues.Add("Missing menu presentation config.");

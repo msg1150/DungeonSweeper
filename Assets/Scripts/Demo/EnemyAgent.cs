@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>배회/추적/공격 상태와 타격 시점만 담당한다.</summary>
-public class EnemyAgent : MonoBehaviour
+public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
 {
     private Transform player;
     private Vector2 roamTarget;
@@ -20,17 +20,23 @@ public class EnemyAgent : MonoBehaviour
     private bool wasChasing;
     private bool wasInvestigating;
     private readonly List<Vector2> path = new();
+    private readonly List<RaycastHit2D> sightHits = new(16);
     private int pathIndex, pathMode = -1;
     private Vector2Int pathTargetCell;
     public string PrefabId { get; set; }
     private float DetectionRange => definition.hasMovementStats ? definition.detectionRange : DungeonTuning.Active.detectionRange;
     private float TravelDistance => definition.hasMovementStats ? definition.patrolTravelDistance : DungeonTuning.Active.patrolTravelDistance;
 
-    public void HearNoise(Vector2 noisePosition) => HearNoise(noisePosition,
-        definition.hasMovementStats ? definition.hearingRange : DungeonTuning.Active.hearingRange);
+    public void HearNoise(Vector2 noisePosition)
+    {
+        if (definition != null) HearNoise(noisePosition,
+            definition.hasMovementStats ? definition.hearingRange : DungeonTuning.Active.hearingRange);
+    }
 
     public void Initialize(Transform target, Vector2 a, Vector2 b, MonsterDefinition data, MonsterVisualAnimator animator)
     {
+        if (target == null || data == null) throw new System.ArgumentException("An enemy requires a player and stats.");
+        ResetForPool();
         player = target;
         playerHealth = target.GetComponent<PlayerHealth>();
         definition = data;
@@ -42,10 +48,20 @@ public class EnemyAgent : MonoBehaviour
         pathMode = -1;
     }
 
+    /// <summary>이전 런의 공격·조사·경로·플레이어 참조를 다음 대여에 넘기지 않는다.</summary>
+    public void ResetForPool()
+    {
+        player = null; playerHealth = null; definition = null; visual = null; PrefabId = null;
+        roamTarget = investigationTarget = previousPatrolOrigin = Vector2.zero;
+        attackCooldown = attackTimer = patrolPauseRemaining = investigationRemaining = 0f;
+        damageApplied = hasPreviousPatrolOrigin = wasChasing = wasInvestigating = false;
+        path.Clear(); sightHits.Clear(); pathIndex = 0; pathMode = -1; pathTargetCell = default;
+    }
+
     /// <summary>해체 실패 같은 소리를 들으면 마지막 소리 위치를 조사한다.</summary>
     public void HearNoise(Vector2 noisePosition, float radius)
     {
-        if (!GameSaveData.Finite(noisePosition) || float.IsNaN(radius) || float.IsInfinity(radius) || radius <= 0f
+        if (definition == null || !isActiveAndEnabled || !GameSaveData.Finite(noisePosition) || float.IsNaN(radius) || float.IsInfinity(radius) || radius <= 0f
             || Vector2.Distance(transform.position, noisePosition) > radius) return;
         Vector2Int noiseCell = DungeonLayoutFactory.WorldToCell(noisePosition);
         investigationTarget = DungeonLayoutFactory.IsWalkablePosition(noisePosition) ? noisePosition : DungeonLayoutFactory.CellCenter(noiseCell.x, noiseCell.y);
@@ -66,12 +82,12 @@ public class EnemyAgent : MonoBehaviour
         {
             attackTimer -= elapsed;
             float progress = 1f - attackTimer / definition.attackAnimationSeconds;
-            visual.Tick(true, progress, false, player.position - transform.position);
+            visual?.Tick(true, progress, false, player.position - transform.position);
             if (!damageApplied && progress >= .5f)
             {
                 damageApplied = true;
                 if (Vector2.Distance(transform.position, player.position) <= definition.attackRange + .25f && HasClearSight(player.position))
-                    playerHealth.TakeDamage(definition.attackDamage);
+                    playerHealth?.TakeDamage(definition.attackDamage);
             }
             return;
         }
@@ -104,7 +120,7 @@ public class EnemyAgent : MonoBehaviour
             patrolPauseRemaining = definition.hasMovementStats ? definition.patrolArrivalPause : DungeonTuning.Active.patrolArrivalPause;
         if (isInvestigating && arrived) investigationRemaining = Mathf.Max(0f, investigationRemaining - elapsed);
         Vector2 velocity = (Vector2)transform.position - before;
-        visual.Tick(false, 0f, velocity.sqrMagnitude > .00001f, velocity);
+        visual?.Tick(false, 0f, velocity.sqrMagnitude > .00001f, velocity);
         wasChasing = isChasing;
         wasInvestigating = isInvestigating;
 
@@ -123,8 +139,12 @@ public class EnemyAgent : MonoBehaviour
         Vector2 offset = targetPosition - origin;
         float distance = offset.magnitude;
         if (distance <= .01f) return true;
-        RaycastHit2D[] hits = Physics2D.RaycastAll(origin, offset / distance, distance);
-        foreach (RaycastHit2D hit in hits)
+        // 리스트는 개체가 보관하고 확장 시에만 할당한다. 고정 배열처럼 벽 결과가 잘리지 않는다.
+        var filter = new ContactFilter2D { useTriggers = Physics2D.queriesHitTriggers };
+        filter.SetLayerMask(Physics2D.DefaultRaycastLayers);
+        sightHits.Clear();
+        Physics2D.Raycast(origin, offset / distance, filter, sightHits, distance);
+        foreach (RaycastHit2D hit in sightHits)
         {
             if (hit.collider == null) continue;
             if (hit.collider.GetComponentInParent<EnemyAgent>() != null) continue;

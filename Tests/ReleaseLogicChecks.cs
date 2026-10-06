@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using UnityEngine;
 
 /// <summary>Release regressions shared by the real Unity editor and Windows player.</summary>
@@ -53,6 +54,29 @@ public static class ReleaseLogicChecks
             drop.minPrice = drop.maxPrice = int.MaxValue;
             check(drop.Roll().Value >= 0, "maximum configured price does not overflow random range");
             check(ReferenceEquals(CasualArtLibrary.WhiteSprite, CasualArtLibrary.WhiteSprite), "fallback graphics reused across dungeon visits");
+            var wideWindow = new DismantleSession(new DismantleDifficulty(3, 3, 1f, .95f));
+            check(wideWindow.WindowStart >= 0f && wideWindow.WindowStart + .95f <= 1f, "wide dismantle window stays inside the bar");
+            var bounce = new DismantleSession(new DismantleDifficulty(3, 3, 1f, .2f));
+            bounce.Tick(2.25f);
+            check(Mathf.Abs(bounce.PointerPosition - .25f) < .0001f, "delayed dismantle tick preserves multiple boundary reflections");
+            bounce.Tick(float.NaN);
+            check(Mathf.Abs(bounce.PointerPosition - .25f) < .0001f, "invalid dismantle elapsed time cannot poison session");
+            check(Throws(() => new DismantleDifficulty(0, 1, 1f, .2f)), "invalid dismantle difficulty is rejected");
+            var previewObject = new GameObject("Rotation Preview Validation");
+            try
+            {
+                var hud = previewObject.AddComponent<DungeonDemoHud>();
+                var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                var toggle = typeof(DungeonDemoHud).GetMethod("ToggleRotation", flags);
+                var display = typeof(DungeonDemoHud).GetMethod("DisplayLoot", flags);
+                toggle.Invoke(hud, new object[] { shape });
+                var preview = (LootDefinition)display.Invoke(hud, new object[] { shape });
+                check(ReferenceEquals(preview, display.Invoke(hud, new object[] { shape })) && !ReferenceEquals(preview, shape),
+                    "rotated HUD previews reuse the same shape without per-repaint copies");
+                toggle.Invoke(hud, new object[] { shape });
+                check(ReferenceEquals(shape, display.Invoke(hud, new object[] { shape })), "toggling rotation off restores original shape");
+            }
+            finally { UnityEngine.Object.Destroy(previewObject); }
 
             var defaults = GameSettings.Defaults();
             var draft = GameSettings.Copy(); draft.masterVolume = float.NaN; draft.musicVolume = float.PositiveInfinity;

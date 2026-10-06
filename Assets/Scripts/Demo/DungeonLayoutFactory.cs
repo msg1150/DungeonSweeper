@@ -11,6 +11,13 @@ public static class DungeonLayoutFactory
     private static int layoutIndex;
     private static Sprite floorSprite;
     private static Sprite wallSprite;
+    private static readonly string[] layoutNames = { "갈림길 저장고", "고리형 회랑", "계단식 묘실" };
+    // AI 탐색은 Unity 메인 스레드에서 순차 실행한다. 최대 240칸의 작업 공간을 공유한다.
+    private static readonly int[,] searchDistances = new int[Columns, Rows];
+    private static readonly Vector2Int[,] searchPrevious = new Vector2Int[Columns, Rows];
+    private static readonly Vector2Int[] searchQueue = new Vector2Int[Columns * Rows];
+    private static readonly Vector2Int[] directions = { Vector2Int.left, Vector2Int.right, Vector2Int.down, Vector2Int.up };
+    private static readonly List<Vector2> roamCandidates = new(Columns * Rows), roamDistant = new(Columns * Rows);
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetRuntimeState()
@@ -25,7 +32,7 @@ public static class DungeonLayoutFactory
     public static int Width => Columns;
     public static int Height => Rows;
     public static int LayoutIndex => layoutIndex;
-    public static string LayoutName => new[] { "갈림길 저장고", "고리형 회랑", "계단식 묘실" }[layoutIndex];
+    public static string LayoutName => layoutNames[layoutIndex];
 
     public static void CreateLayout(int savedLayoutIndex = -1)
     {
@@ -83,8 +90,8 @@ public static class DungeonLayoutFactory
 
     public static Vector2 RandomRoamPosition(Vector2 origin, Vector2? previousOrigin = null, float? minimumOverride = null)
     {
-        List<Vector2> candidates = new List<Vector2>();
-        List<Vector2> distant = new List<Vector2>();
+        var candidates = roamCandidates; candidates.Clear();
+        var distant = roamDistant; distant.Clear();
         var distances = ReachableDistances(ToFloorCell(origin));
         float minimum = minimumOverride ?? DungeonTuning.Active.patrolTravelDistance;
         Vector2 farthest = origin;
@@ -132,16 +139,29 @@ public static class DungeonLayoutFactory
 
     private static int[,] ReachableDistances(Vector2Int start)
     {
-        var distances = new int[Columns, Rows];
-        for (int x = 0; x < Columns; x++) for (int y = 0; y < Rows; y++) distances[x, y] = -1;
-        var queue = new Queue<Vector2Int>(); queue.Enqueue(start); distances[start.x, start.y] = 0;
-        while (queue.Count > 0)
+        Search(start);
+        return searchDistances; // 다음 탐색에서 덮어쓰므로 호출자가 보관하거나 재진입해서 사용하지 않는다.
+    }
+
+    private static void Search(Vector2Int start, Vector2Int? end = null)
+    {
+        for (int x = 0; x < Columns; x++) for (int y = 0; y < Rows; y++) searchDistances[x, y] = -1;
+        if (!IsFloor(start.x, start.y)) return;
+        int head = 0, tail = 0;
+        searchQueue[tail++] = start; searchDistances[start.x, start.y] = 0; searchPrevious[start.x, start.y] = start;
+        while (head < tail)
         {
-            Vector2Int cell = queue.Dequeue();
-            foreach (Vector2Int next in Neighbours(cell))
-                if (distances[next.x, next.y] < 0) { distances[next.x, next.y] = distances[cell.x, cell.y] + 1; queue.Enqueue(next); }
+            var cell = searchQueue[head++];
+            if (end.HasValue && cell == end.Value) break;
+            foreach (var direction in directions)
+            {
+                var next = cell + direction;
+                if (!IsFloor(next.x, next.y) || searchDistances[next.x, next.y] >= 0) continue;
+                searchPrevious[next.x, next.y] = cell;
+                searchDistances[next.x, next.y] = searchDistances[cell.x, cell.y] + 1;
+                searchQueue[tail++] = next;
+            }
         }
-        return distances;
     }
 
     public static bool TryBuildPath(Vector2 from, Vector2 destination, List<Vector2> path)
@@ -149,19 +169,10 @@ public static class DungeonLayoutFactory
         path.Clear();
         if (!GameSaveData.Finite(from) || !GameSaveData.Finite(destination)) return false;
         Vector2Int start = ToFloorCell(from), end = ToFloorCell(destination);
-        var queue = new Queue<Vector2Int>();
-        var previous = new Dictionary<Vector2Int, Vector2Int> { [start] = start };
-        queue.Enqueue(start);
-        while (queue.Count > 0)
-        {
-            Vector2Int cell = queue.Dequeue();
-            if (cell == end) break;
-            foreach (Vector2Int next in Neighbours(cell))
-                if (!previous.ContainsKey(next)) { previous[next] = cell; queue.Enqueue(next); }
-        }
-        if (!previous.ContainsKey(end)) return false;
+        Search(start, end);
+        if (searchDistances[end.x, end.y] < 0) return false;
         Vector2Int step = end;
-        while (step != start) { path.Add(CellCenter(step.x, step.y)); step = previous[step]; }
+        while (step != start) { path.Add(CellCenter(step.x, step.y)); step = searchPrevious[step.x, step.y]; }
         path.Add(CellCenter(start.x, start.y)); path.Reverse();
         path.Add(IsWalkablePosition(destination) ? destination : CellCenter(end.x, end.y));
         return true;
@@ -177,23 +188,14 @@ public static class DungeonLayoutFactory
 
     public static Vector2 GetNextPathPoint(Vector2 from, Vector2 destination)
     {
+        if (!GameSaveData.Finite(from) || !GameSaveData.Finite(destination)) return from;
         Vector2Int start = ToFloorCell(from);
         Vector2Int end = ToFloorCell(destination);
-        if (start == end) return destination;
-        Queue<Vector2Int> queue = new Queue<Vector2Int>();
-        Dictionary<Vector2Int, Vector2Int> previous = new Dictionary<Vector2Int, Vector2Int>();
-        queue.Enqueue(start);
-        previous[start] = start;
-        while (queue.Count > 0)
-        {
-            Vector2Int current = queue.Dequeue();
-            if (current == end) break;
-            foreach (Vector2Int next in Neighbours(current))
-                if (!previous.ContainsKey(next)) { previous[next] = current; queue.Enqueue(next); }
-        }
-        if (!previous.ContainsKey(end)) return CellCenter(start.x, start.y);
+        if (start == end) return IsWalkablePosition(destination) ? destination : CellCenter(end.x, end.y);
+        Search(start, end);
+        if (searchDistances[end.x, end.y] < 0) return CellCenter(start.x, start.y);
         Vector2Int step = end;
-        while (previous[step] != start) step = previous[step];
+        while (searchPrevious[step.x, step.y] != start) step = searchPrevious[step.x, step.y];
         return CellCenter(step.x, step.y);
     }
 
@@ -247,13 +249,6 @@ public static class DungeonLayoutFactory
         for (int y = minY; y <= maxY; y++) floor[x, y] = true;
     }
     private static bool IsFloor(int x, int y) => x >= 0 && x < Columns && y >= 0 && y < Rows && floor[x, y];
-    private static IEnumerable<Vector2Int> Neighbours(Vector2Int cell)
-    {
-        if (IsFloor(cell.x - 1, cell.y)) yield return cell + Vector2Int.left;
-        if (IsFloor(cell.x + 1, cell.y)) yield return cell + Vector2Int.right;
-        if (IsFloor(cell.x, cell.y - 1)) yield return cell + Vector2Int.down;
-        if (IsFloor(cell.x, cell.y + 1)) yield return cell + Vector2Int.up;
-    }
     private static Vector2Int ToFloorCell(Vector2 position)
     {
         Vector2Int nearest = new Vector2Int(

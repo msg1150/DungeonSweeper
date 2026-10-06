@@ -37,7 +37,7 @@ public static class DungeonContentAuthoring
                     renderer.sprite = Preview(root + "/Previews/" + definition.id + "-monster.asset", definition.spriteSheetResource, 3, 2, 3);
                     obj.AddComponent<BoxCollider2D>().size = Vector2.one; obj.AddComponent<MonsterVisualAnimator>();
                     var settings = obj.AddComponent<MonsterPrefab>(); settings.prefabId = "monster." + definition.id;
-                    settings.stats = JsonUtility.FromJson<MonsterDefinition>(JsonUtility.ToJson(definition));
+                    settings.stats = definition.Copy();
                     settings.stats.hasMovementStats = true;
                     var tuning = DungeonTuning.Active;
                     settings.stats.patrolSpeed = tuning.patrolSpeed; settings.stats.chaseSpeed = tuning.chaseSpeed;
@@ -63,7 +63,7 @@ public static class DungeonContentAuthoring
                     renderer.sprite = Preview(root + "/Previews/" + definition.id + "-corpse.asset", "Sprites/Monsters/corpse-sheet", 3, 1, corpseIndex);
                     var settings = obj.AddComponent<CorpsePrefab>(); settings.prefabId = "corpse." + definition.id;
                     settings.displayName = obj.name; settings.sheetIndex = corpseIndex;
-                    settings.loot = JsonUtility.FromJson<MonsterDefinition>(JsonUtility.ToJson(definition)).loot;
+                    settings.loot = definition.Copy().loot;
                     if (definition.attackStyle == MonsterAttackStyle.ClubSwing)
                     { settings.requiredSuccesses = 4; settings.pointerSpeed = 1.12f; settings.windowSize = .16f; }
                     corpse = PrefabUtility.SaveAsPrefabAsset(obj, corpsePath).GetComponent<CorpsePrefab>();

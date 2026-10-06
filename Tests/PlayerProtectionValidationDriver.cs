@@ -93,6 +93,7 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         ReleaseLogicChecks.Run(Check);
         DungeonPopulationChecks.RunLayouts(Check);
         DungeonPrefabChecks.RunAuthoring(Check);
+        DungeonPoolChecks.RunLocal(Check);
         if (capture)
         {
             var display = GameSettings.Copy(); display.width = 1280; display.height = 720; display.fullscreen = false;
@@ -301,6 +302,8 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         while (configuredTrials.MoveNext()) yield return configuredTrials.Current;
         var continueTrials = ContinueEntryChecks.Run(Check, CheckTime);
         while (continueTrials.MoveNext()) yield return continueTrials.Current;
+        var poolTrials = DungeonPoolChecks.RunTransitions(Check, CheckTime);
+        while (poolTrials.MoveNext()) yield return poolTrials.Current;
         Check(GameSession.LoadSlot(8, out _), "fresh-entry trials restore the original quit state");
         while (!Ready("Town")) { CheckTime(); yield return null; }
         yield return null;

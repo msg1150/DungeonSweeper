@@ -42,4 +42,10 @@ public sealed class DungeonTuning : ScriptableObject
     [Min(.1f)] public float detectionRange = 3.8f;
     [Min(.1f)] public float hearingRange = 8f;
     [Min(.1f)] public float investigationSeconds = 6f;
+
+    [Header("Inactive Actor Pool")]
+    [Tooltip("Cached instances per prefab. Zero disables retention; this does not limit active spawns.")]
+    [Min(0)] public int poolCapacityPerPrefab = 32;
+    [Tooltip("Total cached monster/corpse instances across prefabs. Excess returns are destroyed.")]
+    [Min(0)] public int poolTotalCapacity = 128;
 }

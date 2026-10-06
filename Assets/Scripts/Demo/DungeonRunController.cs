@@ -29,13 +29,15 @@ public class DungeonRunController : MonoBehaviour
     private bool hasEscaped;
     private bool isDead;
     private bool lootPlacementOpen;
+    private bool actorsReleased;
+    private Vector2Int lastDiscoveryCell = new(int.MinValue, int.MinValue);
 
     public GridInventory Inventory => inventory;
     public DismantleSession ActiveSession => dismantleSession;
     public string ActiveCorpseName => activeCorpse?.Name;
     public string Toast => toastTimer > 0f ? toast : null;
     public bool HasEscaped => hasEscaped;
-    public bool IsRunActive => enabled && !hasEscaped && !isDead;
+    public bool IsRunActive => enabled && !actorsReleased && !hasEscaped && !isDead;
     public Transform Player => player;
     public IReadOnlyList<LootDefinition> PendingLootItems => pendingLoot;
     public LootDefinition PendingLoot => pendingLoot.Count > 0 ? pendingLoot[0] : null;
@@ -56,8 +58,7 @@ public class DungeonRunController : MonoBehaviour
         {
             string error = null;
             dungeonDefinition = pending != null ? pending : dungeonDefinition != null ? dungeonDefinition : DungeonCatalog.Active?.Pick(out error);
-            if (dungeonDefinition == null || !dungeonDefinition.IsValid(out error)
-                || DungeonCatalog.Active?.FindDungeon(dungeonDefinition.dungeonId) != dungeonDefinition)
+            if (DungeonCatalog.Active == null || !DungeonCatalog.Active.ValidateEntry(dungeonDefinition, out error))
             {
                 Debug.LogError(error ?? "Register the dungeon in Resources/DungeonCatalog.");
                 enabled = false;
@@ -115,6 +116,8 @@ public class DungeonRunController : MonoBehaviour
     {
         if (player == null) return;
         Vector2Int center = DungeonLayoutFactory.WorldToCell(player.position);
+        if (center == lastDiscoveryCell) return;
+        lastDiscoveryCell = center;
         for (int x = Mathf.Max(0, center.x - 3); x <= Mathf.Min(DungeonLayoutFactory.Width - 1, center.x + 3); x++)
         for (int y = Mathf.Max(0, center.y - 3); y <= Mathf.Min(DungeonLayoutFactory.Height - 1, center.y + 3); y++)
             if (DungeonLayoutFactory.IsWalkableCell(x, y) && Mathf.Abs(x - center.x) + Mathf.Abs(y - center.y) <= 3)
@@ -219,11 +222,7 @@ public class DungeonRunController : MonoBehaviour
             Say("보급 도구 사용: 해체 성공 1회를 확보했습니다.");
             if (dismantleSession.IsComplete)
             {
-                foreach (LootDefinition loot in activeCorpse.Loot) pendingLoot.Add(loot);
-                activeCorpse.MarkProcessed();
-                dismantleSession = null;
-                activeCorpse = null;
-                FinishLootRoll();
+                CompleteDismantling();
             }
             return;
         }
@@ -244,12 +243,7 @@ public class DungeonRunController : MonoBehaviour
         }
         if (dismantleSession.IsComplete)
         {
-            foreach (LootDefinition loot in activeCorpse.Loot)
-                pendingLoot.Add(loot);
-            activeCorpse.MarkProcessed();
-            dismantleSession = null;
-            activeCorpse = null;
-            FinishLootRoll();
+            CompleteDismantling();
         }
         else if (dismantleSession.IsDestroyed)
         {
@@ -263,6 +257,15 @@ public class DungeonRunController : MonoBehaviour
         }
     }
 
+    private void CompleteDismantling()
+    {
+        foreach (LootDefinition loot in activeCorpse.Loot) pendingLoot.Add(loot);
+        activeCorpse.MarkProcessed();
+        dismantleSession = null;
+        activeCorpse = null;
+        FinishLootRoll();
+    }
+
     private void EndDismantling(string message)
     {
         dismantleSession = null;
@@ -271,10 +274,9 @@ public class DungeonRunController : MonoBehaviour
         Say(message);
     }
 
-    private static void AlertNearbyMonsters(Vector2 noisePosition)
+    private void AlertNearbyMonsters(Vector2 noisePosition)
     {
-        foreach (EnemyAgent enemy in FindObjectsByType<EnemyAgent>())
-            enemy.HearNoise(noisePosition);
+        foreach (EnemyAgent enemy in enemies) if (enemy != null) enemy.HearNoise(noisePosition);
     }
 
     public void NotifyPlayerCaught()
@@ -415,13 +417,11 @@ public class DungeonRunController : MonoBehaviour
         DungeonWorldFactory factory = new();
         foreach (CorpseSaveData state in data.corpses)
         {
-            List<LootDefinition> loot = new();
-            foreach (LootSaveData item in state.loot) loot.Add(item.Restore());
             CorpseRunData corpse = !string.IsNullOrEmpty(state.prefabId)
                 ? DungeonCatalog.Active.FindCorpse(state.prefabId).Spawn(state.position, state)
                 : factory.CreateCorpse(state.name, state.position,
                 new DismantleDifficulty(state.requiredSuccesses, state.maxFailures, state.pointerSpeed, state.windowSize),
-                state.monsterIndex, loot.ToArray());
+                state.monsterIndex, RestoreLegacyLoot(state));
             corpse.RestoreSession(state.session);
             if (state.processed) corpse.MarkProcessed();
             corpses.Add(corpse);
@@ -453,8 +453,30 @@ public class DungeonRunController : MonoBehaviour
         if (data.lootPlacementOpen) OpenLootPlacement();
     }
 
+    private static LootDefinition[] RestoreLegacyLoot(CorpseSaveData state)
+    {
+        var loot = new LootDefinition[state.loot.Count];
+        for (int i = 0; i < loot.Length; i++) loot[i] = state.loot[i].Restore();
+        return loot;
+    }
+
+    /// <summary>
+    /// 저장·귀환 정산을 끝낸 후에만 호출한다. 처리된 시체도 이때까지 위치와 저장 상태를 보존한다.
+    /// 씬의 삭제 순서에 의존하지 않도록 정상 이동에서 먼저 반환하고 OnDestroy는 안전망으로 둔다.
+    /// </summary>
+    public void ReleaseActors()
+    {
+        if (actorsReleased) return;
+        actorsReleased = true;
+        foreach (var enemy in enemies) if (enemy != null && !DungeonActorPool.Return(enemy.gameObject)) Destroy(enemy.gameObject);
+        foreach (var corpse in corpses) if (corpse.Visual != null && !DungeonActorPool.Return(corpse.Visual)) Destroy(corpse.Visual);
+        enemies.Clear(); corpses.Clear(); pendingLoot.Clear();
+        activeCorpse = null; dismantleSession = null;
+    }
+
     private void OnDestroy()
     {
+        ReleaseActors();
         if (Instance == this)
         {
             if (lootPlacementOpen) Time.timeScale = 1f;

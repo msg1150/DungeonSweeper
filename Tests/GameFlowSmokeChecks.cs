@@ -94,6 +94,7 @@ public static class GameFlowSmokeChecks
                     ReleaseLogicChecks.Run(Check);
                     DungeonPopulationChecks.RunLayouts(Check);
                     DungeonPrefabChecks.RunAuthoring(Check);
+                    DungeonPoolChecks.RunLocal(Check);
                     Next(1);
                     break;
                 case 1:

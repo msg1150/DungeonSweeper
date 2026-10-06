@@ -27,8 +27,10 @@ public static class GameSession
 
     public static bool StartNewGame(out string error)
     {
+        if (IsLoading) { error = "현재 지역을 불러오는 중입니다."; return false; }
         string scene = GameFlowConfig.Active.townSceneName;
         if (!Application.CanStreamedLevelBeLoaded(scene)) { error = "마을 씬이 빌드 목록에 없습니다."; return false; }
+        DungeonRunController.Instance?.ReleaseActors();
         Reset();
         TownProgress.Reset();
         HasActiveGame = IsLoading = saveAfterSceneLoad = true;
@@ -40,9 +42,11 @@ public static class GameSession
 
     public static bool LoadSlot(int slot, out string error)
     {
+        if (IsLoading) { error = "현재 지역을 불러오는 중입니다."; return false; }
         if (!GameSaveService.TryLoad(slot, out GameSaveData data, out error)) return false;
         string scene = data.area == SaveArea.Dungeon ? GameFlowConfig.Active.dungeonSceneName : GameFlowConfig.Active.townSceneName;
         if (!Application.CanStreamedLevelBeLoaded(scene)) { error = "저장된 지역의 씬이 빌드 목록에 없습니다."; return false; }
+        DungeonRunController.Instance?.ReleaseActors();
         Reset();
         TownProgress.Restore(data.town);
         HasActiveGame = IsLoading = true;
@@ -68,11 +72,11 @@ public static class GameSession
     {
         string scene = GameFlowConfig.Active.dungeonSceneName;
         if (!CanTravel(scene, out error)) return false;
-        if (definition == null) definition = DungeonCatalog.Active?.Pick(out error);
+        var catalog = DungeonCatalog.Active;
+        if (catalog == null) { error = "던전 카탈로그 설정이 없습니다."; return false; }
+        if (definition == null) definition = catalog.Pick(out error);
         if (definition == null) { error ??= "던전 카탈로그 설정이 없습니다."; return false; }
-        if (DungeonCatalog.Active?.FindDungeon(definition.dungeonId) != definition)
-        { error = "선택한 던전을 Resources/DungeonCatalog에 등록하세요."; return false; }
-        if (!definition.IsValid(out error)) return false;
+        if (!catalog.ValidateEntry(definition, out error)) return false;
         pendingDungeon = null; // Entering from town always starts a new run.
         pendingDefinition = definition;
         PlayerMovement player = Object.FindAnyObjectByType<PlayerMovement>();
@@ -102,6 +106,7 @@ public static class GameSession
 
     private static void BeginTravel(string scene)
     {
+        DungeonRunController.Instance?.ReleaseActors();
         IsLoading = saveAfterSceneLoad = true;
         Time.timeScale = 1f;
         SceneManager.LoadScene(scene);
@@ -187,5 +192,10 @@ public static class GameSession
         };
     }
 
-    public static void EndGame() => Reset();
+    public static void EndGame()
+    {
+        DungeonRunController.Instance?.ReleaseActors();
+        Reset();
+        DungeonActorPool.ClearInactive();
+    }
 }

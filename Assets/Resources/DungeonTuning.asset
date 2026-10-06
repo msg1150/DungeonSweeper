@@ -30,3 +30,5 @@ MonoBehaviour:
   detectionRange: 3.8
   hearingRange: 8
   investigationSeconds: 6
+  poolCapacityPerPrefab: 32
+  poolTotalCapacity: 128

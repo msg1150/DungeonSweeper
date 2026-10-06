@@ -2,7 +2,7 @@ using UnityEngine;
 
 [DisallowMultipleComponent]
 [RequireComponent(typeof(EnemyAgent))]
-public sealed class MonsterPrefab : MonoBehaviour
+public sealed class MonsterPrefab : MonoBehaviour, IDungeonPoolResettable
 {
     public string prefabId = "monster.custom";
     public bool useSpriteSheetAnimation = true;
@@ -17,9 +17,12 @@ public sealed class MonsterPrefab : MonoBehaviour
 
     public EnemyAgent Spawn(Transform player, Vector2 origin, Vector2 target, MonsterDefinition savedStats = null)
     {
-        MonsterPrefab actor = Instantiate(this, origin, Quaternion.identity);
+        MonsterPrefab actor = DungeonActorPool.Rent(this, origin);
+        actor.prefabId = prefabId;
+        actor.useSpriteSheetAnimation = useSpriteSheetAnimation;
         actor.name = "배회 " + (savedStats ?? stats).displayName;
-        actor.stats = JsonUtility.FromJson<MonsterDefinition>(JsonUtility.ToJson(savedStats ?? stats));
+        // 데이터 에셋이나 저장 스냅샷을 런타임 개체가 변경하지 않도록 독립적인 복사본을 사용한다.
+        actor.stats = (savedStats ?? stats).Copy();
         var renderer = actor.GetComponentInChildren<SpriteRenderer>(true);
         var visual = actor.GetComponent<MonsterVisualAnimator>();
         if (visual == null) visual = actor.gameObject.AddComponent<MonsterVisualAnimator>();
@@ -30,4 +33,5 @@ public sealed class MonsterPrefab : MonoBehaviour
         actor.gameObject.SetActive(true);
         return agent;
     }
+    public void ResetForPool() => stats = null;
 }

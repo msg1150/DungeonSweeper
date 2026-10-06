@@ -36,7 +36,7 @@ public sealed class CorpsePrefab : MonoBehaviour
     }
     public CorpseRunData Spawn(Vector2 position, CorpseSaveData saved = null)
     {
-        CorpsePrefab actor = Instantiate(this, position, Quaternion.identity);
+        CorpsePrefab actor = DungeonActorPool.Rent(this, position);
         string label = saved?.name ?? displayName;
         actor.name = label;
         if (useSpriteSheet)
@@ -49,6 +49,7 @@ public sealed class CorpsePrefab : MonoBehaviour
         if (saved == null) items = RollLoot();
         else { var list = new List<LootDefinition>(); foreach (var item in saved.loot) list.Add(item.Restore()); items = list.ToArray(); }
         actor.gameObject.SetActive(true);
+        // 시각 오브젝트만 재사용한다. 해체 세션과 확정 전리품은 매번 새 런 데이터에 보관한다.
         return new CorpseRunData(actor.gameObject, label, difficulty, items) { PrefabId = prefabId, MonsterIndex = saved?.monsterIndex ?? sheetIndex };
     }
 }

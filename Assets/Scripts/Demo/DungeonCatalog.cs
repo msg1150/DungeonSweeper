@@ -32,15 +32,29 @@ public sealed class DungeonCatalog : ScriptableObject
             if (prefab != null && prefab.prefabId == id) return prefab;
         return null;
     }
+
+    /// <summary>무작위 입장·특정 던전 입장·에디터 직접 실행에 같은 등록 규칙을 적용한다.</summary>
+    public bool ValidateEntry(DungeonDefinition dungeon, out string error)
+    {
+        error = null;
+        if (dungeon == null || FindDungeon(dungeon.dungeonId) != dungeon)
+        { error = "선택한 던전을 DungeonCatalog에 등록하세요."; return false; }
+        if (!dungeon.IsValid(out error)) return false;
+        foreach (var row in dungeon.monsters)
+            if (row.prefab != null && FindMonster(row.prefab.prefabId) != row.prefab)
+            { error = "몬스터 프리팹을 DungeonCatalog에 등록하세요: " + row.prefab.name; return false; }
+        foreach (var row in dungeon.corpses)
+            if (row.prefab != null && FindCorpse(row.prefab.prefabId) != row.prefab)
+            { error = "시체 프리팹을 DungeonCatalog에 등록하세요: " + row.prefab.name; return false; }
+        return true;
+    }
     public DungeonDefinition Pick(out string error)
     {
         error = null;
         var issues = CollectIssues();
         if (issues.Count > 0) { error = "던전 카탈로그 오류: " + string.Join("; ", issues); return null; }
         if (dungeons == null || dungeons.Length == 0) { error = "등록된 던전이 없습니다."; return null; }
-        var selected = dungeons[UnityEngine.Random.Range(0, dungeons.Length)];
-        if (selected == null || !selected.IsValid(out error)) { error ??= "던전 설정이 비어 있습니다."; return null; }
-        return selected;
+        return dungeons[UnityEngine.Random.Range(0, dungeons.Length)];
     }
     public List<string> CollectIssues()
     {
@@ -65,13 +79,7 @@ public sealed class DungeonCatalog : ScriptableObject
         {
             if (dungeon == null) { issues.Add("Null dungeon definition."); continue; }
             if (!ids.Add(dungeon.dungeonId)) issues.Add("Duplicate dungeon ID: " + dungeon.dungeonId);
-            if (!dungeon.IsValid(out var error)) issues.Add(dungeon.name + ": " + error);
-            if (dungeon.monsters != null) foreach (var row in dungeon.monsters)
-                if (row?.prefab != null && FindMonster(row.prefab.prefabId) != row.prefab)
-                    issues.Add("Dungeon monster must be registered in DungeonCatalog: " + row.prefab.name);
-            if (dungeon.corpses != null) foreach (var row in dungeon.corpses)
-                if (row?.prefab != null && FindCorpse(row.prefab.prefabId) != row.prefab)
-                    issues.Add("Dungeon corpse must be registered in DungeonCatalog: " + row.prefab.name);
+            if (!ValidateEntry(dungeon, out var error)) issues.Add(dungeon.name + ": " + error);
         }
         return issues;
     }

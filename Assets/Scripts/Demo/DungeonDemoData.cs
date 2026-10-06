@@ -105,6 +105,9 @@ public sealed class DismantleDifficulty
 
     public DismantleDifficulty(int requiredSuccesses, int maxFailures, float pointerSpeed, float successWindowSize)
     {
+        if (requiredSuccesses < 1 || maxFailures < 1 || !MonsterDefinition.Positive(pointerSpeed)
+            || !MonsterDefinition.Positive(successWindowSize) || successWindowSize > 1f)
+            throw new System.ArgumentException("Invalid dismantle difficulty.");
         RequiredSuccesses = requiredSuccesses;
         MaxFailures = maxFailures;
         PointerSpeed = pointerSpeed;
@@ -137,6 +140,7 @@ public sealed class CorpseRunData
     public void MarkProcessed()
     {
         IsProcessed = true;
+        // 즉시 풀에 반환하면 이 런의 저장 위치가 다음 대여 위치로 바뀐다. 런 종료까지 소유한다.
         Visual.SetActive(false);
     }
 }
@@ -157,17 +161,20 @@ public sealed class DismantleSession
     public DismantleSession(DismantleDifficulty difficulty)
     {
         Difficulty = difficulty;
-        WindowStart = Random.Range(.16f, .68f);
+        if (difficulty == null) throw new System.ArgumentNullException(nameof(difficulty));
+        // 큰 성공 영역도 항상 막대 안에 들어가도록 한다.
+        float lastStart = 1f - difficulty.SuccessWindowSize;
+        WindowStart = Random.Range(Mathf.Min(.16f, lastStart), Mathf.Min(.68f, lastStart));
     }
 
     public void Tick(float deltaTime)
     {
-        PointerPosition += direction * Difficulty.PointerSpeed * deltaTime;
-        if (PointerPosition >= 1f || PointerPosition <= 0f)
-        {
-            PointerPosition = Mathf.Clamp01(PointerPosition);
-            direction *= -1f;
-        }
+        if (!MonsterDefinition.Nonnegative(deltaTime)) return;
+        // 프레임 지연으로 여러 번 왕복해도 초과 이동량을 버리지 않고 반사한다.
+        double phase = direction < 0f ? 2d - PointerPosition : PointerPosition;
+        phase = (phase + (double)Difficulty.PointerSpeed * deltaTime) % 2d;
+        PointerPosition = (float)(phase <= 1d ? phase : 2d - phase);
+        direction = phase < 1d ? 1f : -1f;
     }
 
     public void RegisterAttempt()

@@ -18,6 +18,9 @@ public static partial class TownProgress
     private static List<WarehouseStackData> warehouse = new();
     private static readonly HashSet<string> saleLocks = new();
     private static int nextWarehouseId = 1;
+    // UI는 창고 변경 때만 그룹화·정렬·깊은 복사를 다시 수행한다.
+    public static uint WarehouseRevision { get; private set; }
+    private static void WarehouseChanged() => WarehouseRevision = unchecked(WarehouseRevision + 1);
     public static int BagLevel { get; private set; }
     public static int LastRecoveredCount { get; private set; }
     public static int LastRecoveredValue { get; private set; }
@@ -30,6 +33,7 @@ public static partial class TownProgress
     {
         warehouse.Clear(); saleLocks.Clear(); nextWarehouseId = 1;
         BagLevel = LastRecoveredCount = LastRecoveredValue = 0;
+        WarehouseChanged();
     }
     private static List<WarehouseStackData> CopyWarehouse()
     {
@@ -43,6 +47,7 @@ public static partial class TownProgress
         foreach (var stack in warehouse) if (stack.saleLocked) saleLocks.Add(stack.loot.Restore().KindId);
         BagLevel = data.bagLevel; LastRecoveredCount = data.lastRecoveredCount; LastRecoveredValue = data.lastRecoveredValue;
         nextWarehouseId = Mathf.Max(1, data.nextWarehouseId);
+        WarehouseChanged();
     }
 
     public static long MaterialCount(string kindId)
@@ -55,6 +60,7 @@ public static partial class TownProgress
         if (!InTown || !LootKinds.ValidId(kindId)) return false;
         if (locked) saleLocks.Add(kindId); else saleLocks.Remove(kindId);
         foreach (var item in warehouse) if (item.loot.kindId == kindId) item.saleLocked = locked;
+        WarehouseChanged();
         GameSession.RequestAutosave(); return true;
     }
     public static List<WarehouseStackData> GetStacks(string kindId)
@@ -103,6 +109,7 @@ public static partial class TownProgress
         LastRecoveredCount = bag.Items.Count; LastRecoveredValue = bag.TotalValue;
         LastRunGold = LastContractBonus = 0;
         warehouse = staged; nextWarehouseId = stagedId;
+        WarehouseChanged();
         bag.Clear();
         GameSession.RequestAutosave(); return true;
     }
@@ -117,6 +124,7 @@ public static partial class TownProgress
         if ((long)Gold + stack.unitPrice > int.MaxValue) { error = "골드를 더 받을 수 없습니다."; return false; }
         Gold += stack.unitPrice; stack.quantity--;
         if (stack.quantity == 0) warehouse.Remove(stack);
+        WarehouseChanged();
         GameSession.RequestAutosave(); return true;
     }
 
@@ -164,6 +172,7 @@ public static partial class TownProgress
         var next = NextBagUpgrade; var staged = CopyWarehouse();
         foreach (var material in next.materials) Consume(staged, material.kindId, material.quantity);
         warehouse = staged; Gold -= next.goldCost; BagLevel++;
+        WarehouseChanged();
         GameSession.RequestAutosave(); return true;
     }
     public static bool TrySubmitContract(out string error)
@@ -174,6 +183,7 @@ public static partial class TownProgress
         if ((long)Gold + ContractBonus > int.MaxValue) { error = "골드를 더 받을 수 없습니다."; return false; }
         var staged = CopyWarehouse(); Consume(staged, ContractKindId, 1); warehouse = staged;
         Gold += ContractBonus; LastContractBonus = LastRunGold = ContractBonus; HasAcceptedContract = false;
+        WarehouseChanged();
         GameSession.RequestAutosave(); return true;
     }
 }

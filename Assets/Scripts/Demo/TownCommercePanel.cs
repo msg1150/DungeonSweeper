@@ -16,6 +16,12 @@ public sealed class TownCommercePanel : MonoBehaviour
     private string selectedKind, filter = "", notice;
     private int sort;
     private Vector2 listScroll, detailScroll;
+    private static readonly string[] sortLabels = { "이름순", "수량순", "가격순" };
+    private List<WarehouseGroup> cachedGroups;
+    private List<WarehouseStackData> cachedStacks;
+    private uint groupRevision, stackRevision;
+    private string cachedFilter, cachedStackKind;
+    private int cachedSort;
     public static bool IsOpen => instance != null && instance.open;
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)] private static void Reset() => instance = null;
     private void Awake() => instance = this;
@@ -75,11 +81,8 @@ public sealed class TownCommercePanel : MonoBehaviour
             notice = TownProgress.TryBuySupplyKit() ? "해체 보급 도구를 구매했습니다." : "골드가 부족하거나 더 구매할 수 없습니다.";
         Text(new Rect(176, 200, 50, 28), "검색", 15);
         filter = GUI.TextField(new Rect(224, 200, 205, 28), filter, 80);
-        if (GUI.Button(new Rect(439, 200, 143, 28), new[] { "이름순", "수량순", "가격순" }[sort])) sort = (sort + 1) % 3;
-        var groups = TownProgress.GetWarehouseGroups();
-        groups.RemoveAll(group => !string.IsNullOrEmpty(filter) && !(group.Name ?? "").Contains(filter, StringComparison.OrdinalIgnoreCase));
-        groups.Sort((a, b) => sort switch { 1 => b.Quantity.CompareTo(a.Quantity), 2 => b.MaximumPrice.CompareTo(a.MaximumPrice),
-            _ => string.Compare(a.Name, b.Name, StringComparison.Ordinal) });
+        if (GUI.Button(new Rect(439, 200, 143, 28), sortLabels[sort])) sort = (sort + 1) % 3;
+        var groups = WarehouseGroups();
         if (!groups.Exists(group => group.KindId == selectedKind)) selectedKind = groups.Count > 0 ? groups[0].KindId : null;
         listScroll = GUI.BeginScrollView(new Rect(176, 242, 416, 345), listScroll, new Rect(0, 0, 394, groups.Count * 76));
         for (int i = 0; i < groups.Count; i++)
@@ -100,7 +103,7 @@ public sealed class TownCommercePanel : MonoBehaviour
         bool nextLocked = GUI.Toggle(new Rect(618, 241, 250, 28), locked, "판매 잠금", GUI.skin.button);
         if (locked != nextLocked) TownProgress.SetSaleLock(selected.KindId, nextLocked);
         Text(new Rect(618, 278, 472, 50), selling ? "가격별로 보관됩니다. 판매할 전리품을 선택하세요." : "거래소에서 판매하거나 가방 확장 재료로 사용하세요.", 14);
-        var stacks = TownProgress.GetStacks(selected.KindId);
+        var stacks = WarehouseStacks(selected.KindId);
         detailScroll = GUI.BeginScrollView(new Rect(618, 328, 486, selling ? 205 : 255), detailScroll, new Rect(0, 0, 462, stacks.Count * 61));
         for (int i = 0; i < stacks.Count; i++)
         {
@@ -108,13 +111,32 @@ public sealed class TownCommercePanel : MonoBehaviour
             Text(new Rect(8, i * 61 + 8, 270, 31), $"개당 {stack.unitPrice}G · {stack.quantity}개");
             if (selling)
             {
-                GUI.enabled = !TownProgress.IsSaleLocked(selected.KindId);
-                bool sale = GUI.Button(new Rect(298, i * 61 + 4, 148, 35), "1개 판매"); GUI.enabled = true;
+                bool previousEnabled = GUI.enabled;
+                GUI.enabled = previousEnabled && !TownProgress.IsSaleLocked(selected.KindId);
+                bool sale = GUI.Button(new Rect(298, i * 61 + 4, 148, 35), "1개 판매"); GUI.enabled = previousEnabled;
                 if (sale) { notice = TownProgress.TrySellOne(stack.id, out string error) ? $"{selected.Name} 1개 판매 · +{stack.unitPrice}G" : error; break; }
             }
         }
         GUI.EndScrollView();
     }
+    private List<WarehouseGroup> WarehouseGroups()
+    {
+        if (cachedGroups != null && groupRevision == TownProgress.WarehouseRevision && cachedFilter == filter && cachedSort == sort) return cachedGroups;
+        cachedGroups = TownProgress.GetWarehouseGroups();
+        cachedGroups.RemoveAll(group => !string.IsNullOrEmpty(filter) && !(group.Name ?? "").Contains(filter, StringComparison.OrdinalIgnoreCase));
+        cachedGroups.Sort((a, b) => sort switch { 1 => b.Quantity.CompareTo(a.Quantity), 2 => b.MaximumPrice.CompareTo(a.MaximumPrice),
+            _ => string.Compare(a.Name, b.Name, StringComparison.Ordinal) });
+        groupRevision = TownProgress.WarehouseRevision; cachedFilter = filter; cachedSort = sort;
+        return cachedGroups;
+    }
+    private List<WarehouseStackData> WarehouseStacks(string kind)
+    {
+        if (cachedStacks != null && stackRevision == TownProgress.WarehouseRevision && cachedStackKind == kind) return cachedStacks;
+        cachedStacks = TownProgress.GetStacks(kind);
+        stackRevision = TownProgress.WarehouseRevision; cachedStackKind = kind;
+        return cachedStacks;
+    }
+
     private static bool IsMaterial(string kind)
     {
         foreach (var upgrade in TownEconomyConfig.Active.bagUpgrades)
@@ -138,8 +160,9 @@ public sealed class TownCommercePanel : MonoBehaviour
         GUI.EndScrollView();
         Text(new Rect(176, 483, 924, 50), "가격이 낮은 재료부터 사용합니다. 판매 잠금 상태의 재료도 업그레이드에는 사용됩니다.", 14);
         bool ready = TownProgress.CanUpgradeBag(out string error);
-        GUI.enabled = ready;
-        bool buy = GUI.Button(new Rect(176, 548, 430, 40), $"재료와 {next.goldCost}G를 사용해 가방 확장"); GUI.enabled = true;
+        bool previousEnabled = GUI.enabled;
+        GUI.enabled = previousEnabled && ready;
+        bool buy = GUI.Button(new Rect(176, 548, 430, 40), $"재료와 {next.goldCost}G를 사용해 가방 확장"); GUI.enabled = previousEnabled;
         if (!ready) Text(new Rect(626, 552, 464, 38), error, 16);
         if (buy) notice = TownProgress.TryUpgradeBag(out error) ? "가방 확장을 완료했습니다. 다음 던전부터 적용됩니다." : error;
     }
@@ -153,8 +176,9 @@ public sealed class TownCommercePanel : MonoBehaviour
         }
         Text(new Rect(176, 210, 900, 70), $"의뢰 제출품: {TownProgress.ContractTargetName} 1개\n창고 보유: {TownProgress.MaterialCount(TownProgress.ContractKindId)}개 · 보상 120G", 22);
         Text(new Rect(176, 300, 900, 65), "제출한 전리품은 소비됩니다. 가격이 낮은 것부터 사용하며 판매 잠금은 제출을 막지 않습니다.", 16);
-        GUI.enabled = TownProgress.MaterialCount(TownProgress.ContractKindId) >= 1;
-        bool submit = GUI.Button(new Rect(176, 394, 430, 40), "창고 전리품 1개 제출 · 보상 받기"); GUI.enabled = true;
+        bool previousEnabled = GUI.enabled;
+        GUI.enabled = previousEnabled && TownProgress.MaterialCount(TownProgress.ContractKindId) >= 1;
+        bool submit = GUI.Button(new Rect(176, 394, 430, 40), "창고 전리품 1개 제출 · 보상 받기"); GUI.enabled = previousEnabled;
         if (submit) notice = TownProgress.TrySubmitContract(out string error) ? "의뢰를 완료했습니다. +120G" : error;
     }
 }

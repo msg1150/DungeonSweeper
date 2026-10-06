@@ -1,4 +1,5 @@
 using UnityEditor;
+using System.IO;
 using UnityEngine;
 
 [CustomEditor(typeof(MonsterDatabase))]
@@ -9,6 +10,8 @@ public sealed class MonsterDatabaseEditor : Editor
     {
         const string path = "Assets/Resources/MonsterDatabase.asset";
         if (AssetDatabase.LoadAssetAtPath<MonsterDatabase>(path) != null) return;
+        if (File.Exists(path)) { Debug.LogError("Existing monster database has an unexpected type; preserving the asset: " + path); return; }
+        if (!AssetDatabase.IsValidFolder("Assets/Resources")) AssetDatabase.CreateFolder("Assets", "Resources");
         MonsterDatabase database = CreateInstance<MonsterDatabase>();
         database.ResetDefaults();
         AssetDatabase.CreateAsset(database, path);

@@ -27,7 +27,8 @@ public static class DungeonPrefabChecks
                 "save lookup works through registry even without any dungeon spawn rows");
             registry.dungeons = catalog.dungeons;
             registry.monsterPrefabs = Array.Empty<MonsterPrefab>();
-            check(registry.CollectIssues().Count > 0 && registry.FindMonster("monster.goblin") == null,
+            check(registry.CollectIssues().Count > 0 && registry.FindMonster("monster.goblin") == null
+                && !registry.ValidateEntry(catalog.dungeons[0], out _),
                 "unregistered dungeon prefab is rejected instead of relying on folder discovery");
         }
         finally { UnityEngine.Object.Destroy(registry); }
@@ -58,6 +59,14 @@ public static class DungeonPrefabChecks
                 var unique = new HashSet<Vector2>(plan.Enemies) { plan.Gate, DungeonLayoutFactory.Entrance };
                 check(plan.Enemies.Count == capacity && unique.Count == capacity + 2,
                     "layout " + layout + " spawns exactly the maximum population without duplicate cells or gates");
+                var path = new List<Vector2>(DungeonLayoutFactory.Width * DungeonLayoutFactory.Height + 1);
+                DungeonLayoutFactory.TryBuildPath(DungeonLayoutFactory.Entrance, plan.Gate, path);
+                long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+                bool allPaths = true;
+                for (int attempt = 0; attempt < 128; attempt++)
+                    allPaths &= DungeonLayoutFactory.TryBuildPath(DungeonLayoutFactory.Entrance, plan.Gate, path);
+                long allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+                check(allPaths && allocated == 0, "layout " + layout + " repeated path searches allocate " + allocated + " managed bytes after warmup");
                 clone.monsters[0].count++; check(!clone.IsValid(out _), "layout " + layout + " rejects one more than capacity");
             }
         }

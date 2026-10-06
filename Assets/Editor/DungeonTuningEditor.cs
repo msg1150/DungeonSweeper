@@ -33,6 +33,8 @@ public sealed class DungeonTuningEditor : Editor
             "Hearing Range를 높이면 해체 실패 소리를 듣는 적의 범위가 넓어집니다. Investigation Seconds를 높이면 적이 소리 난 시체를 더 오래 조사합니다.");
         Help("Player Move / Dash",
             "Move Speed는 평상시 속도, Dash Speed는 대시 속도입니다. Dash Duration은 대시 유지 시간, Dash Cooldown은 다시 사용할 때까지의 대기 시간입니다.");
+        Help("Pool Capacity Per Prefab / Pool Total Capacity",
+            "몬스터·시체의 비활성 인스턴스를 프리팹별·전체 한도까지 보관합니다. 마을 귀환 후 재입장 시 재사용하고 메인 화면으로 돌아가면 해제합니다. 0으로 설정하면 반환 시 모두 삭제합니다. 활성 스폰 수에는 영향을 주지 않습니다.");
     }
 
     private static void Help(string title, string text)

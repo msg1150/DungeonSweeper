@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 
 public static class TownEconomyChecks
@@ -36,12 +37,26 @@ public static class TownEconomyChecks
                 "warehouse groups quantities while preserving individual price tiers");
             prices[0].quantity = 999;
             check(TownProgress.MaterialCount(LootKinds.GoblinHide) == 3, "warehouse views cannot mutate authoritative quantities");
+            var cachePanel = UnityEngine.Object.FindAnyObjectByType<TownCommercePanel>();
+            var groupsMethod = typeof(TownCommercePanel).GetMethod("WarehouseGroups", BindingFlags.Instance | BindingFlags.NonPublic);
+            var stacksMethod = typeof(TownCommercePanel).GetMethod("WarehouseStacks", BindingFlags.Instance | BindingFlags.NonPublic);
+            var cachedGroups = groupsMethod.Invoke(cachePanel, null);
+            var cachedStacks = stacksMethod.Invoke(cachePanel, new object[] { LootKinds.GoblinHide });
+            check(ReferenceEquals(cachedGroups, groupsMethod.Invoke(cachePanel, null))
+                && ReferenceEquals(cachedStacks, stacksMethod.Invoke(cachePanel, new object[] { LootKinds.GoblinHide })),
+                "unchanged warehouse UI reuses grouped and price-tier snapshots");
             TownProgress.SetSaleLock(LootKinds.GoblinHide, true);
+            var lockedGroups = (List<WarehouseGroup>)groupsMethod.Invoke(cachePanel, null);
+            check(!ReferenceEquals(cachedGroups, lockedGroups) && lockedGroups.Find(item => item.KindId == LootKinds.GoblinHide).SaleLocked,
+                "warehouse change invalidates cached lock view");
             check(!TownProgress.TrySellOne(prices[0].id, out _) && TownProgress.Gold == 0 && TownProgress.WarehouseCount == 4,
                 "sale lock prevents item and currency changes");
             TownProgress.SetSaleLock(LootKinds.GoblinHide, false);
             check(TownProgress.TrySellOne(prices[0].id, out _) && TownProgress.Gold == 40 && TownProgress.MaterialCount(LootKinds.GoblinHide) == 2,
                 "selling removes exactly one chosen price-tier item");
+            var soldStacks = (List<WarehouseStackData>)stacksMethod.Invoke(cachePanel, new object[] { LootKinds.GoblinHide });
+            check(!ReferenceEquals(cachedStacks, soldStacks) && soldStacks.Count == 1 && soldStacks[0].quantity == 2,
+                "sale refreshes cached quantities and removes depleted price tiers");
             check(!TownProgress.TrySellOne(prices[0].id, out _) && TownProgress.Gold == 40, "repeated sale of depleted stack cannot duplicate gold");
             ReceiveItems(LootKinds.GoblinHide, "고블린 가죽", LootShape.Hide, 30, 42);
             check(TownProgress.WarehouseCount == 45, "town warehouse exceeds expedition capacity without slot limits");

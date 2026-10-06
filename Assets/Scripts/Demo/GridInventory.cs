@@ -109,9 +109,11 @@ public sealed class GridInventory
     {
         Clear();
         foreach (StoredLootSaveData item in savedItems)
-            if (!Place(item.loot.Restore(), item.position.x, item.position.y,
-                item.hasSaleValue ? item.saleValue : Price(item.loot.Restore())))
+        {
+            var loot = item.loot.Restore();
+            if (!Place(loot, item.position.x, item.position.y, item.hasSaleValue ? item.saleValue : Price(loot)))
                 throw new System.ArgumentException("Saved inventory has an invalid placement.");
+        }
         TotalValue = Mathf.Max(0, totalValue);
     }
 

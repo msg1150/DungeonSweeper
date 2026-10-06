@@ -16,6 +16,8 @@ public sealed class MonsterLootEntry
     [Min(1)] public int width = 1;
     [Min(1)] public int height = 1;
 
+    public MonsterLootEntry Copy() => (MonsterLootEntry)MemberwiseClone();
+
     public bool IsValid() => LootKinds.ValidId(kindId) && !string.IsNullOrWhiteSpace(lootName)
         && MonsterDefinition.Nonnegative(dropChance) && dropChance <= 1f && minPrice >= 0 && maxPrice >= minPrice
         && maxPrice < int.MaxValue && width >= 1 && height >= 1 && width <= GridInventory.Width
@@ -56,6 +58,15 @@ public sealed class MonsterDefinition
             && Positive(hearingRange) && Positive(investigationSeconds) && Positive(patrolTravelDistance) && Nonnegative(patrolArrivalPause)));
     public static bool Positive(float value) => Nonnegative(value) && value > 0f;
     public static bool Nonnegative(float value) => !float.IsNaN(value) && !float.IsInfinity(value) && value >= 0f;
+
+    /// <summary>JSON 문자열 생성 없이 런별 능력치와 기존 드롭 목록까지 독립적으로 복사한다.</summary>
+    public MonsterDefinition Copy()
+    {
+        var copy = (MonsterDefinition)MemberwiseClone();
+        copy.loot = new List<MonsterLootEntry>(loot?.Count ?? 0);
+        if (loot != null) foreach (var entry in loot) copy.loot.Add(entry?.Copy());
+        return copy;
+    }
 
     public LootDefinition[] RollLoot()
     {
