@@ -96,12 +96,21 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         DungeonPoolChecks.RunLocal(Check);
         if (capture)
         {
-            var display = GameSettings.Copy(); display.width = 1280; display.height = 720; display.fullscreen = false;
+            // 숨겨진 Windows 창도 실제 backbuffer를 생성하도록 먼저 다른 크기로 갱신한다.
+            var display = GameSettings.Copy(); display.width = 800; display.height = 450; display.fullscreen = false;
+            GameSettings.Apply(display, false);
+            float initializeUntil = Time.realtimeSinceStartup + .25f;
+            while (Time.realtimeSinceStartup < initializeUntil || Screen.width != 800 || Screen.height != 450)
+            { CheckTime(); yield return null; }
+            display.width = 1280; display.height = 720;
             GameSettings.Apply(display, false);
             float settleUntil = Time.realtimeSinceStartup + .25f;
             while (Time.realtimeSinceStartup < settleUntil || Screen.width != 1280 || Screen.height != 720 || Screen.fullScreen)
             { CheckTime(); yield return null; }
             Check(Screen.width == 1280 && Screen.height == 720, "release supports standard window size");
+            // 숨겨진 테스트 창의 포커스 상태 대신, 사용자가 조작 중인 메뉴 모습을 캡처한다.
+            Call(Shell, "OnApplicationFocus", true);
+            yield return null;
         }
         Snapshot("release-main-menu");
         yield return null; yield return null;
@@ -113,6 +122,8 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         Call(Shell, "Resume");
         TownEconomyChecks.Run(Check);
         FocusPauseChecks.Run(Check);
+        var artChecks = CheckConceptArt();
+        while (artChecks.MoveNext()) yield return artChecks.Current;
         TownProgress.Restore(new TownProgressData { gold = 250 });
         Check(TownProgress.TryBuySupplyKit() && TownProgress.Gold == 225, "release supply transaction");
         TownProgress.AcceptContract();
@@ -309,6 +320,137 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         yield return null;
         Check(TownProgress.Gold == 466, "quit state remains unchanged after fresh-entry trials");
         Finish(false);
+    }
+
+    private IEnumerator CheckConceptArt()
+    {
+        Call(Shell, "OnApplicationFocus", true); Call(Shell, "Resume");
+        // 포커스 복귀/메뉴 닫기 프레임에는 정상적으로 입력과 시각 이동을 막는다.
+        yield return null;
+        var movement = UnityEngine.Object.FindAnyObjectByType<PlayerMovement>();
+        var animator = movement.GetComponent<PlayerVisualAnimator>();
+        var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        var renderer = movement.transform.Find("Animated Player Visual").GetComponent<SpriteRenderer>();
+        var walk = (Sprite[])typeof(PlayerVisualAnimator).GetField("walkFrames", flags).GetValue(animator);
+        var dash = (Sprite[])typeof(PlayerVisualAnimator).GetField("dashFrames", flags).GetValue(animator);
+        Sprite idle = Resources.Load<Sprite>("Sprites/player");
+        movement.GetComponent<Rigidbody2D>().linearVelocity = Vector2.zero;
+        Call(animator, "LateUpdate");
+        Check(renderer.sprite == idle && idle != null, "cat shows its separate idle pose when stopped");
+        Check(walk.Length == 4 && dash.Length == 4 && walk[0].rect.y > walk[2].rect.y && dash[0].rect.y > dash[2].rect.y,
+            "four walk and dash poses read from top left in artwork order");
+        movement.GetComponent<Rigidbody2D>().linearVelocity = Vector2.left;
+        Call(animator, "LateUpdate");
+        Check(Array.IndexOf(walk, renderer.sprite) >= 0 && renderer.flipX, "moving cat animates and faces left");
+        movement.Restore(new PlayerMotionSaveData { isDashing = true, dashSeconds = DungeonTuning.Active.playerDashDuration * .15f,
+            dashDirection = Vector2.right, lastDirection = Vector2.right });
+        Call(animator, "LateUpdate");
+        Check(renderer.sprite == dash[2] && !renderer.flipX, "dash uses saved movement progress and its actual direction");
+        Call(movement, "EndDash");
+        movement.GetComponent<Rigidbody2D>().linearVelocity = Vector2.zero;
+        Call(animator, "LateUpdate");
+        Check(!movement.IsDashing && renderer.sprite == dash[3], "landing recovery persists visually after physical dash ends");
+        float recoveryUntil = Time.realtimeSinceStartup + PlayerVisualProfile.Active.dashRecoverySeconds
+            + PlayerVisualProfile.Active.poseBlendSeconds + .04f;
+        while (Time.realtimeSinceStartup < recoveryUntil) { CheckTime(); yield return null; }
+        Check(renderer.sprite == idle && !movement.IsDashing && Mathf.Approximately(renderer.color.a, 1f),
+            "landing fades back to idle without extending movement or leaving transparent poses");
+        Sprite[] buildings = CasualArtLibrary.LoadSheet("Sprites/Environment/town-structures", 2, 2, 180f, true);
+        string[] names = { "Dungeon Entrance", "Town Warehouse", "Salvager Guild", "Supply Shop" };
+        for (int i = 0; i < names.Length; i++)
+            Check(GameObject.Find(names[i]).GetComponent<SpriteRenderer>().sprite == buildings[i], "correct town building: " + names[i]);
+        string[] species = { "goblin", "slime", "orc" };
+        Sprite[] corpses = CasualArtLibrary.LoadSheet("Sprites/Monsters/corpse-sheet", 3, 1, 180f, true);
+        Check(Mathf.Approximately(corpses[0].rect.width, 724f) && corpses.Length == 3,
+            "corpse sheet keeps its original dimensions instead of power-of-two resizing");
+        var stage = new GameObject("Validation Art Gallery");
+        var hub = UnityEngine.Object.FindAnyObjectByType<TownHubController>();
+        bool hubEnabled = hub.enabled;
+        try
+        {
+            Vector3 origin = Camera.main.transform.position; origin.z = 0f;
+            AddGallerySprite(stage, CasualArtLibrary.WhiteSprite, origin, new Vector3(19, 11, 1), 40);
+            AddGallerySprite(stage, idle, origin + new Vector3(-6.5f, 2.5f, 0), Vector3.one * 1.7f, 41);
+            for (int i = 0; i < 4; i++)
+            {
+                AddGallerySprite(stage, walk[i], origin + new Vector3(-3.9f + i * 2.6f, 2.5f, 0), Vector3.one * 1.7f, 41);
+                AddGallerySprite(stage, dash[i], origin + new Vector3(-3.9f + i * 2.6f, 0f, 0), Vector3.one * 1.7f, 41);
+            }
+            for (int i = 0; i < species.Length; i++)
+            {
+                var obj = new GameObject(species[i]); obj.transform.SetParent(stage.transform);
+                obj.transform.position = origin + new Vector3(-6.5f + i * 5.2f, -2.5f, 0);
+                obj.transform.localScale = Vector3.one * .55f;
+                var sprite = obj.AddComponent<SpriteRenderer>(); sprite.sortingOrder = 41;
+                var monster = obj.AddComponent<MonsterVisualAnimator>();
+                monster.Initialize("Sprites/Monsters/" + species[i] + "-sheet", sprite);
+                Check(sprite.sprite != null && Mathf.Approximately(sprite.sprite.rect.width, 512f), "monster sheet cell stays square: " + species[i]);
+                var source = CasualArtLibrary.CreateReadableCopy(sprite.sprite.texture);
+                try { Check(source.GetPixel(0, 0).a < .1f, "transparent monster backdrop: " + species[i]); }
+                finally { UnityEngine.Object.Destroy(source); }
+                AddGallerySprite(stage, corpses[i], origin + new Vector3(-3.9f + i * 5.2f, -2.5f, 0), Vector3.one * .4f, 41);
+            }
+            if (capture)
+            {
+                hub.enabled = false;
+                yield return null;
+                Snapshot("release-art-gallery"); yield return null; yield return null;
+            }
+        }
+        finally { hub.enabled = hubEnabled; UnityEngine.Object.Destroy(stage); }
+        yield return null;
+        var attackChecks = CheckAttackArt();
+        while (attackChecks.MoveNext()) yield return attackChecks.Current;
+    }
+
+    private IEnumerator CheckAttackArt()
+    {
+        var stage = new GameObject("Validation Attack Gallery");
+        var hub = UnityEngine.Object.FindAnyObjectByType<TownHubController>();
+        bool hubEnabled = hub.enabled;
+        try
+        {
+            Vector3 origin = Camera.main.transform.position; origin.z = 0f;
+            AddGallerySprite(stage, CasualArtLibrary.WhiteSprite, origin, new Vector3(19, 11, 1), 40);
+            string[] species = { "goblin", "orc" };
+            for (int row = 0; row < 4; row++)
+            for (int frame = 0; frame < 3; frame++)
+            {
+                bool left = row % 2 == 1;
+                var obj = new GameObject(species[row / 2] + " attack"); obj.transform.SetParent(stage.transform);
+                obj.transform.position = origin + new Vector3(-4.5f + frame * 4.5f, 3f - row * 2f, 0);
+                obj.transform.localScale = Vector3.one * .55f;
+                var renderer = obj.AddComponent<SpriteRenderer>(); renderer.sortingOrder = 41;
+                var animator = obj.AddComponent<MonsterVisualAnimator>();
+                animator.Initialize("Sprites/Monsters/" + species[row / 2] + "-sheet", renderer);
+                animator.Tick(true, frame / 3f + .01f, false, left ? Vector2.left : Vector2.right);
+                Check(renderer.flipX == left, "attack pose faces its target: " + species[row / 2] + " frame " + frame + " left=" + left);
+                if (frame == 2)
+                {
+                    Check(renderer.sprite.vertices.Length == 6 && Mathf.Approximately(renderer.sprite.pivot.x + renderer.sprite.rect.x, 1280f),
+                        "recovery excludes neighboring slash fragments and preserves body pivot: " + species[row / 2]);
+                }
+                else if (frame == 1)
+                    Check(renderer.sprite.rect.width > 570 && renderer.sprite.vertices.Length == 6
+                        && Mathf.Approximately(renderer.sprite.pivot.x, 256f),
+                        "entire forward weapon and arc fit without borrowing recovery clothing: " + species[row / 2]);
+            }
+            if (capture)
+            {
+                hub.enabled = false;
+                yield return null;
+                Snapshot("release-attack-gallery"); yield return null; yield return null;
+            }
+        }
+        finally { hub.enabled = hubEnabled; UnityEngine.Object.Destroy(stage); }
+        yield return null;
+    }
+
+    private static void AddGallerySprite(GameObject stage, Sprite sprite, Vector3 position, Vector3 scale, int order)
+    {
+        var obj = new GameObject("Art Preview"); obj.transform.SetParent(stage.transform);
+        obj.transform.position = position; obj.transform.localScale = scale;
+        var renderer = obj.AddComponent<SpriteRenderer>(); renderer.sprite = sprite; renderer.sortingOrder = order;
     }
 
     private void Finish(bool restart)

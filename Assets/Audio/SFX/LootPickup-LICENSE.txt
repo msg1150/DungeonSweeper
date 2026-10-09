@@ -1,0 +1,24 @@
+LootPickup.wav - original synthesized loot pickup effect
+Created for DungeonSweeper on 2026-10-08.
+
+License: CC0 1.0 Universal (SPDX: CC0-1.0)
+https://creativecommons.org/publicdomain/zero/1.0/
+Legal code: https://creativecommons.org/publicdomain/zero/1.0/legalcode
+
+To the extent any copyright or related rights exist in the generated audio
+and its generator, these contributions are dedicated to the public domain
+under CC0 1.0. Commercial use, editing, copying, and redistribution are
+permitted. Attribution and payment are not required.
+
+Scope: LootPickup.wav and Tools/Generate-LootPickupSound.py only.
+This notice does not change the license of any other project files.
+
+Provenance: generated entirely with mathematical oscillators, exponential
+envelopes, and seeded pseudorandom noise. No third-party audio, recordings,
+sample packs, sound fonts, or voice/person impersonation were used.
+
+Technical format: 0.8 seconds, 48 kHz, mono, 16-bit PCM WAV.
+Intended use: a short metallic ascending chime for picking up loot.
+Regenerate using Python 3: python Tools/Generate-LootPickupSound.py
+
+Provided as-is, without warranty, as described in the CC0 legal code.

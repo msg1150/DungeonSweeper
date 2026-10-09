@@ -15,7 +15,7 @@ $taskOldPrefabRoot = [IO.Path]::GetFullPath((Join-Path $taskValidationRoot 'Asse
 if (-not $taskOldPrefabRoot.StartsWith(([IO.Path]::GetFullPath($taskValidationRoot) + [IO.Path]::DirectorySeparatorChar), [StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid isolated prefab cleanup path.' }
 if (Test-Path -LiteralPath $taskOldPrefabRoot) { Remove-Item -LiteralPath $taskOldPrefabRoot -Recurse -Force }
 if (Test-Path -LiteralPath ($taskOldPrefabRoot + '.meta')) { Remove-Item -LiteralPath ($taskOldPrefabRoot + '.meta') -Force }
-foreach ($taskFolder in @('Scripts', 'Resources', 'Prefabs', 'Scenes', 'Settings', 'Editor')) {
+foreach ($taskFolder in @('Scripts', 'Resources', 'Prefabs', 'Scenes', 'Settings', 'Editor', 'Art', 'Audio')) {
     Copy-Item -LiteralPath (Join-Path $taskProjectRoot "Assets/$taskFolder") -Destination "$taskValidationRoot/Assets" -Recurse -Force
     $taskFolderMeta = Join-Path $taskProjectRoot "Assets/$taskFolder.meta"
     if (Test-Path -LiteralPath $taskFolderMeta) { Copy-Item -LiteralPath $taskFolderMeta -Destination "$taskValidationRoot/Assets" -Force }
@@ -71,6 +71,8 @@ if ($CheckPlayerProtection -or $CaptureScreens) {
         if ($CaptureScreens -and -not $taskRestart) {
             Get-ChildItem -LiteralPath $taskValidationRoot -Filter 'release-*.png' -File | Remove-Item
             $taskPlayerArgs += '-captureReleaseScreens'
+            # 숨겨진 창의 D3D12 초기 backbuffer는 검게 캡처될 수 있어 화면 검증은 D3D11을 사용한다.
+            $taskPlayerArgs += '-force-d3d11'
         }
         else { $taskPlayerArgs += @('-batchmode', '-nographics') }
         if ($taskRestart) { $taskPlayerArgs += '-readSavedProtection' }
@@ -82,9 +84,10 @@ if ($CheckPlayerProtection -or $CaptureScreens) {
         Write-Output $taskPlayerText
     }
     if ($CaptureScreens) {
-        foreach ($taskCapture in @('release-main-menu', 'release-town', 'release-dungeon', 'release-loot-modal', 'release-loot-scrolled', 'release-loot-small', 'release-warehouse', 'release-warehouse-small', 'release-market', 'release-bag-upgrade', 'release-expanded-bag', 'release-spawn-layout-0', 'release-spawn-layout-1', 'release-spawn-layout-2')) {
+        foreach ($taskCapture in @('release-main-menu', 'release-town', 'release-art-gallery', 'release-attack-gallery', 'release-dungeon', 'release-loot-modal', 'release-loot-scrolled', 'release-loot-small', 'release-warehouse', 'release-warehouse-small', 'release-market', 'release-bag-upgrade', 'release-expanded-bag', 'release-spawn-layout-0', 'release-spawn-layout-1', 'release-spawn-layout-2')) {
             $taskCapturePath = Join-Path $taskValidationRoot ($taskCapture + '.png')
             if (-not (Test-Path -LiteralPath $taskCapturePath)) { throw "Release screen capture missing: $taskCapturePath" }
+            if ((Get-Item -LiteralPath $taskCapturePath).Length -lt 10000) { throw "Release screen capture appears blank: $taskCapturePath" }
         }
         Write-Output "Screen captures: $taskValidationRoot"
     }

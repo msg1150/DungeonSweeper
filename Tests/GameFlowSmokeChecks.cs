@@ -19,6 +19,15 @@ public static class GameFlowSmokeChecks
     public static void Run()
     {
         if (!Root.Replace('\\', '/').EndsWith("/.utmp/UnityValidation")) throw new Exception("Validation must run in the isolated project.");
+        ConceptArtPreviewRefresh.Refresh();
+        string[] previewSpecies = { "goblin", "slime", "orc" };
+        foreach (string species in previewSpecies)
+        {
+            var monsterPreview = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Prefabs/Previews/" + species + "-monster.asset");
+            var corpsePreview = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Prefabs/Previews/" + species + "-corpse.asset");
+            if (monsterPreview.rect.size != new Vector2(512, 512) || corpsePreview.rect.size != new Vector2(724, 724))
+                throw new Exception("Art preview dimensions are stale: " + species);
+        }
         SessionState.SetBool(Active, true);
         SessionState.SetInt(StepKey, 0);
         SessionState.SetInt(CountKey, 0);

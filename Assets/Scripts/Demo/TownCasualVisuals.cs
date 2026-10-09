@@ -14,14 +14,16 @@ public static class TownCasualVisuals
             marker.sortingOrder = 1; warehouse.transform.localScale = new Vector3(1.3f, .8f, 1);
         }
         Sprite background = CasualArtLibrary.LoadFull("Sprites/Environment/town-casual", 100f);
-        Sprite[] structures = CasualArtLibrary.LoadSheet("Sprites/Environment/town-structures", 3, 1, 180f, true);
+        Sprite[] structures = CasualArtLibrary.LoadSheet("Sprites/Environment/town-structures", 2, 2, 180f, true);
         SetBackgroundCover("Town Ground", background);
         GameObject path = GameObject.Find("Main Path"); if (path != null) path.SetActive(false);
-        if (structures.Length >= 3)
+        if (structures.Length >= 4)
         {
-            SetSprite("Salvager Guild", structures[0], 4.8f, 1);
-            SetSprite("Supply Shop", structures[1], 4.1f, 1);
-            SetSprite("Dungeon Entrance", structures[2], 3.1f, 1);
+            // 시트 상단: 길드·거래소 / 하단: 게이트·창고. LoadSheet는 하단부터 읽는다.
+            SetSprite("Salvager Guild", structures[2], 4.8f, 1);
+            SetSprite("Supply Shop", structures[3], 4.1f, 1);
+            SetSprite("Dungeon Entrance", structures[0], 3.1f, 1);
+            SetSprite("Town Warehouse", structures[1], 3.2f, 1);
         }
     }
 

@@ -16,6 +16,9 @@ MonoBehaviour:
   dashSheetResource: Sprites/player-dash-cycle
   columns: 2
   rows: 2
+  frameLeftInset: 0.06
   walkFramesPerSecond: 9
   dashFramesPerSecond: 20
+  dashRecoverySeconds: 0.08
+  poseBlendSeconds: 0.045
   visualScale: 1.35

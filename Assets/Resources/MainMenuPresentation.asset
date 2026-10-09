@@ -12,11 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fb4fcacbfd3a4dcca99ecbf3929021b9, type: 3}
   m_Name: MainMenuPresentation
   m_EditorClassIdentifier: Assembly-CSharp::MainMenuPresentationConfig
-  backgroundImage: {fileID: 0}
+  backgroundImage: {fileID: 2800000, guid: 71b14fc0c0d2497fa0346f6feefbaae1, type: 3}
   logo: {fileID: 0}
   backgroundVideo: {fileID: 0}
   uiFont: {fileID: 0}
-  backgroundDarkness: 0.45
+  backgroundDarkness: 0
+  menuPanelOpacity: 0.56
+  menuButtonOpacity: 0.8
   menuMusic: {fileID: 0}
   townMusic: {fileID: 0}
   dungeonMusic: {fileID: 0}

@@ -41,7 +41,6 @@ public sealed class GameShell : MonoBehaviour
     private float noticeUntil;
     private float nextAutosaveAttempt;
     private GUIStyle titleStyle, subtitleStyle, buttonStyle, slotStyle, labelStyle, smallStyle, panelStyle;
-    private readonly List<Texture2D> styleTextures = new();
     private Font fallbackFont;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -237,45 +236,31 @@ public sealed class GameShell : MonoBehaviour
         SceneManager.sceneLoaded -= OnSceneLoaded;
         Application.wantsToQuit -= OnWantsToQuit;
         if (instance == this) { instance = null; Time.timeScale = 1f; }
-        foreach (Texture2D texture in styleTextures) if (texture != null) Destroy(texture);
         if (fallbackFont != null) Destroy(fallbackFont);
     }
 
     private void ShowNotice(string text) { notice = text; noticeUntil = Time.unscaledTime + 7f; }
 
-    private Texture2D Solid(Color color)
-    {
-        Texture2D texture = new(1, 1);
-        texture.SetPixel(0, 0, color);
-        texture.Apply();
-        styleTextures.Add(texture);
-        return texture;
-    }
-
     private void EnsureStyles()
     {
         if (titleStyle != null) return;
         Font font = EnsureFont();
-        Color white = new(.94f, .94f, .90f);
+        Color white = GameUiTheme.Ink;
         titleStyle = new GUIStyle(GUI.skin.label) { font = font, fontSize = 52, fontStyle = FontStyle.Bold, wordWrap = true };
         titleStyle.normal.textColor = white;
         subtitleStyle = new GUIStyle(GUI.skin.label) { font = font, fontSize = 21, wordWrap = true };
-        subtitleStyle.normal.textColor = new Color(.72f, .77f, .79f);
+        subtitleStyle.normal.textColor = GameUiTheme.MutedInk;
         labelStyle = new GUIStyle(GUI.skin.label) { font = font, fontSize = 19, alignment = TextAnchor.MiddleLeft, wordWrap = true };
         labelStyle.normal.textColor = white;
         smallStyle = new GUIStyle(labelStyle) { fontSize = 15 };
-        smallStyle.normal.textColor = new Color(.65f, .72f, .76f);
-        buttonStyle = new GUIStyle(GUI.skin.button)
+        smallStyle.normal.textColor = GameUiTheme.MutedInk;
+        GUISkin theme = GameUiTheme.GetSkin(GUI.skin);
+        buttonStyle = new GUIStyle(theme.button)
         {
             font = font, fontSize = 21, alignment = TextAnchor.MiddleCenter, padding = new RectOffset(18, 18, 9, 9)
         };
-        buttonStyle.normal.background = Solid(new Color(.12f, .17f, .21f, .96f));
-        buttonStyle.hover.background = Solid(new Color(.24f, .32f, .35f, 1f));
-        buttonStyle.active.background = Solid(new Color(.34f, .40f, .35f, 1f));
-        buttonStyle.normal.textColor = buttonStyle.hover.textColor = buttonStyle.active.textColor = white;
         slotStyle = new GUIStyle(buttonStyle) { alignment = TextAnchor.MiddleLeft, fontSize = 18, wordWrap = true };
-        panelStyle = new GUIStyle(GUI.skin.box);
-        panelStyle.normal.background = Solid(new Color(.045f, .07f, .09f, .98f));
+        panelStyle = new GUIStyle(theme.box);
     }
 
     public static Font UiFont => instance != null ? instance.EnsureFont() : null;
@@ -305,22 +290,23 @@ public sealed class GameShell : MonoBehaviour
         Matrix4x4 originalMatrix = GUI.matrix;
         Color originalColor = GUI.color;
         int originalDepth = GUI.depth;
+        using var gui = new GameGuiScope(false);
         GUI.depth = -1000;
         GUI.color = Color.white;
         bool menuScene = SceneManager.GetActiveScene().name == GameFlowConfig.Active.mainMenuSceneName;
         if (menuScene)
         {
-            GUI.color = new Color(.035f, .06f, .075f);
+            GUI.color = GameUiTheme.Paper;
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
             GUI.color = Color.white;
             if (presentation != null && presentation.Background != null)
                 GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), presentation.Background, ScaleMode.ScaleAndCrop);
-            GUI.color = new Color(0, 0, 0, presentation != null ? presentation.Config.backgroundDarkness : .45f);
+            GUI.color = new Color(0, 0, 0, presentation != null ? presentation.Config.backgroundDarkness : 0f);
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
         }
         else if (page != Page.Playing)
         {
-            GUI.color = new Color(0, 0, 0, .72f);
+            GUI.color = GameUiTheme.Scrim;
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
         }
         GUI.color = Color.white;
@@ -355,15 +341,22 @@ public sealed class GameShell : MonoBehaviour
 
     private void DrawMain()
     {
+        // 배경만 반투명하게 한다. 글자까지 GUI.color로 흐리게 만들지 않는다.
+        Color previousBackground = GUI.backgroundColor;
+        var config = MainMenuPresentationConfig.Active;
+        GUI.backgroundColor = new Color(1, 1, 1, Mathf.Clamp01(config.menuPanelOpacity));
+        GUI.Box(new Rect(138, 110, 400, 512), GUIContent.none, panelStyle);
+        GUI.backgroundColor = new Color(1, 1, 1, Mathf.Clamp01(config.menuButtonOpacity));
         if (presentation != null && presentation.Config.logo != null)
             GUI.DrawTexture(new Rect(160, 130, 570, 150), presentation.Config.logo, ScaleMode.ScaleToFit);
         else GUI.Label(new Rect(160, 130, 660, 140), "DUNGEON\nSWEEPER", titleStyle);
-        GUI.Label(new Rect(168, 275, 600, 35), "회수하고, 살아 돌아오세요.", subtitleStyle);
+        GUI.Label(new Rect(168, 275, 500, 60), "들키기 전에 회수하고,\n무사히 돌아오세요.", subtitleStyle);
         if (Button(new Rect(168, 345, 340, 54), "새 게임"))
             if (!GameSession.StartNewGame(out string error)) ShowNotice(error);
         if (Button(new Rect(168, 411, 340, 54), "이어하기")) OpenSlots(false);
         if (Button(new Rect(168, 477, 340, 54), "옵션")) OpenOptions();
         if (Button(new Rect(168, 543, 340, 54), "게임종료")) RequestQuit();
+        GUI.backgroundColor = previousBackground;
     }
 
     private void DrawPause()

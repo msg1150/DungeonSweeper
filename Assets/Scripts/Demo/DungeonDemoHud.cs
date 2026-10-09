@@ -57,6 +57,7 @@ public class DungeonDemoHud : MonoBehaviour
     {
         GUI.skin.label.fontSize = 17;
         GUI.skin.label.alignment = TextAnchor.UpperLeft;
+        GameUiTheme.Panel(new Rect(8, 8, 1000, 58));
         GUI.color = Color.white;
         GUI.Label(new Rect(16, 14, 740, 25), "DUNGEON SWEEPER  ·  비전투 회수 작업 데모");
         string contract = TownProgress.HasAcceptedContract ? $"  |  의뢰: {TownProgress.ContractTargetName} +{TownProgress.ActiveContractBonus}G" : string.Empty;
@@ -70,7 +71,7 @@ public class DungeonDemoHud : MonoBehaviour
         GUI.skin.label.alignment = TextAnchor.MiddleLeft;
         float ratio = run.PlayerHealth.Maximum <= 0 ? 0f : (float)run.PlayerHealth.Current / run.PlayerHealth.Maximum;
         Rect background = new Rect(16f, 68f, 230f, 22f);
-        GUI.color = new Color(.08f, .08f, .1f, .92f); GUI.DrawTexture(background, Texture2D.whiteTexture);
+        GUI.color = GameUiTheme.EmptyCell; GUI.DrawTexture(background, Texture2D.whiteTexture);
         GUI.color = Color.Lerp(danger, mint, ratio); GUI.DrawTexture(new Rect(background.x + 2f, background.y + 2f, (background.width - 4f) * ratio, background.height - 4f), Texture2D.whiteTexture);
         GUI.color = Color.white; GUI.Label(background, $"  체력 {run.PlayerHealth.Current} / {run.PlayerHealth.Maximum}");
     }
@@ -85,7 +86,7 @@ public class DungeonDemoHud : MonoBehaviour
         float height = DungeonLayoutFactory.Height * cell;
         float bagHeight = CompactBagCell * run.Inventory.Rows;
         Rect panel = new Rect(GameGuiScope.Width - width - 30f, Mathf.Max(210f, bagHeight + 120f), width + 16f, height + 38f);
-        GUI.color = new Color(.02f, .035f, .06f, .9f);
+        GUI.color = GameUiTheme.Paper;
         GUI.DrawTexture(panel, Texture2D.whiteTexture);
         GUI.color = Color.white;
         GUI.skin.label.fontSize = 13;
@@ -109,13 +110,14 @@ public class DungeonDemoHud : MonoBehaviour
         float cell = CompactBagCell;
         float x = GameGuiScope.Width - 160f;
         float y = 18f;
+        GameUiTheme.Panel(new Rect(x - 8f, y - 10f, 160f, 95f + cell * run.Inventory.Rows));
         GUI.color = Color.white;
         GUI.Label(new Rect(x, y, 145f, 23f), $"작업 가방  {run.Inventory.Columns} × {run.Inventory.Rows}");
         for (int row = 0; row < run.Inventory.Rows; row++)
         for (int col = 0; col < run.Inventory.Columns; col++)
         {
             int id = run.Inventory.GetCell(col, row);
-            GUI.color = id == 0 ? new Color(.12f, .15f, .2f) : LootColor(id);
+            GUI.color = id == 0 ? GameUiTheme.EmptyCell : LootColor(id);
             Rect cellRect = new Rect(x + col * cell, y + 25f + row * cell, cell - 2f, cell - 2f);
             GUI.DrawTexture(cellRect, Texture2D.whiteTexture);
             if (id == 0 && run.PendingLoot != null && GUI.Button(cellRect, GUIContent.none, GUIStyle.none))
@@ -138,13 +140,13 @@ public class DungeonDemoHud : MonoBehaviour
 
     private void DrawLootPlacementModal()
     {
-        GUI.color = new Color(0f, 0f, 0f, .68f);
+        GUI.color = GameUiTheme.Scrim;
         GUI.DrawTexture(new Rect(0, 0, GameGuiScope.Width, GameGuiScope.Height), Texture2D.whiteTexture);
         const float panelWidth = 800f;
         const float panelHeight = 500f;
         float panelX = (GameGuiScope.Width - panelWidth) * .5f;
         float panelY = (GameGuiScope.Height - panelHeight) * .5f;
-        GUI.color = new Color(.035f, .055f, .09f, .99f);
+        GUI.color = GameUiTheme.Paper;
         GUI.DrawTexture(new Rect(panelX, panelY, panelWidth, panelHeight), Texture2D.whiteTexture);
         GUI.color = mint;
         GUI.skin.label.alignment = TextAnchor.MiddleCenter;
@@ -172,7 +174,7 @@ public class DungeonDemoHud : MonoBehaviour
         {
             int id = run.Inventory.GetCell(col, row);
             Rect cellRect = new Rect(x + col * cell, y + row * cell, cell - 3f, cell - 3f);
-            GUI.color = id == 0 ? new Color(.1f, .13f, .18f) : LootColor(id);
+            GUI.color = id == 0 ? GameUiTheme.EmptyCell : LootColor(id);
             GUI.DrawTexture(cellRect, Texture2D.whiteTexture);
             if (id != 0) HandleStoredDragStart(id, cellRect);
         }
@@ -200,7 +202,7 @@ public class DungeonDemoHud : MonoBehaviour
             LootDefinition displayLoot = DisplayLoot(loot);
             int width = displayLoot.Width;
             int height = displayLoot.Height;
-            GUI.color = i == draggingLootIndex ? new Color(.28f, .38f, .5f, 1f) : new Color(.12f, .16f, .24f, 1f);
+            GUI.color = i == draggingLootIndex ? GameUiTheme.Mint : new Color(.93f, .94f, .86f);
             GUI.DrawTexture(card, Texture2D.whiteTexture);
             GUI.color = Color.white;
             GUI.skin.label.fontSize = 18;
@@ -325,14 +327,16 @@ public class DungeonDemoHud : MonoBehaviour
         string prompt = run.GetContextPrompt();
         if (string.IsNullOrEmpty(prompt)) return;
         GUI.skin.label.alignment = TextAnchor.MiddleCenter;
-        GUI.color = new Color(1f, .86f, .35f);
+        GameUiTheme.Panel(new Rect(GameGuiScope.Width * .5f - 250f, GameGuiScope.Height - 84, 500f, 38f), GameUiTheme.PromptPaper);
+        GUI.color = Color.white;
         GUI.Label(new Rect(GameGuiScope.Width * .5f - 230f, GameGuiScope.Height - 78, 460f, 26f), prompt);
     }
 
     private void DrawToast()
     {
         if (string.IsNullOrEmpty(run.Toast)) return;
-        GUI.color = new Color(.85f, .96f, 1f);
+        GameUiTheme.Panel(new Rect(8, GameGuiScope.Height - 46, GameGuiScope.Width - 176, 36));
+        GUI.color = Color.white;
         GUI.skin.label.alignment = TextAnchor.UpperLeft;
         GUI.Label(new Rect(16, GameGuiScope.Height - 42, GameGuiScope.Width - 32, 28), run.Toast);
     }
@@ -342,7 +346,7 @@ public class DungeonDemoHud : MonoBehaviour
         float width = 560f;
         float x = (GameGuiScope.Width - width) * .5f;
         float y = GameGuiScope.Height - 220f;
-        GUI.color = new Color(.025f, .04f, .07f, .96f);
+        GUI.color = GameUiTheme.Paper;
         GUI.DrawTexture(new Rect(x, y, width, 180), Texture2D.whiteTexture);
         GUI.color = Color.white;
         GUI.skin.label.alignment = TextAnchor.MiddleCenter;
@@ -351,7 +355,7 @@ public class DungeonDemoHud : MonoBehaviour
         GUI.skin.label.fontSize = 14;
         GUI.Label(new Rect(x, y + 45, width, 24), TownProgress.SupplyKits > 0 ? "[E] 정밀 해체  ·  [R] 보급 도구 사용: 즉시 성공 1회" : "포인터가 초록색 영역에 있을 때 [E]를 누르세요");
         Rect bar = new Rect(x + 42, y + 91, width - 84, 28);
-        GUI.color = new Color(.4f, .09f, .11f); GUI.DrawTexture(bar, Texture2D.whiteTexture);
+        GUI.color = new Color(.94f, .74f, .70f); GUI.DrawTexture(bar, Texture2D.whiteTexture);
         GUI.color = mint; GUI.DrawTexture(new Rect(bar.x + bar.width * session.WindowStart, bar.y, bar.width * session.Difficulty.SuccessWindowSize, bar.height), Texture2D.whiteTexture);
         GUI.color = danger; GUI.DrawTexture(new Rect(bar.x + bar.width * session.PointerPosition - 3f, bar.y - 7f, 6f, bar.height + 14f), Texture2D.whiteTexture);
         GUI.color = Color.white; GUI.skin.label.fontSize = 13;
@@ -360,7 +364,7 @@ public class DungeonDemoHud : MonoBehaviour
 
     private void DrawResult()
     {
-        GUI.color = new Color(.02f, .04f, .07f, .94f);
+        GUI.color = GameUiTheme.Paper;
         GUI.DrawTexture(new Rect(GameGuiScope.Width * .5f - 250f, GameGuiScope.Height * .5f - 95f, 500f, 190f), Texture2D.whiteTexture);
         GUI.color = mint;
         GUI.skin.label.alignment = TextAnchor.MiddleCenter;

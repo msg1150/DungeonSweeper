@@ -10,7 +10,9 @@ public sealed class MainMenuPresentationConfig : ScriptableObject
     public Texture2D logo;
     public VideoClip backgroundVideo;
     public Font uiFont;
-    [Range(0f, 1f)] public float backgroundDarkness = .45f;
+    [Range(0f, 1f)] public float backgroundDarkness = 0f;
+    [Range(0f, 1f)] public float menuPanelOpacity = .56f;
+    [Range(0f, 1f)] public float menuButtonOpacity = .8f;
     [Header("Music and UI Sounds")]
     public AudioClip menuMusic;
     public AudioClip townMusic;

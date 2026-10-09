@@ -12,6 +12,7 @@ public static class PlayerProtectionValidationBuild
         string root = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
         if (!root.Replace('\\', '/').EndsWith("/.utmp/UnityValidation"))
             throw new InvalidOperationException("Build validation must run in the isolated project.");
+        ConceptArtPreviewRefresh.Refresh();
         PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, ScriptingImplementation.Mono2x);
         var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
         {

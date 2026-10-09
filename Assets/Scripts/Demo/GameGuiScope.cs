@@ -8,13 +8,16 @@ public readonly struct GameGuiScope : IDisposable
     private readonly Matrix4x4 matrix;
     private readonly Color color;
     private readonly Font font;
+    private readonly GUISkin skin;
     private readonly bool enabled;
     private readonly TextAnchor labelAlignment;
     private readonly int labelSize, buttonSize;
 
     public GameGuiScope(bool scale)
     {
-        matrix = GUI.matrix; color = GUI.color; font = GUI.skin.font;
+        matrix = GUI.matrix; color = GUI.color; skin = GUI.skin;
+        GUI.skin = GameUiTheme.GetSkin(skin);
+        font = GUI.skin.font;
         enabled = GUI.enabled;
         labelAlignment = GUI.skin.label.alignment;
         labelSize = GUI.skin.label.fontSize; buttonSize = GUI.skin.button.fontSize;
@@ -35,5 +38,6 @@ public readonly struct GameGuiScope : IDisposable
         GUI.enabled = enabled;
         GUI.skin.label.alignment = labelAlignment;
         GUI.skin.label.fontSize = labelSize; GUI.skin.button.fontSize = buttonSize;
+        GUI.skin = skin;
     }
 }

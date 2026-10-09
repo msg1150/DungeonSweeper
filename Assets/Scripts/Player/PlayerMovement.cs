@@ -17,6 +17,9 @@ public sealed class PlayerMovement : MonoBehaviour, IPlayerMotionState
 
     public bool IsDashing { get; private set; }
     public Vector2 Velocity => body == null ? Vector2.zero : body.linearVelocity;
+    public Vector2 DashDirection => dashDirection;
+    public float DashProgress => Mathf.Clamp01(1f - dashTimeRemaining / Mathf.Max(.01f, DungeonTuning.Active.playerDashDuration));
+    public bool IsMovementEnabled => movementEnabled;
     public event Action DashStarted;
     public event Action DashEnded;
 

@@ -57,8 +57,8 @@ public sealed class TownCommercePanel : MonoBehaviour
         using var gui = new GameGuiScope(true);
         GUI.enabled &= !GameShell.IsFocusInputBlocked;
         GUI.skin.button.fontSize = 16;
-        Panel(new Rect(0, 0, 1280, 720), new Color(0, 0, 0, .7f));
-        Panel(new Rect(150, 64, 980, 592), new Color(.035f, .055f, .09f, .99f));
+        Panel(new Rect(0, 0, 1280, 720), GameUiTheme.Scrim);
+        Panel(new Rect(150, 64, 980, 592), GameUiTheme.Paper);
         string title = facility switch { TownFacility.Market => "거래소 · 보급 상점", TownFacility.Guild => "회수 길드", TownFacility.Upgrades => "가방 확장", _ => "마을 창고" };
         Text(new Rect(176, 80, 800, 38), title, 27);
         if (GUI.Button(new Rect(1002, 82, 102, 34), "닫기 [Esc]")) { Close(); return; }
@@ -89,7 +89,9 @@ public sealed class TownCommercePanel : MonoBehaviour
         {
             var group = groups[i];
             if (GUI.Button(new Rect(0, i * 76, 394, 68), GUIContent.none)) { selectedKind = group.KindId; detailScroll = Vector2.zero; }
-            GUI.color = group.KindId == selectedKind ? new Color(.35f, .9f, .7f) : Color.white;
+            GUI.color = Color.white;
+            if (group.KindId == selectedKind)
+                GameUiTheme.Panel(new Rect(0, i * 76 + 6, 4, 53), GameUiTheme.MintPressed);
             Text(new Rect(12, i * 76 + 6, 370, 27), $"{group.Name} × {group.Quantity}" + (group.SaleLocked ? "  [판매 잠금]" : ""));
             GUI.color = Color.white;
             string price = group.MinimumPrice == group.MaximumPrice ? group.MinimumPrice + "G" : $"{group.MinimumPrice}~{group.MaximumPrice}G";

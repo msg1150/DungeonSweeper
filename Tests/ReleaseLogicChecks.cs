@@ -54,8 +54,13 @@ public static class ReleaseLogicChecks
             drop.minPrice = drop.maxPrice = int.MaxValue;
             check(drop.Roll().Value >= 0, "maximum configured price does not overflow random range");
             check(ReferenceEquals(CasualArtLibrary.WhiteSprite, CasualArtLibrary.WhiteSprite), "fallback graphics reused across dungeon visits");
-            var wideWindow = new DismantleSession(new DismantleDifficulty(3, 3, 1f, .95f));
-            check(wideWindow.WindowStart >= 0f && wideWindow.WindowStart + .95f <= 1f, "wide dismantle window stays inside the bar");
+            bool wideWindowsFit = true;
+            for (int i = 0; i < 128; i++)
+            {
+                var wideWindow = new DismantleSession(new DismantleDifficulty(3, 3, 1f, .95f));
+                wideWindowsFit &= wideWindow.WindowStart >= 0f && wideWindow.WindowStart + .95f <= 1f;
+            }
+            check(wideWindowsFit, "wide dismantle windows stay inside the bar across repeated random samples");
             var bounce = new DismantleSession(new DismantleDifficulty(3, 3, 1f, .2f));
             bounce.Tick(2.25f);
             check(Mathf.Abs(bounce.PointerPosition - .25f) < .0001f, "delayed dismantle tick preserves multiple boundary reflections");

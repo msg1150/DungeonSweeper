@@ -1,0 +1,22 @@
+fileFormatVersion: 2
+guid: c20dd03c37184b9191eef52e95bf6a67
+TextureImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+  isReadable: 0
+  textureType: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spriteGenerateFallbackPhysicsShape: 0
+  alphaUsage: 1
+  alphaIsTransparency: 0
+  sRGBTexture: 1
+  wrapU: 1
+  wrapV: 1
+  filterMode: 1
+  maxTextureSize: 4096
+  textureCompression: 1
+  platformSettings: []

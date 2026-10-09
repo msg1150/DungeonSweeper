@@ -164,7 +164,8 @@ public sealed class DismantleSession
         if (difficulty == null) throw new System.ArgumentNullException(nameof(difficulty));
         // 큰 성공 영역도 항상 막대 안에 들어가도록 한다.
         float lastStart = 1f - difficulty.SuccessWindowSize;
-        WindowStart = Random.Range(Mathf.Min(.16f, lastStart), Mathf.Min(.68f, lastStart));
+        // 상·하한이 같은 넓은 창도 Random.Range의 부동소수 오차로 막대 밖에 나가지 않게 한다.
+        WindowStart = Mathf.Clamp(Random.Range(Mathf.Min(.16f, lastStart), Mathf.Min(.68f, lastStart)), 0f, lastStart);
     }
 
     public void Tick(float deltaTime)
