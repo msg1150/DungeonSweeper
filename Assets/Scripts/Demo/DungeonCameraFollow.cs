@@ -14,6 +14,7 @@ public sealed class DungeonCameraFollow : MonoBehaviour
     }
     private void LateUpdate()
     {
+        if (ThreeDWorldView.Current != null) return;
         if (target == null) return;
         Vector3 position = target.position;
         position.z = transform.position.z;

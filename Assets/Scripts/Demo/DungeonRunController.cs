@@ -78,6 +78,7 @@ public class DungeonRunController : MonoBehaviour
         else RestoreWorld(saved);
         DiscoverAroundPlayer();
 
+        ThreeDWorldView.Create(player, true);
         DungeonDemoHud hud = new GameObject("Dungeon Demo HUD").AddComponent<DungeonDemoHud>();
         hud.Initialize(this);
         Say(TownProgress.HasAcceptedContract ? $"의뢰 목표: {TownProgress.ContractTargetName}을 회수해 마을 길드에 제출하세요." : "입구입니다. 시체를 해체하고 전리품을 가방에 배치해 회수하세요.", 6f);

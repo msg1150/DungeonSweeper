@@ -6,6 +6,8 @@ public sealed class CorpsePrefab : MonoBehaviour
 {
     public string prefabId = "corpse.custom", displayName = "시체";
     public bool useSpriteSheet = true;
+    [Tooltip("Defeated 애니메이션을 가진 실제 3D 모델 프리팹.")]
+    public GameObject model3D;
     public string spriteSheetResource = "Sprites/Monsters/corpse-sheet";
     [Min(1)] public int sheetColumns = 3, sheetRows = 1;
     [Min(0)] public int sheetIndex;
@@ -49,6 +51,7 @@ public sealed class CorpsePrefab : MonoBehaviour
         if (saved == null) items = RollLoot();
         else { var list = new List<LootDefinition>(); foreach (var item in saved.loot) list.Add(item.Restore()); items = list.ToArray(); }
         actor.gameObject.SetActive(true);
+        if (ThreeDWorldView.Current != null) ThreeDActorView.Attach(actor.gameObject, sheetIndex == 1 ? "slime" : sheetIndex == 2 ? "orc" : "goblin", true, model3D);
         // 시각 오브젝트만 재사용한다. 해체 세션과 확정 전리품은 매번 새 런 데이터에 보관한다.
         return new CorpseRunData(actor.gameObject, label, difficulty, items) { PrefabId = prefabId, MonsterIndex = saved?.monsterIndex ?? sheetIndex };
     }

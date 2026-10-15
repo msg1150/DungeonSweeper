@@ -134,8 +134,8 @@ BoxCollider2D:
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.35}
-    oldSize: {x: 3.7925928, y: 2.8444445}
-    newSize: {x: 3.7925928, y: 2.8444445}
+    oldSize: {x: 2.8444445, y: 2.8444445}
+    newSize: {x: 1, y: 1}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
     adaptiveTiling: 0
@@ -180,6 +180,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MonsterPrefab
   prefabId: monster.slime
   useSpriteSheetAnimation: 1
+  model3D: {fileID: 3253301647855787910, guid: 59b04f1c3df296e4daf0316a64adbedc, type: 3}
   stats:
     id: slime
     displayName: "\uC2AC\uB77C\uC784"

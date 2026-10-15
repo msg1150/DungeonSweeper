@@ -13,6 +13,7 @@ public static class PlayerProtectionValidationBuild
         if (!root.Replace('\\', '/').EndsWith("/.utmp/UnityValidation"))
             throw new InvalidOperationException("Build validation must run in the isolated project.");
         ConceptArtPreviewRefresh.Refresh();
+        Blender3DAssets.Ensure();
         PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, ScriptingImplementation.Mono2x);
         var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
         {

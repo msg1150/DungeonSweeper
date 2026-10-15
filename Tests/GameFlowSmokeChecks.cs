@@ -20,6 +20,7 @@ public static class GameFlowSmokeChecks
     {
         if (!Root.Replace('\\', '/').EndsWith("/.utmp/UnityValidation")) throw new Exception("Validation must run in the isolated project.");
         ConceptArtPreviewRefresh.Refresh();
+        Blender3DAssets.Ensure();
         string[] previewSpecies = { "goblin", "slime", "orc" };
         foreach (string species in previewSpecies)
         {

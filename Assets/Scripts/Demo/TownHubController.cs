@@ -31,6 +31,7 @@ public class TownHubController : MonoBehaviour
             Rigidbody2D body = player.GetComponent<Rigidbody2D>();
             if (body != null) body.position = restoredPosition;
         }
+        if (player != null) ThreeDWorldView.Create(player, false);
     }
 
     private void Update()
@@ -106,7 +107,11 @@ public class TownHubController : MonoBehaviour
     {
         // 시설에 접근할 때만 작은 이름표를 띄운다. 멀리 있는 건물에는 상시 패널을 덮지 않는다.
         if (target == null || Camera.main == null || !IsNear(target, interactionRange + .65f)) return;
-        Vector3 screen = Camera.main.WorldToScreenPoint(target.position + Vector3.down * 1.4f);
+        // 세워진 건물의 발판에 표시한다. 평면 화면의 아래쪽 오프셋을 쓰면 고양이 위를 덮는다.
+        Vector3 anchor = ThreeDPresentationConfig.SpritesEnabled
+            ? ThreeDWorldView.Project(target.position, .2f)
+            : ThreeDWorldView.Project((Vector2)target.position + Vector2.down * 1.4f);
+        Vector3 screen = Camera.main.WorldToScreenPoint(anchor);
         Vector3 point = GUI.matrix.inverse.MultiplyPoint3x4(new Vector3(screen.x, Screen.height - screen.y, 0));
         Rect rect = new Rect(point.x - 38, point.y, 76, 26);
         DrawPanel(rect, new Color(1f, .98f, .91f, .68f));

@@ -3,6 +3,8 @@
 # Get latest from https://github.com/github/gitignore/blob/main/Unity.gitignore
 #
 .utmp/
+# Blender originals are tracked; automatic previous-version backups stay local.
+/ArtSource/Blender/*.blend[1-9]
 /[Ll]ibrary/
 /[Tt]emp/
 /[Oo]bj/

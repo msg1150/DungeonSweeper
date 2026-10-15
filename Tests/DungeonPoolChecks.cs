@@ -95,6 +95,7 @@ public static class DungeonPoolChecks
         while (!Ready("Town")) { timeout(); yield return null; }
         DungeonActorPool.ClearInactive();
         var seen = new HashSet<UnityEngine.Object>();
+        var models = new Dictionary<UnityEngine.Object, GameObject>();
         for (int round = 0; round < 3; round++)
         {
             Shell("OnApplicationFocus", true); Shell("Resume");
@@ -115,6 +116,17 @@ public static class DungeonPoolChecks
             }
             foreach (var corpse in corpses)
             { if (round > 0) reused &= seen.Contains(corpse); seen.Add(corpse); }
+            if (ThreeDWorldView.Current != null)
+            {
+                foreach (var actor in seen)
+                {
+                    var owner = (Component)actor;
+                    var display = ThreeDPresentationConfig.SpritesEnabled ? owner.GetComponent<SpriteDepthView>()?.Display : owner.GetComponent<ThreeDActorView>()?.Model;
+                    check(display != null,"pooled actor has a depth display");
+                    if(models.TryGetValue(actor,out var original)) check(display==original,"display instance is retained across town and dungeon visits");
+                    else models[actor]=display;
+                }
+            }
             check(reused && DungeonActorPool.LeasedCount == enemies.Length + corpses.Length, "layout " + round + " uses retained actors with exact lease counts");
             if (round == 0)
             {

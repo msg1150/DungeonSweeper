@@ -134,8 +134,8 @@ BoxCollider2D:
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.35}
-    oldSize: {x: 3.7925928, y: 2.8444445}
-    newSize: {x: 3.7925928, y: 2.8444445}
+    oldSize: {x: 2.8444445, y: 2.8444445}
+    newSize: {x: 1, y: 1}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
     adaptiveTiling: 0
@@ -180,6 +180,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MonsterPrefab
   prefabId: monster.goblin
   useSpriteSheetAnimation: 1
+  model3D: {fileID: 6857127243681349268, guid: fe29f2be49a572548937e1b728674064, type: 3}
   stats:
     id: goblin
     displayName: "\uACE0\uBE14\uB9B0"

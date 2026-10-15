@@ -19,12 +19,24 @@ Shader "DungeonSweeper/VisionOverlay"
             float _DarkRadius;
             float _OuterDarkness;
             float _Aspect;
+            float _UseWorld3D;
+            float _Orthographic;
+            float3 _Ground00, _Ground10, _Ground01, _Ground11;
+            float3 _WorldCamera, _WorldPlayer, _Ray00, _Ray10, _Ray01, _Ray11;
             v2f vert(appdata v) { v2f o; o.vertex = UnityObjectToClipPos(v.vertex); o.uv = v.uv; return o; }
             fixed4 frag(v2f i) : SV_Target
             {
                 float2 delta = i.uv - _VisionCenter;
                 delta.x *= _Aspect;
                 float distanceFromPlayer = length(delta);
+                if (_UseWorld3D > .5)
+                {
+                    float3 ray = lerp(lerp(_Ray00,_Ray10,i.uv.x),lerp(_Ray01,_Ray11,i.uv.x),i.uv.y);
+                    float3 ground = _WorldCamera + ray * (-_WorldCamera.y / min(-.0001,ray.y));
+                    if (_Orthographic > .5)
+                        ground = lerp(lerp(_Ground00,_Ground10,i.uv.x),lerp(_Ground01,_Ground11,i.uv.x),i.uv.y);
+                    distanceFromPlayer = length(ground.xz - _WorldPlayer.xz);
+                }
                 float alpha = smoothstep(_ClearRadius, _DarkRadius, distanceFromPlayer) * _OuterDarkness;
                 return fixed4(0, 0, 0, alpha);
             }

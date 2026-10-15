@@ -134,8 +134,8 @@ BoxCollider2D:
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.35}
-    oldSize: {x: 3.7925928, y: 2.8444445}
-    newSize: {x: 3.7925928, y: 2.8444445}
+    oldSize: {x: 2.8444445, y: 2.8444445}
+    newSize: {x: 1, y: 1}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
     adaptiveTiling: 0
@@ -180,6 +180,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MonsterPrefab
   prefabId: monster.orc
   useSpriteSheetAnimation: 1
+  model3D: {fileID: 4898983334862731046, guid: 206df011e51c57643b64f7e1ffd28865, type: 3}
   stats:
     id: orc
     displayName: "\uC624\uD06C"

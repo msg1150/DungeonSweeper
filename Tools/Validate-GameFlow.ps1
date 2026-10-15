@@ -15,7 +15,7 @@ $taskOldPrefabRoot = [IO.Path]::GetFullPath((Join-Path $taskValidationRoot 'Asse
 if (-not $taskOldPrefabRoot.StartsWith(([IO.Path]::GetFullPath($taskValidationRoot) + [IO.Path]::DirectorySeparatorChar), [StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid isolated prefab cleanup path.' }
 if (Test-Path -LiteralPath $taskOldPrefabRoot) { Remove-Item -LiteralPath $taskOldPrefabRoot -Recurse -Force }
 if (Test-Path -LiteralPath ($taskOldPrefabRoot + '.meta')) { Remove-Item -LiteralPath ($taskOldPrefabRoot + '.meta') -Force }
-foreach ($taskFolder in @('Scripts', 'Resources', 'Prefabs', 'Scenes', 'Settings', 'Editor', 'Art', 'Audio')) {
+foreach ($taskFolder in @('Scripts', 'Resources', 'Prefabs', 'Scenes', 'Settings', 'Editor', 'Art', 'Audio', 'Models')) {
     Copy-Item -LiteralPath (Join-Path $taskProjectRoot "Assets/$taskFolder") -Destination "$taskValidationRoot/Assets" -Recurse -Force
     $taskFolderMeta = Join-Path $taskProjectRoot "Assets/$taskFolder.meta"
     if (Test-Path -LiteralPath $taskFolderMeta) { Copy-Item -LiteralPath $taskFolderMeta -Destination "$taskValidationRoot/Assets" -Force }

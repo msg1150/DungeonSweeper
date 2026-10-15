@@ -42,8 +42,34 @@ public sealed class DungeonVisionOverlayRenderer : MonoBehaviour
     {
         if (player == null || material == null) return;
         if (worldCamera == null) worldCamera = Camera.main;
-        if (worldCamera == null || !worldCamera.orthographic) return;
+        if (worldCamera == null) return;
         DungeonTuning tuning = DungeonTuning.Active;
+        if (ThreeDWorldView.Current != null)
+        {
+            Vector3 origin = worldCamera.transform.position;
+            material.SetFloat("_UseWorld3D", 1f);
+            material.SetVector("_WorldCamera", origin);
+            material.SetVector("_WorldPlayer", ThreeDWorldView.Map(player.position));
+            material.SetFloat("_Orthographic", worldCamera.orthographic ? 1f : 0f);
+            if (worldCamera.orthographic)
+            {
+                // 정사영 카메라는 화면마다 광선 시작점이 다르다. 원근용 광선 보간을 재사용하지 않는다.
+                material.SetVector("_Ground00", Ground(0, 0));
+                material.SetVector("_Ground10", Ground(1, 0));
+                material.SetVector("_Ground01", Ground(0, 1));
+                material.SetVector("_Ground11", Ground(1, 1));
+            }
+            material.SetVector("_Ray00", worldCamera.ViewportToWorldPoint(new Vector3(0,0,1)) - origin);
+            material.SetVector("_Ray10", worldCamera.ViewportToWorldPoint(new Vector3(1,0,1)) - origin);
+            material.SetVector("_Ray01", worldCamera.ViewportToWorldPoint(new Vector3(0,1,1)) - origin);
+            material.SetVector("_Ray11", worldCamera.ViewportToWorldPoint(new Vector3(1,1,1)) - origin);
+            material.SetFloat("_ClearRadius", tuning.clearSightRadius);
+            material.SetFloat("_DarkRadius", Mathf.Max(tuning.darkSightRadius,tuning.clearSightRadius+.01f));
+            material.SetFloat("_OuterDarkness", tuning.outerDarkness);
+            return;
+        }
+        material.SetFloat("_UseWorld3D", 0f);
+        if (!worldCamera.orthographic) return;
         Vector3 viewport = worldCamera.WorldToViewportPoint(player.position);
         float screenWorldHeight = worldCamera.orthographicSize * 2f;
         material.SetVector("_VisionCenter", new Vector4(viewport.x, viewport.y, 0f, 0f));
@@ -56,5 +82,11 @@ public sealed class DungeonVisionOverlayRenderer : MonoBehaviour
     private void OnDestroy()
     {
         if (material != null) Destroy(material);
+    }
+
+    private Vector3 Ground(float x, float y)
+    {
+        Ray ray = worldCamera.ViewportPointToRay(new Vector3(x, y, 0));
+        return ray.origin + ray.direction * (-ray.origin.y / Mathf.Min(-.0001f, ray.direction.y));
     }
 }

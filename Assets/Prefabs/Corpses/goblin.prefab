@@ -108,6 +108,7 @@ MonoBehaviour:
   prefabId: corpse.goblin
   displayName: "\uACE0\uBE14\uB9B0 \uC2DC\uCCB4"
   useSpriteSheet: 1
+  model3D: {fileID: 6857127243681349268, guid: fe29f2be49a572548937e1b728674064, type: 3}
   spriteSheetResource: Sprites/Monsters/corpse-sheet
   sheetColumns: 3
   sheetRows: 1

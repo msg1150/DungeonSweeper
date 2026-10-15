@@ -5,6 +5,7 @@ using System.IO;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.Rendering.Universal;
 
 public sealed class PlayerProtectionValidationDriver : MonoBehaviour
 {
@@ -146,6 +147,7 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         DungeonPopulationChecks.RunPatrol(Check);
         DungeonRunController run = DungeonRunController.Instance;
         Check(run != null && run.IsRunActive && Resources.Load<Shader>("VisionOverlay") != null, "release dungeon and vision shader exist");
+        if (ThreeDPresentationConfig.SpritesEnabled) CheckSpriteDepth();
         Check(GameSaveService.TryLoad(-1, out var entry, out _) && entry.area == SaveArea.Dungeon, "dungeon entry checkpoint persisted");
         Call(Shell, "OpenPause");
         Check(run.Inventory.TryPlace(LootDefinition.CreateShaped("회수품", 50, TownProgress.ContractTarget,
@@ -300,9 +302,13 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         var populationTrials = DungeonPopulationChecks.CheckFreshEntries(Check, CheckTime, layout =>
         {
             if (!capture) return;
+            if (ThreeDWorldView.Current != null) ThreeDWorldView.Current.SetOverview(true);
+            else
+            {
             Camera.main.GetComponent<DungeonCameraFollow>().enabled = false;
             Camera.main.transform.position = new Vector3(0, 0, -10);
             Camera.main.orthographicSize = 10f;
+            }
             var overlay = UnityEngine.Object.FindAnyObjectByType<DungeonVisionOverlayRenderer>();
             if (overlay != null) overlay.gameObject.SetActive(false);
             UnityEngine.Object.FindAnyObjectByType<DungeonDemoHud>().enabled = false;
@@ -323,6 +329,77 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
     }
 
     private IEnumerator CheckConceptArt()
+    {
+        if (ThreeDWorldView.Current != null && !ThreeDPresentationConfig.SpritesEnabled)
+        {
+            var models = CheckBlenderModels();
+            while (models.MoveNext()) yield return models.Current;
+            yield break;
+        }
+        if (!ThreeDPresentationConfig.SpritesEnabled)
+        {
+            var flat = CheckFlatConceptArt();
+            while (flat.MoveNext()) yield return flat.Current;
+            yield break;
+        }
+        CheckSpriteDepth();
+        // 원본 시트 갤러리는 XY 카메라에서 검사하고 실제 플레이 화면은 다시 2.5D로 캡처한다.
+        var world = ThreeDWorldView.Current;
+        var camera = world.WorldCamera;
+        Vector3 position = camera.transform.position; Quaternion rotation = camera.transform.rotation;
+        float size = camera.orthographicSize;
+        world.PreviewCamera(true);
+        camera.GetUniversalAdditionalCameraData().SetRenderer(0);
+        camera.cullingMask = 1; camera.transform.SetPositionAndRotation(new Vector3(0,0,-10), Quaternion.identity);
+        camera.orthographicSize = 6.5f;
+        try
+        {
+            var sprites = CheckFlatConceptArt();
+            while (sprites.MoveNext()) yield return sprites.Current;
+        }
+        finally
+        {
+            camera.GetUniversalAdditionalCameraData().SetRenderer(ThreeDPresentationConfig.Active.forwardRendererIndex);
+            camera.cullingMask = 1 << ThreeDWorldView.RenderLayer;
+            camera.orthographicSize = size; camera.transform.SetPositionAndRotation(position, rotation);
+            world.PreviewCamera(false);
+        }
+        yield return null;
+    }
+
+    private void CheckSpriteDepth()
+    {
+        var world = ThreeDWorldView.Current;
+        Check(world != null && world.WorldCamera.orthographic, "2.5D uses orthographic projection without perspective distortion");
+        Check(world.SpriteMaterial != null && world.SpriteMaterial.shader.isSupported, "sprite material survives native shader stripping");
+        var player = UnityEngine.Object.FindAnyObjectByType<PlayerMovement>();
+        var view = player.GetComponent<SpriteDepthView>();
+        Check(view != null && view.Display != null && view.Display.GetComponentInChildren<SkinnedMeshRenderer>() == null,
+            "2.5D cat uses original illustration instead of the experimental low-poly model");
+        view.Sync();
+        Check(Vector3.Distance(view.Display.transform.position, ThreeDWorldView.Map(player.transform.position,.025f)) < .001f,
+            "depth display remains aligned with logical player and save coordinates");
+        var source = player.transform.Find("Animated Player Visual").GetComponent<SpriteRenderer>();
+        bool copied = false;
+        foreach(var copy in view.Copies)
+            if(copy.enabled && copy.sprite == source.sprite && copy.flipX == source.flipX && copy.color.a == source.color.a)
+                copied = true;
+        Check(copied, "billboard preserves sprite pose, facing and dash cross-fade alpha");
+        if (!world.IsDungeon) return;
+        Check(GameObject.Find("Dungeon 3D Walls")?.GetComponent<MeshRenderer>() != null,
+            "2.5D dungeon retains actual wall thickness");
+        foreach(var enemy in UnityEngine.Object.FindObjectsByType<EnemyAgent>())
+            Check(enemy.GetComponent<SpriteDepthView>()?.Display != null && enemy.GetComponent<ThreeDActorView>() == null,
+                "dungeon monster uses animated sprite billboard");
+        var overlay = UnityEngine.Object.FindAnyObjectByType<DungeonVisionOverlayRenderer>();
+        Call(overlay, "LateUpdate");
+        var material = (Material)typeof(DungeonVisionOverlayRenderer).GetField("material", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(overlay);
+        Vector3 bottom = material.GetVector("_Ground00"), top = material.GetVector("_Ground01");
+        Check(material.GetFloat("_Orthographic") == 1 && Mathf.Abs(bottom.y) < .001f && top.z > bottom.z,
+            "darkness projects onto orthographic ground in the correct orientation");
+    }
+
+    private IEnumerator CheckFlatConceptArt()
     {
         Call(Shell, "OnApplicationFocus", true); Call(Shell, "Resume");
         // 포커스 복귀/메뉴 닫기 프레임에는 정상적으로 입력과 시각 이동을 막는다.
@@ -401,6 +478,79 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         yield return null;
         var attackChecks = CheckAttackArt();
         while (attackChecks.MoveNext()) yield return attackChecks.Current;
+    }
+
+    private IEnumerator CheckBlenderModels()
+    {
+        Call(Shell, "OnApplicationFocus", true); Call(Shell, "Resume");
+        yield return null;
+        var world = ThreeDWorldView.Current;
+        Check(world != null && !world.WorldCamera.orthographic && world.WorldCamera.cullingMask == 1 << ThreeDWorldView.RenderLayer,
+            "gameplay uses a perspective camera and actual 3D render layer");
+        var player = UnityEngine.Object.FindAnyObjectByType<PlayerMovement>();
+        var playerView = player.GetComponent<ThreeDActorView>();
+        Check(playerView != null && playerView.Model.GetComponentInChildren<SkinnedMeshRenderer>() != null,
+            "white janitor cat is a skinned Blender mesh rather than a sprite billboard");
+        Check(Vector3.Distance(playerView.Model.transform.position, ThreeDWorldView.Map(player.transform.position)) < .1f,
+            "3D player follows logical save coordinates without moving the physics owner");
+        var stage = new GameObject("Blender Model Validation Stage");
+        var hub = UnityEngine.Object.FindAnyObjectByType<TownHubController>();
+        bool hubEnabled = hub.enabled;
+        try
+        {
+            world.PreviewCamera(true); hub.enabled = false;
+            var camera = world.WorldCamera;
+            camera.transform.position = new Vector3(40, 4.4f, -9);
+            camera.transform.LookAt(new Vector3(40,.7f,0));
+            var floor = GameObject.CreatePrimitive(PrimitiveType.Cube); floor.transform.SetParent(stage.transform);
+            floor.transform.position = new Vector3(40,-.1f,0); floor.transform.localScale = new Vector3(15,.2f,7);
+            floor.layer = ThreeDWorldView.RenderLayer;
+            floor.GetComponent<MeshRenderer>().sharedMaterial = ThreeDPresentationConfig.Active.town.GetComponentInChildren<Renderer>().sharedMaterials[0];
+            var models = new System.Collections.Generic.List<GameObject>();
+            string[] species = { "cat", "goblin", "slime", "orc" };
+            for (int i=0;i<4;i++)
+            {
+                var owner=new GameObject(species[i]);owner.transform.SetParent(stage.transform);
+                owner.transform.position=new Vector2(36.4f+i*2.4f,0);
+                var view=ThreeDActorView.Attach(owner,species[i]);view.enabled=false;view.Model.SetActive(true);
+                models.Add(view.Model);
+                var animation=view.Model.GetComponentInChildren<Animation>();
+                foreach(string clip in new[] {"Idle","Walk","Dash","Attack","Loot","Defeated"})
+                    Check(animation[clip]!=null && animation[clip].clip.legacy && animation[clip].length>0,
+                        "Blender clip included in build: "+species[i]+"/"+clip);
+                Check(view.Model.GetComponentInChildren<SkinnedMeshRenderer>().bones.Length>0,
+                    "armature bone weights survive FBX import: "+species[i]);
+                if(i==0)
+                {
+                    var leg=Array.Find(view.Model.GetComponentsInChildren<Transform>(),item=>item.name=="Leg_L");
+                    Check(leg!=null,"cat has an actual leg bone");
+                    animation.Play("Idle"); animation["Idle"].normalizedTime=0; animation.Sample();
+                    var initial=leg.localRotation;
+                    animation.Play("Walk"); animation["Walk"].normalizedTime=.25f; animation.Sample();
+                    Check(Quaternion.Angle(initial,leg.localRotation)>10,"walking deforms the leg bone instead of swapping pictures");
+                    animation.Play("Idle");animation["Idle"].normalizedTime=0;animation.Sample();
+                }
+            }
+            yield return null; Snapshot("release-art-gallery");yield return null;yield return null;
+            // Three poses, two species, facing both ways with the same actual rig.
+            foreach(var model in models) model.SetActive(false);
+            camera.transform.position = new Vector3(40,11,-13);camera.transform.LookAt(new Vector3(40,.4f,0));
+            for(int row=0;row<4;row++)
+            for(int frame=0;frame<3;frame++)
+            {
+                var owner=new GameObject("attack pose");owner.transform.SetParent(stage.transform);
+                owner.transform.position=new Vector2(36+frame*4,row*2.5f-3.75f);
+                var view=ThreeDActorView.Attach(owner,row<2?"goblin":"orc");view.enabled=false;view.Model.SetActive(true);
+                Vector2 facing = row%2==0 ? Vector2.right : Vector2.left;
+                view.Face(facing,true);
+                var animation=view.Model.GetComponentInChildren<Animation>();
+                animation.Play("Attack");animation["Attack"].normalizedTime=frame*.45f;animation.Sample();animation.Stop();
+                Check(Vector2.Dot(view.VisibleForward,facing)>.99f,"Blender face markers agree with attack direction after sampling");
+            }
+            yield return null;Snapshot("release-attack-gallery");yield return null;yield return null;
+        }
+        finally { world.PreviewCamera(false);hub.enabled=hubEnabled;UnityEngine.Object.Destroy(stage); }
+        yield return null;
     }
 
     private IEnumerator CheckAttackArt()

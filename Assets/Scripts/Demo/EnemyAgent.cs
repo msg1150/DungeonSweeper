@@ -24,6 +24,9 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
     private int pathIndex, pathMode = -1;
     private Vector2Int pathTargetCell;
     public string PrefabId { get; set; }
+    public bool IsAttacking => attackTimer > 0f;
+    public float AttackProgress => definition == null ? 0f : Mathf.Clamp01(1f - attackTimer / Mathf.Max(.01f, definition.attackAnimationSeconds));
+    public Vector2 AttackDirection => player != null ? (Vector2)(player.position - transform.position) : Vector2.down;
     private float DetectionRange => definition.hasMovementStats ? definition.detectionRange : DungeonTuning.Active.detectionRange;
     private float TravelDistance => definition.hasMovementStats ? definition.patrolTravelDistance : DungeonTuning.Active.patrolTravelDistance;
 
