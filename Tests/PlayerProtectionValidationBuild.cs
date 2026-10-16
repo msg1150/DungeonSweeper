@@ -14,6 +14,7 @@ public static class PlayerProtectionValidationBuild
             throw new InvalidOperationException("Build validation must run in the isolated project.");
         ConceptArtPreviewRefresh.Refresh();
         Blender3DAssets.Ensure();
+        DungeonAuthoringService.EnsureDemo();
         PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, ScriptingImplementation.Mono2x);
         var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
         {

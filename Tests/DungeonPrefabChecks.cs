@@ -12,7 +12,7 @@ public static class DungeonPrefabChecks
     public static void RunAuthoring(Action<bool, string> check)
     {
         var catalog = DungeonCatalog.Active;
-        check(catalog != null && catalog.CollectIssues().Count == 0 && catalog.dungeons.Length == 3, "three independent dungeon configuration assets validate");
+        check(catalog != null && catalog.CollectIssues().Count == 0 && catalog.dungeons.Length >= 3, "independent dungeon configuration assets validate");
         check(catalog.dungeons[0] != catalog.dungeons[1] && catalog.dungeons[1] != catalog.dungeons[2], "dungeon spawn arrays belong to separate assets");
         var clone = UnityEngine.Object.Instantiate(catalog.dungeons[0]);
         var goblin = catalog.FindMonster("monster.goblin");
@@ -82,15 +82,18 @@ public static class DungeonPrefabChecks
         var run = DungeonRunController.Instance;
         var state = run.CaptureSave();
         var config = DungeonCatalog.Active.FindDungeon(state.dungeonId);
+        var monsterRows = config.floors != null && config.floors.Length > 0 ? config.floors[run.FloorIndex].monsters : config.monsters;
+        var corpseRows = config.floors != null && config.floors.Length > 0 ? config.floors[run.FloorIndex].corpses : config.corpses;
         var counts = new Dictionary<string, int>();
-        foreach (var row in config.monsters) if (row.count > 0) counts[row.prefab.prefabId] = counts.GetValueOrDefault(row.prefab.prefabId) + row.count;
+        int expectedMonsters = 0, expectedCorpses = 0;
+        foreach (var row in monsterRows) if (row.count > 0) { counts[row.prefab.prefabId] = counts.GetValueOrDefault(row.prefab.prefabId) + row.count; expectedMonsters += row.count; }
         foreach (var enemy in state.enemies) counts[enemy.prefabId] = counts.GetValueOrDefault(enemy.prefabId) - 1;
         bool types = true; foreach (int remaining in counts.Values) types &= remaining == 0;
         counts.Clear();
-        foreach (var row in config.corpses) if (row.count > 0) counts[row.prefab.prefabId] = counts.GetValueOrDefault(row.prefab.prefabId) + row.count;
+        foreach (var row in corpseRows) if (row.count > 0) { counts[row.prefab.prefabId] = counts.GetValueOrDefault(row.prefab.prefabId) + row.count; expectedCorpses += row.count; }
         foreach (var corpse in state.corpses) counts[corpse.prefabId] = counts.GetValueOrDefault(corpse.prefabId) - 1;
         foreach (int remaining in counts.Values) types &= remaining == 0;
-        check(types && state.enemies.Count == config.ExpandMonsters().Count && state.corpses.Count == config.ExpandCorpses().Count,
+        check(types && state.enemies.Count == expectedMonsters && state.corpses.Count == expectedCorpses,
             "live dungeon spawns exactly each configured prefab and count");
         bool actualPrefabs = true, independentStats = true;
         foreach (var enemy in UnityEngine.Object.FindObjectsByType<EnemyAgent>())

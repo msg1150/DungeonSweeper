@@ -28,6 +28,20 @@ public sealed class ThreeDWorldView : MonoBehaviour
     public bool IsDungeon => dungeon;
     public Camera WorldCamera => camera;
     public static Vector3 Map(Vector2 point, float height = 0) => new(point.x, height, point.y);
+    public float FloorHeight(Vector2 point)
+    {
+        var map = dungeon ? DungeonLayoutFactory.ActiveMap : null;
+        if (map == null) return 0;
+        if (map.hasStairsUp && OnSteps(point, map.Center(map.stairsUp), out float up)) return up;
+        if (map.hasStairsDown && OnSteps(point, map.Center(map.stairsDown), out float down)) return down;
+        return 0;
+    }
+    private static bool OnSteps(Vector2 point, Vector2 center, out float height)
+    {
+        Vector2 offset = point - center;
+        height = .06f + Mathf.Clamp(Mathf.FloorToInt((offset.y + .45f) / .15f), 0, 5) * .065f;
+        return Mathf.Abs(offset.x) < .4f && Mathf.Abs(offset.y) < .45f;
+    }
     public static Vector3 Project(Vector2 point, float height = 0) => Current != null ? Map(point, height) : new Vector3(point.x, point.y, 0);
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)] private static void Reset() => Current = null;
 
@@ -189,6 +203,13 @@ public sealed class ThreeDWorldView : MonoBehaviour
         for (int x = 0; x < DungeonLayoutFactory.Width; x++)
         for (int y = 0; y < DungeonLayoutFactory.Height; y++)
         {
+            if (DungeonLayoutFactory.IsSolidWallCell(x, y))
+            {
+                float blockHeight = DungeonLayoutFactory.IsWalkableCell(x, y + 1) ? .45f : 1.25f;
+                Vector2 center = DungeonLayoutFactory.CellCenter(x, y);
+                AddBox(walls, cube, Map(center, blockHeight * .5f), new Vector3(cell, blockHeight, cell));
+                AddBox(caps, cube, Map(center, blockHeight + .045f), new Vector3(cell, .09f, cell));
+            }
             if (!DungeonLayoutFactory.IsWalkableCell(x,y)) continue;
             Vector2 p = DungeonLayoutFactory.CellCenter(x,y);
             AddBox(floors,cube,Map(p,-.12f),new Vector3(cell-.025f,.24f,cell-.025f));
@@ -204,6 +225,21 @@ public sealed class ThreeDWorldView : MonoBehaviour
             }
         }
         Combine("Dungeon 3D Floor",floors,floor); Combine("Dungeon 3D Walls",walls,stone); Combine("Dungeon 3D Caps",caps,trim);
+        var steps = new List<CombineInstance>();
+        foreach (var stair in FindObjectsByType<DungeonStairMarker>())
+        {
+            Vector2 point = stair.transform.position;
+            for (int i = 0; i < 6; i++)
+            {
+                float height = .06f + i * .065f;
+                AddBox(steps, cube, Map(point + new Vector2(0, (i - 2.5f) * .15f), height * .5f), new Vector3(.8f, height, .15f));
+            }
+            var indicator = new GameObject(stair.direction > 0 ? "Down stair glow" : "Up stair glow"); indicator.transform.SetParent(transform);
+            indicator.transform.position = Map(point, .65f);
+            var lamp = indicator.AddComponent<Light>(); lamp.type = LightType.Point; lamp.range = 2.4f; lamp.intensity = 1.1f;
+            lamp.color = stair.direction > 0 ? new Color(.28f,.9f,.65f) : new Color(.45f,.65f,1);
+        }
+        Combine("Dungeon Stairs", steps, trim);
         foreach (string name in new[] { "입구", "특수 탈출 게이트" })
         {
             var marker = GameObject.Find(name); if (marker == null) continue;
@@ -254,7 +290,9 @@ public sealed class ThreeDWorldView : MonoBehaviour
             Vector3 desiredPosition = center - rotation * Vector3.forward * 35;
             camera.transform.position = immediate ? desiredPosition : Vector3.Lerp(camera.transform.position, desiredPosition, 1 - Mathf.Exp(-12 * Time.unscaledDeltaTime));
             camera.transform.rotation = rotation;
-            camera.orthographicSize = overview ? 11 : dungeon ? ThreeDPresentationConfig.Active.dungeonViewSize : ThreeDPresentationConfig.Active.townViewSize;
+            float overviewSize = Mathf.Max(11, DungeonLayoutFactory.Width * 1.45f / Mathf.Max(.1f,camera.aspect) * .5f + 1,
+                DungeonLayoutFactory.Height * 1.45f * Mathf.Sin(ThreeDPresentationConfig.Active.spriteCameraElevation * Mathf.Deg2Rad) * .5f + 1);
+            camera.orthographicSize = overview ? overviewSize : dungeon ? ThreeDPresentationConfig.Active.dungeonViewSize : ThreeDPresentationConfig.Active.townViewSize;
             return;
         }
         Vector3 focus=dungeon && !overview ? Map(player.position,.4f) : new Vector3(0,.3f,0);

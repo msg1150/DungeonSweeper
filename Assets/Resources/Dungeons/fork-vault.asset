@@ -29,3 +29,6 @@ MonoBehaviour:
     count: 1
   - prefab: {fileID: 5555483854383871316, guid: 056208bae4f3c4e47b214abe3d25d0b4, type: 3}
     count: 1
+  floors:
+  - {fileID: 11400000, guid: d1065780ef757f5438827e12e353f348, type: 2}
+  extraExitFloor: -1

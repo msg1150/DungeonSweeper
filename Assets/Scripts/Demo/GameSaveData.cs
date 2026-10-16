@@ -161,6 +161,13 @@ public sealed class PlayerMotionSaveData
 [Serializable]
 public sealed class DungeonSaveData
 {
+    public DungeonFloorMap mapSnapshot;
+    public DungeonExpeditionData expedition;
+    // Unity의 inline JSON은 null 클래스를 빈 객체로 되살릴 수 있으므로 존재 여부를 명시한다.
+    public bool hasMapSnapshot;
+    public int expeditionVersion;
+    public DungeonFloorMap ResolvedMap => hasMapSnapshot ? mapSnapshot : null;
+    public DungeonExpeditionData ResolvedExpedition => expeditionVersion == 1 ? expedition : null;
     public string dungeonId;
     public int bagWidth, bagHeight;
     public int ResolvedWidth => bagWidth == 0 ? GridInventory.Width : bagWidth;
@@ -179,6 +186,8 @@ public sealed class DungeonSaveData
 
     public bool IsValid()
     {
+        if (hasMapSnapshot && (mapSnapshot == null || !mapSnapshot.IsValid(out _))) return false;
+        if (expeditionVersion < 0 || expeditionVersion > 1 || (expeditionVersion == 1 && (expedition == null || !expedition.IsValid() || !hasMapSnapshot))) return false;
         if (!string.IsNullOrEmpty(dungeonId) && (!LootKinds.ValidId(dungeonId)
             || DungeonCatalog.Active?.FindDungeon(dungeonId) == null)) return false;
         if (layoutIndex < 0 || layoutIndex > 2 || health <= 0 || totalValue < 0
@@ -189,11 +198,11 @@ public sealed class DungeonSaveData
             || (motion != null && !motion.IsValid())) return false;
         if (discoveredCells != null)
         {
-            if (discoveredCells.Count > DungeonLayoutFactory.Width * DungeonLayoutFactory.Height) return false;
+            int width = ResolvedMap == null ? 20 : ResolvedMap.width, height = ResolvedMap == null ? 12 : ResolvedMap.height;
+            if (discoveredCells.Count > width * height) return false;
             HashSet<Vector2Int> unique = new();
             foreach (Vector2Int cell in discoveredCells)
-                if (cell.x < 0 || cell.y < 0 || cell.x >= DungeonLayoutFactory.Width
-                    || cell.y >= DungeonLayoutFactory.Height || !unique.Add(cell)) return false;
+                if (cell.x < 0 || cell.y < 0 || cell.x >= width || cell.y >= height || !unique.Add(cell)) return false;
         }
         if ((bagWidth == 0) != (bagHeight == 0) || ResolvedWidth < GridInventory.Width || ResolvedHeight < GridInventory.Height
             || ResolvedWidth > GridInventory.MaximumWidth || ResolvedHeight > GridInventory.MaximumHeight) return false;

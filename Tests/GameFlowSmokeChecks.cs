@@ -10,6 +10,7 @@ using UnityEngine.SceneManagement;
 [InitializeOnLoad]
 public static class GameFlowSmokeChecks
 {
+    private static System.Collections.IEnumerator floorTrials;
     const string Active = "DungeonValidation.Active", StepKey = "DungeonValidation.Step", CountKey = "DungeonValidation.Count";
     static string Root => Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
     static GameFlowSmokeChecks()
@@ -21,6 +22,7 @@ public static class GameFlowSmokeChecks
         if (!Root.Replace('\\', '/').EndsWith("/.utmp/UnityValidation")) throw new Exception("Validation must run in the isolated project.");
         ConceptArtPreviewRefresh.Refresh();
         Blender3DAssets.Ensure();
+        DungeonAuthoringService.EnsureDemo();
         string[] previewSpecies = { "goblin", "slime", "orc" };
         foreach (string species in previewSpecies)
         {
@@ -32,6 +34,8 @@ public static class GameFlowSmokeChecks
         SessionState.SetBool(Active, true);
         SessionState.SetInt(StepKey, 0);
         SessionState.SetInt(CountKey, 0);
+        SessionState.SetBool("DungeonValidation.FloorsComplete", false);
+        floorTrials = null;
         SessionState.SetFloat("DungeonValidation.Deadline", (float)EditorApplication.timeSinceStartup + 240f);
         Application.runInBackground = true;
         EditorSceneManager.OpenScene("Assets/Scenes/MainMenu.unity");
@@ -105,6 +109,7 @@ public static class GameFlowSmokeChecks
                     DungeonPopulationChecks.RunLayouts(Check);
                     DungeonPrefabChecks.RunAuthoring(Check);
                     DungeonPoolChecks.RunLocal(Check);
+                    DungeonBuilderChecks.RunData(Check);
                     Next(1);
                     break;
                 case 1:
@@ -301,7 +306,14 @@ public static class GameFlowSmokeChecks
                     Next(13);
                     break;
                 case 13:
-                    if (!EditorApplication.isPlaying || GameSession.IsLoading || SceneManager.GetActiveScene().name != "Town") return;
+                    if (!EditorApplication.isPlaying || GameSession.IsLoading) return;
+                    if (!SessionState.GetBool("DungeonValidation.FloorsComplete", false))
+                    {
+                        floorTrials ??= DungeonBuilderChecks.RunTransitions(Check, () => { });
+                        if (floorTrials.MoveNext()) return;
+                        floorTrials = null; SessionState.SetBool("DungeonValidation.FloorsComplete", true);
+                    }
+                    if (SceneManager.GetActiveScene().name != "Town") return;
                     TownProgress.Restore(new TownProgressData { gold = 123 });
                     string autoPath = Path.Combine(GameSaveService.SaveDirectory, "autosave.sav");
                     using (var locked = File.Open(autoPath, FileMode.Open, FileAccess.Read, FileShare.None))

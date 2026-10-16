@@ -84,6 +84,13 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
                 && Vector2.Distance(restartedRun.Player.position, DungeonLayoutFactory.Entrance) < .2f
                 && DungeonLayoutFactory.LayoutIndex == 1, "restart starts at chosen entrance with full health");
             DungeonPrefabChecks.CheckLive(Check);
+            Check(GameSession.LoadSlot(6, out _), "restart loads the protected deeper-floor checkpoint");
+            while (!Ready("Dungeon")) { CheckTime(); yield return null; }
+            Call(Shell, "OnApplicationFocus", true); Call(Shell, "OpenPause");
+            var deepRun = DungeonRunController.Instance;
+            Check(deepRun.FloorIndex == 1 && deepRun.PlayerHealth.Current == 61 && deepRun.Inventory.Items.Count == 1
+                && deepRun.CaptureSave().expedition.floors[0].corpses[0].processed,
+                "independent process restores both the active floor and previous floor progress");
             Check(GameSession.LoadSlot(8, out _), "restart restores quit state after entry regression check");
             while (!Ready("Town")) { CheckTime(); yield return null; }
             Finish(true); yield break;
@@ -95,6 +102,7 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         DungeonPopulationChecks.RunLayouts(Check);
         DungeonPrefabChecks.RunAuthoring(Check);
         DungeonPoolChecks.RunLocal(Check);
+        DungeonBuilderChecks.RunData(Check);
         if (capture)
         {
             // 숨겨진 Windows 창도 실제 backbuffer를 생성하도록 먼저 다른 크기로 갱신한다.
@@ -321,6 +329,8 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         while (continueTrials.MoveNext()) yield return continueTrials.Current;
         var poolTrials = DungeonPoolChecks.RunTransitions(Check, CheckTime);
         while (poolTrials.MoveNext()) yield return poolTrials.Current;
+        var floorTrials = DungeonBuilderChecks.RunTransitions(Check, CheckTime, Snapshot);
+        while (floorTrials.MoveNext()) yield return floorTrials.Current;
         Check(GameSession.LoadSlot(8, out _), "fresh-entry trials restore the original quit state");
         while (!Ready("Town")) { CheckTime(); yield return null; }
         yield return null;

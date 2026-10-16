@@ -40,6 +40,17 @@ public sealed class DungeonCatalog : ScriptableObject
         if (dungeon == null || FindDungeon(dungeon.dungeonId) != dungeon)
         { error = "선택한 던전을 DungeonCatalog에 등록하세요."; return false; }
         if (!dungeon.IsValid(out error)) return false;
+        if (dungeon.floors != null && dungeon.floors.Length > 0)
+        {
+            foreach (var floor in dungeon.floors)
+            {
+                foreach (var row in floor.monsters)
+                    if (row.count > 0 && FindMonster(row.prefab.prefabId) != row.prefab) { error = "층의 몬스터를 카탈로그에 등록하세요: " + row.prefab.name; return false; }
+                foreach (var row in floor.corpses)
+                    if (row.count > 0 && FindCorpse(row.prefab.prefabId) != row.prefab) { error = "층의 시체를 카탈로그에 등록하세요: " + row.prefab.name; return false; }
+            }
+            return true;
+        }
         foreach (var row in dungeon.monsters)
             if (row.prefab != null && FindMonster(row.prefab.prefabId) != row.prefab)
             { error = "몬스터 프리팹을 DungeonCatalog에 등록하세요: " + row.prefab.name; return false; }

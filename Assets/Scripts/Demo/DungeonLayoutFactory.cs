@@ -4,18 +4,19 @@ using UnityEngine;
 /// <summary>넓은 방과 짧은 복도로 이어진 던전 평면을 런타임에 생성한다.</summary>
 public static class DungeonLayoutFactory
 {
-    private const int Columns = 20;
-    private const int Rows = 12;
+    private static int Columns = 20;
+    private static int Rows = 12;
     private const float CellSize = 1.45f;
-    private static readonly bool[,] floor = new bool[Columns, Rows];
+    private static readonly bool[,] floor = new bool[DungeonFloorMap.MaximumSize, DungeonFloorMap.MaximumSize];
+    private static DungeonFloorMap activeMap;
     private static int layoutIndex;
     private static Sprite floorSprite;
     private static Sprite wallSprite;
     private static readonly string[] layoutNames = { "갈림길 저장고", "고리형 회랑", "계단식 묘실" };
-    // AI 탐색은 Unity 메인 스레드에서 순차 실행한다. 최대 240칸의 작업 공간을 공유한다.
-    private static readonly int[,] searchDistances = new int[Columns, Rows];
-    private static readonly Vector2Int[,] searchPrevious = new Vector2Int[Columns, Rows];
-    private static readonly Vector2Int[] searchQueue = new Vector2Int[Columns * Rows];
+    // AI 탐색은 메인 스레드에서 순차 실행하며 최대 64×64칸의 작업 공간을 공유한다.
+    private static readonly int[,] searchDistances = new int[DungeonFloorMap.MaximumSize, DungeonFloorMap.MaximumSize];
+    private static readonly Vector2Int[,] searchPrevious = new Vector2Int[DungeonFloorMap.MaximumSize, DungeonFloorMap.MaximumSize];
+    private static readonly Vector2Int[] searchQueue = new Vector2Int[DungeonFloorMap.MaximumSize * DungeonFloorMap.MaximumSize];
     private static readonly Vector2Int[] directions = { Vector2Int.left, Vector2Int.right, Vector2Int.down, Vector2Int.up };
     private static readonly List<Vector2> roamCandidates = new(Columns * Rows), roamDistant = new(Columns * Rows);
 
@@ -23,22 +24,35 @@ public static class DungeonLayoutFactory
     private static void ResetRuntimeState()
     {
         layoutIndex = 0;
+        Columns = 20; Rows = 12; activeMap = null;
         floorSprite = null;
         wallSprite = null;
         System.Array.Clear(floor, 0, floor.Length);
     }
 
-    public static Vector2 Entrance => CellCenter(2, 1);
+    public static Vector2 Entrance => activeMap == null ? CellCenter(2, 1) : activeMap.Center(activeMap.entrance);
+    public static DungeonFloorMap ActiveMap => activeMap;
+    public static bool IsReserved(Vector2 point) => activeMap == null ? Vector2.Distance(point, Entrance) < .1f : activeMap.Reserved(WorldToCell(point));
+    public static bool IsSolidWallCell(int x, int y) => activeMap != null && activeMap.Tile(x, y) == DungeonTile.Wall;
     public static int Width => Columns;
     public static int Height => Rows;
     public static int LayoutIndex => layoutIndex;
     public static string LayoutName => layoutNames[layoutIndex];
 
     public static void CreateLayout(int savedLayoutIndex = -1)
+        => CreateLayout(null, savedLayoutIndex);
+
+    public static void CreateLayout(DungeonFloorMap map, int savedLayoutIndex = 0)
     {
         if (GameObject.Find("Runtime Dungeon Layout") != null) return;
         System.Array.Clear(floor, 0, floor.Length);
-        BuildFloorPlan(savedLayoutIndex);
+        if (map == null) BuildFloorPlan(savedLayoutIndex);
+        else
+        {
+            if (!map.IsValid(out string error)) throw new System.InvalidOperationException(error);
+            activeMap = map; Columns = map.width; Rows = map.height; layoutIndex = Mathf.Clamp(savedLayoutIndex, 0, 2);
+            for (int x = 0; x < Columns; x++) for (int y = 0; y < Rows; y++) floor[x, y] = map.Tile(x, y) == DungeonTile.Floor;
+        }
         floorSprite = CasualArtLibrary.LoadFull("Sprites/Environment/dungeon-floor-casual", 100f);
         wallSprite = CasualArtLibrary.LoadFull("Sprites/Environment/dungeon-wall-casual", 100f);
         GameObject root = new GameObject("Runtime Dungeon Layout");
@@ -46,6 +60,7 @@ public static class DungeonLayoutFactory
         for (int x = 0; x < Columns; x++)
         for (int y = 0; y < Rows; y++)
         {
+            if (IsSolidWallCell(x, y)) CreateWall(root.transform, $"Painted Wall {x}-{y}", CellCenter(x, y), new Vector2(CellSize, CellSize));
             if (!floor[x, y]) continue;
             Vector2 center = CellCenter(x, y);
             CreateFloor(root.transform, center);
@@ -101,6 +116,7 @@ public static class DungeonLayoutFactory
         {
             if (distances[x, y] < 0) continue;
             Vector2 point = CellCenter(x, y);
+            if (IsReserved(point)) continue;
             float distance = Vector2.Distance(point, origin);
             if (distance > farthestDistance) { farthest = point; farthestDistance = distance; }
             if (distance < minimum || distances[x, y] * CellSize < minimum || Vector2.Distance(point, Entrance) < 5f) continue;
@@ -129,8 +145,10 @@ public static class DungeonLayoutFactory
             if (distances[x, y] < 0) continue;
             Vector2 point = CellCenter(x, y);
             float entranceDistance = Vector2.Distance(point, Entrance);
+            if (IsReserved(point)) continue;
             float gap = entranceDistance;
             if (occupied != null) foreach (Vector2 other in occupied) gap = Mathf.Min(gap, Vector2.Distance(point, other));
+            if (gap < .01f) continue; // 밀집 설정에서도 같은 칸을 중복 사용하지 않는다.
             if (gap > bestGap) { fallback = point; bestGap = gap; }
             if (entranceDistance >= minimumDistance && entranceDistance <= maximumDistance && gap >= separation) candidates.Add(point);
         }
@@ -201,6 +219,7 @@ public static class DungeonLayoutFactory
 
     private static void BuildFloorPlan(int savedLayoutIndex)
     {
+        activeMap = null; Columns = 20; Rows = 12;
         layoutIndex = savedLayoutIndex >= 0 && savedLayoutIndex < 3 ? savedLayoutIndex : Random.Range(0, 3);
         AddRoom(0, 0, 4, 3); // 모든 템플릿은 같은 시작 방을 공유한다.
         if (layoutIndex == 0) BuildForkVault();
@@ -214,16 +233,31 @@ public static class DungeonLayoutFactory
         if (index < 0 || index > 2) return 0;
         bool[,] previous = (bool[,])floor.Clone();
         int previousIndex = layoutIndex;
+        int previousWidth = Columns, previousHeight = Rows; var previousMap = activeMap;
         try
         {
             System.Array.Clear(floor, 0, floor.Length);
             BuildFloorPlan(index);
             var reachable = ReachableDistances(new Vector2Int(2, 1));
             int count = 0;
-            foreach (int distance in reachable) if (distance >= 0) count++;
+            for (int x = 0; x < Columns; x++) for (int y = 0; y < Rows; y++) if (reachable[x,y] >= 0) count++;
             return Mathf.Max(0, count - 2); // Entrance and special gate each reserve one cell.
         }
-        finally { System.Array.Copy(previous, floor, floor.Length); layoutIndex = previousIndex; }
+        finally { System.Array.Copy(previous, floor, floor.Length); layoutIndex = previousIndex; Columns = previousWidth; Rows = previousHeight; activeMap = previousMap; }
+    }
+
+    public static DungeonFloorMap LegacyMap(int index)
+    {
+        var previous = (bool[,])floor.Clone(); int previousIndex = layoutIndex, previousWidth = Columns, previousHeight = Rows;
+        var previousMap = activeMap;
+        try
+        {
+            System.Array.Clear(floor, 0, floor.Length); BuildFloorPlan(index);
+            var map = new DungeonFloorMap();
+            for (int x = 0; x < Columns; x++) for (int y = 0; y < Rows; y++) if (floor[x, y]) map.tiles[y * Columns + x] = 1;
+            return map;
+        }
+        finally { System.Array.Copy(previous, floor, floor.Length); layoutIndex = previousIndex; Columns = previousWidth; Rows = previousHeight; activeMap = previousMap; }
     }
 
     private static void BuildForkVault()
@@ -263,6 +297,8 @@ public static class DungeonLayoutFactory
     }
     private static void CreateFloor(Transform parent, Vector2 position)
     {
+        // 입체 표시에서는 합친 메시가 바닥을 그린다. 큰 도면에서 숨겨진 타일 객체 수천 개를 만들지 않는다.
+        if (ThreeDPresentationConfig.Enabled) return;
         GameObject tile = new GameObject("Dungeon Floor");
         tile.transform.SetParent(parent);
         tile.transform.position = position;
@@ -283,6 +319,7 @@ public static class DungeonLayoutFactory
         wall.transform.localScale = new Vector3(size.x, size.y, 1f);
         BoxCollider2D collider = wall.AddComponent<BoxCollider2D>();
         collider.size = Vector2.one;
+        if (ThreeDPresentationConfig.Enabled) return; // 논리 충돌체만 남기고 표시는 합친 벽 메시가 담당한다.
         SpriteRenderer renderer = wall.AddComponent<SpriteRenderer>();
         renderer.sprite = SafeSprite(wallSprite);
         renderer.color = Color.white;

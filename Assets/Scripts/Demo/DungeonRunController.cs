@@ -10,6 +10,11 @@ public class DungeonRunController : MonoBehaviour
     [Tooltip("Direct scene play override. Town entries use the selected catalog dungeon; saves restore their recorded dungeon.")]
     public DungeonDefinition dungeonDefinition;
     private string activeDungeonId;
+    private DungeonExpeditionData expedition;
+    public int FloorIndex => expedition?.currentFloor ?? 0;
+    public int FloorCount => expedition?.floors.Count ?? 1;
+    public bool HasEntrancePortal => FloorIndex == 0;
+    public bool HasSpecialPortal => expedition == null || FloorIndex == expedition.exitFloor;
 
     private readonly List<CorpseRunData> corpses = new();
     private readonly List<EnemyAgent> enemies = new();
@@ -43,7 +48,8 @@ public class DungeonRunController : MonoBehaviour
     public LootDefinition PendingLoot => pendingLoot.Count > 0 ? pendingLoot[0] : null;
     public bool IsLootPlacementOpen => lootPlacementOpen;
     public PlayerHealth PlayerHealth => playerHealth;
-    public string DungeonName => dungeonDefinition != null ? dungeonDefinition.displayName : DungeonLayoutFactory.LayoutName;
+    public string DungeonName => (dungeonDefinition != null ? dungeonDefinition.displayName : DungeonLayoutFactory.LayoutName)
+        + (expedition != null ? $" · {FloorIndex + 1}/{FloorCount}층 ({expedition.Current.displayName})" : "");
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetInstance() => Instance = null;
@@ -67,15 +73,24 @@ public class DungeonRunController : MonoBehaviour
             activeDungeonId = dungeonDefinition.dungeonId;
         }
         else { activeDungeonId = saved.dungeonId; dungeonDefinition = DungeonCatalog.Active?.FindDungeon(activeDungeonId); }
+        expedition = saved != null ? saved.ResolvedExpedition : DungeonExpeditionData.Create(dungeonDefinition);
         Vector2Int bagSize = saved == null ? TownProgress.BagSize : new(saved.ResolvedWidth, saved.ResolvedHeight);
         inventory = new GridInventory(bagSize.x, bagSize.y);
         if (!FindExistingPlayer()) return;
         ClearLegacyDungeonGeometry();
-        DungeonLayoutFactory.CreateLayout(saved?.layoutIndex ?? dungeonDefinition.layoutIndex);
+        DungeonLayoutFactory.CreateLayout(saved?.ResolvedMap ?? expedition?.Current.map, saved?.layoutIndex ?? dungeonDefinition.layoutIndex);
+        entrance = DungeonLayoutFactory.Entrance;
+        player.position = entrance;
+        if (playerBody != null) playerBody.position = entrance;
         DungeonVisionFog legacyWorldFog = FindAnyObjectByType<DungeonVisionFog>();
         if (legacyWorldFog != null) legacyWorldFog.gameObject.SetActive(false);
-        if (saved == null) BuildDemoWorld();
+        if (saved == null || (expedition != null && !expedition.Current.visited))
+        {
+            BuildDemoWorld();
+            if (saved != null) RestorePlayerAndBag(saved);
+        }
         else RestoreWorld(saved);
+        CreateStairs();
         DiscoverAroundPlayer();
 
         ThreeDWorldView.Create(player, true);
@@ -141,9 +156,6 @@ public class DungeonRunController : MonoBehaviour
         playerHealth.Initialize();
         PlayerVisualAnimator.Ensure(player.gameObject);
         playerBody = player.GetComponent<Rigidbody2D>();
-        entrance = DungeonLayoutFactory.Entrance;
-        player.position = entrance;
-        if (playerBody != null) playerBody.position = entrance;
         DungeonCameraFollow.Ensure(player);
         DungeonVisionOverlayRenderer.Create(player);
 
@@ -176,20 +188,26 @@ public class DungeonRunController : MonoBehaviour
 
         CorpseInteractable existing = FindAnyObjectByType<CorpseInteractable>();
         if (existing != null) existing.gameObject.SetActive(false);
-        List<MonsterPrefab> monsters = dungeonDefinition.ExpandMonsters();
-        List<CorpsePrefab> corpsePrefabs = dungeonDefinition.ExpandCorpses();
+        List<MonsterPrefab> monsters = new(); List<CorpsePrefab> corpsePrefabs = new();
+        if (expedition == null) { monsters = dungeonDefinition.ExpandMonsters(); corpsePrefabs = dungeonDefinition.ExpandCorpses(); }
+        else
+        {
+            foreach (string id in expedition.Current.monsterIds) monsters.Add(DungeonCatalog.Active.FindMonster(id));
+            foreach (string id in expedition.Current.corpseIds) corpsePrefabs.Add(DungeonCatalog.Active.FindCorpse(id));
+        }
         DungeonPopulationPlan population = DungeonPopulationPlan.Create(corpsePrefabs.Count, monsters);
         for (int i = 0; i < corpsePrefabs.Count; i++) corpses.Add(corpsePrefabs[i].Spawn(population.Corpses[i]));
         for (int i = 0; i < monsters.Count; i++) enemies.Add(monsters[i].Spawn(player, population.Enemies[i], population.PatrolTargets[i]));
 
-        factory.CreateExitMarker("입구", entrance, new Color(.25f, .55f, 1f), false);
         specialGate = population.Gate;
-        factory.CreateExitMarker("특수 탈출 게이트", specialGate, new Color(.75f, .3f, 1f), true);
+        CreatePortals(factory);
 
     }
 
     private void TryInteract()
     {
+        int stair = NearbyStair();
+        if (stair != 0) { if (!TryTravelFloor(stair, out string error)) Say(error); return; }
         CorpseRunData corpse = FindNearbyCorpse();
         if (corpse != null)
         {
@@ -201,8 +219,8 @@ public class DungeonRunController : MonoBehaviour
             return;
         }
 
-        if (Vector2.Distance(player.position, entrance) < GameFlowConfig.Active.exitRange) FinishRun("입구로 돌아와 탈출했습니다.");
-        else if (Vector2.Distance(player.position, specialGate) < GameFlowConfig.Active.exitRange) FinishRun("특수 게이트를 찾아 탈출했습니다.");
+        if (HasEntrancePortal && Vector2.Distance(player.position, entrance) < GameFlowConfig.Active.exitRange) FinishRun("입구로 돌아와 탈출했습니다.");
+        else if (HasSpecialPortal && Vector2.Distance(player.position, specialGate) < GameFlowConfig.Active.exitRange) FinishRun("특수 게이트를 찾아 탈출했습니다.");
         else Say("시체 또는 탈출 지점 가까이에서 [E]를 누르세요.");
     }
 
@@ -304,10 +322,12 @@ public class DungeonRunController : MonoBehaviour
     public string GetContextPrompt()
     {
         if (hasEscaped || dismantleSession != null) return null;
+        int stair = NearbyStair();
+        if (stair != 0) return stair > 0 ? "[E] 아래층으로 내려가기" : "[E] 위층으로 올라가기";
         CorpseRunData corpse = FindNearbyCorpse();
         if (corpse != null) return $"[E] {corpse.Name} 해체";
-        if (Vector2.Distance(player.position, entrance) < GameFlowConfig.Active.exitRange) return "[E] 입구로 탈출 (현재 전리품 확정)";
-        if (Vector2.Distance(player.position, specialGate) < GameFlowConfig.Active.exitRange) return "[E] 특수 게이트로 탈출";
+        if (HasEntrancePortal && Vector2.Distance(player.position, entrance) < GameFlowConfig.Active.exitRange) return "[E] 입구로 탈출 (현재 전리품 확정)";
+        if (HasSpecialPortal && Vector2.Distance(player.position, specialGate) < GameFlowConfig.Active.exitRange) return "[E] 특수 게이트로 탈출";
         return null;
     }
 
@@ -410,6 +430,16 @@ public class DungeonRunController : MonoBehaviour
         }
         foreach (EnemyAgent enemy in enemies) if (enemy != null) data.enemies.Add(enemy.Capture());
         foreach (LootDefinition loot in pendingLoot) data.pendingLoot.Add(LootSaveData.Capture(loot));
+        if (expedition != null)
+        {
+            var current = expedition.Current;
+            current.visited = true; current.corpses = data.corpses; current.enemies = data.enemies;
+            current.discoveredCells = data.discoveredCells; current.specialGate = specialGate;
+            // 저장 호출자가 스냅샷을 편집해도 현재 탐험 데이터가 바뀌지 않는다.
+            data.expedition = JsonUtility.FromJson<DungeonExpeditionData>(JsonUtility.ToJson(expedition));
+            data.mapSnapshot = data.expedition.Current.map;
+            data.hasMapSnapshot = true; data.expeditionVersion = 1;
+        }
         return data;
     }
 
@@ -436,8 +466,12 @@ public class DungeonRunController : MonoBehaviour
             enemies.Add(enemy);
         }
         specialGate = data.specialGate;
-        factory.CreateExitMarker("입구", entrance, new Color(.25f, .55f, 1f), false);
-        factory.CreateExitMarker("특수 탈출 게이트", specialGate, new Color(.75f, .3f, 1f), true);
+        CreatePortals(factory);
+        RestorePlayerAndBag(data);
+    }
+
+    private void RestorePlayerAndBag(DungeonSaveData data)
+    {
         inventory.Restore(data.inventory, data.totalValue);
         foreach (LootSaveData loot in data.pendingLoot) pendingLoot.Add(loot.Restore());
         player.position = data.playerPosition;
@@ -452,6 +486,52 @@ public class DungeonRunController : MonoBehaviour
             movement.SetMovementEnabled(false);
         }
         if (data.lootPlacementOpen) OpenLootPlacement();
+    }
+
+    private void CreatePortals(DungeonWorldFactory factory)
+    {
+        if (HasEntrancePortal) factory.CreateExitMarker("입구", entrance, new Color(.25f, .55f, 1f), false);
+        if (HasSpecialPortal) factory.CreateExitMarker("특수 탈출 게이트", specialGate, new Color(.75f, .3f, 1f), true);
+    }
+
+    private void CreateStairs()
+    {
+        if (expedition == null) return;
+        var map = expedition.Current.map;
+        if (map.hasStairsUp) CreateStair(-1, map.Center(map.stairsUp));
+        if (map.hasStairsDown) CreateStair(1, map.Center(map.stairsDown));
+    }
+    private void CreateStair(int direction, Vector2 position)
+    {
+        var marker = new GameObject(direction > 0 ? "아래층 계단" : "위층 계단");
+        marker.transform.position = position; marker.AddComponent<DungeonStairMarker>().direction = direction;
+        var sprite = marker.AddComponent<SpriteRenderer>(); sprite.sprite = CasualArtLibrary.WhiteSprite;
+        sprite.color = direction > 0 ? new Color(.28f,.75f,.62f) : new Color(.55f,.70f,.95f);
+        sprite.sortingOrder = 2; marker.transform.localScale = new Vector3(.8f,.8f,1);
+    }
+    private int NearbyStair()
+    {
+        if (expedition == null) return 0;
+        var map = expedition.Current.map;
+        if (map.hasStairsUp && Vector2.Distance(player.position, map.Center(map.stairsUp)) < .8f) return -1;
+        if (map.hasStairsDown && Vector2.Distance(player.position, map.Center(map.stairsDown)) < .8f) return 1;
+        return 0;
+    }
+    public bool TryTravelFloor(int direction, out string error)
+    {
+        error = null;
+        if (!IsRunActive || GameSession.IsLoading || expedition == null || (direction != -1 && direction != 1)
+            || dismantleSession != null || lootPlacementOpen || NearbyStair() != direction)
+        { error = "계단 가까이에서 작업을 끝낸 뒤 이동하세요."; return false; }
+        int targetIndex = FloorIndex + direction;
+        if (targetIndex < 0 || targetIndex >= FloorCount) { error = "이동할 층이 없습니다."; return false; }
+        var state = CaptureSave(); var journey = state.expedition;
+        journey.currentFloor = targetIndex; var target = journey.Current;
+        state.mapSnapshot = target.map; state.corpses = target.corpses; state.enemies = target.enemies;
+        state.discoveredCells = target.discoveredCells; state.specialGate = target.specialGate;
+        state.playerPosition = target.map.Center(direction > 0 ? target.map.stairsUp : target.map.stairsDown);
+        state.motion.isDashing = false; state.motion.dashSeconds = 0;
+        return GameSession.ChangeDungeonFloor(state, out error);
     }
 
     private static LootDefinition[] RestoreLegacyLoot(CorpseSaveData state)

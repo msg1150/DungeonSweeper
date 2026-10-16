@@ -81,7 +81,7 @@ public class DungeonDemoHud : MonoBehaviour
         if (run.Player == null) return;
         Vector2Int playerCell = DungeonLayoutFactory.WorldToCell(run.Player.position);
 
-        const float cell = 7f;
+        float cell = Mathf.Min(7f, 160f / DungeonLayoutFactory.Width, 140f / DungeonLayoutFactory.Height);
         float width = DungeonLayoutFactory.Width * cell;
         float height = DungeonLayoutFactory.Height * cell;
         float bagHeight = CompactBagCell * run.Inventory.Rows;
@@ -91,13 +91,19 @@ public class DungeonDemoHud : MonoBehaviour
         GUI.color = Color.white;
         GUI.skin.label.fontSize = 13;
         GUI.skin.label.alignment = TextAnchor.UpperLeft;
-        GUI.Label(new Rect(panel.x + 8f, panel.y + 6f, width, 18f), "탐색 지도");
+        GUI.Label(new Rect(panel.x + 8f, panel.y + 6f, width, 18f), $"탐색 지도 · {run.FloorIndex + 1}층");
         for (int x = 0; x < DungeonLayoutFactory.Width; x++)
         for (int y = 0; y < DungeonLayoutFactory.Height; y++)
         {
             if (!run.IsCellDiscovered(x, y)) continue;
             Rect tile = new Rect(panel.x + 8f + x * cell, panel.y + 28f + (DungeonLayoutFactory.Height - 1 - y) * cell, cell - 1f, cell - 1f);
             GUI.color = new Vector2Int(x, y) == playerCell ? mint : new Color(.3f, .43f, .52f);
+            var map = DungeonLayoutFactory.ActiveMap;
+            if (new Vector2Int(x,y) != playerCell && map != null)
+            {
+                if (map.hasStairsUp && map.stairsUp == new Vector2Int(x,y)) GUI.color = new Color(.55f,.7f,1);
+                if (map.hasStairsDown && map.stairsDown == new Vector2Int(x,y)) GUI.color = new Color(.3f,1,.65f);
+            }
             GUI.DrawTexture(tile, Texture2D.whiteTexture);
         }
         GUI.color = Color.white;

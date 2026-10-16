@@ -96,6 +96,16 @@ public static class GameSession
         return true;
     }
 
+    /// <summary>같은 탐험의 소지품·체력·층 상태를 이어받아 현재 층만 다시 구성한다.</summary>
+    public static bool ChangeDungeonFloor(DungeonSaveData snapshot, out string error)
+    {
+        string scene = GameFlowConfig.Active.dungeonSceneName;
+        if (!CanTravel(scene, out error)) return false;
+        if (snapshot?.ResolvedExpedition == null || !snapshot.IsValid()) { error = "층 이동 데이터가 올바르지 않습니다."; return false; }
+        pendingDungeon = snapshot; pendingDefinition = null;
+        BeginTravel(scene); return true;
+    }
+
     private static bool CanTravel(string scene, out string error)
     {
         error = null;

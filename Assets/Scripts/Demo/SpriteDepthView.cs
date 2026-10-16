@@ -76,7 +76,7 @@ public sealed class SpriteDepthView : MonoBehaviour
         if (display == null || world == null || world.WorldCamera == null) return;
         if (boundWorld != world) BindWorld(); // 재입장 후 새 월드 자원을 연결하며 표시 객체는 재사용한다.
         var camera = world.WorldCamera;
-        Vector3 ground = ThreeDWorldView.Map(transform.position, .025f);
+        Vector3 ground = ThreeDWorldView.Map(transform.position, world.FloorHeight(transform.position) + .025f);
         display.transform.position = ground;
         display.transform.rotation = Quaternion.identity;
         int order = 1000 - Mathf.RoundToInt(transform.position.y * 20);
