@@ -16,34 +16,56 @@ public sealed class DungeonBuilderWindow : EditorWindow
     private int desiredWidth = 20, desiredHeight = 12, strokeGroup = -1;
     private Vector2Int? lastCell;
     private string status;
-    private DungeonFloorDefinition Floor => dungeon != null && dungeon.floors != null && floorIndex >= 0 && floorIndex < dungeon.floors.Length ? dungeon.floors[floorIndex] : null;
+    [SerializeField] private DungeonGenerationSettings generation = new();
+    [SerializeField] private string generatedName = "자동 생성 던전";
+    private bool automatic, showPreviewSpawns;
+    private DungeonDefinition preview;
+    private DungeonDefinition Displayed => automatic ? preview : dungeon;
+    private DungeonFloorDefinition Floor => Displayed != null && Displayed.floors != null && floorIndex >= 0 && floorIndex < Displayed.floors.Length ? Displayed.floors[floorIndex] : null;
 
     [MenuItem("Dungeon Sweeper/Dungeon Builder")]
     public static void Open() => GetWindow<DungeonBuilderWindow>("던전 제작");
     public static void Open(DungeonDefinition selected)
     {
-        var window = GetWindow<DungeonBuilderWindow>("던전 제작"); window.dungeon = selected; window.floorIndex = 0; window.SelectFloor(); window.Show();
+        var window = GetWindow<DungeonBuilderWindow>("던전 제작");
+        DungeonGenerationPreview.Discard(window.preview); window.preview = null; window.automatic = false;
+        window.dungeon = selected; window.floorIndex = 0; window.SelectFloor(); window.Show();
     }
     private void OnEnable() { minSize = new Vector2(850, 500); Undo.undoRedoPerformed += Repaint; }
-    private void OnDisable() { EndStroke(); Undo.undoRedoPerformed -= Repaint; }
+    private void OnDisable() { EndStroke(); DungeonGenerationPreview.Discard(preview); preview = null; Undo.undoRedoPerformed -= Repaint; }
 
     private void OnGUI()
     {
         using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
         {
-            var selected = (DungeonDefinition)EditorGUILayout.ObjectField(dungeon, typeof(DungeonDefinition), false, GUILayout.Width(280));
+            DungeonDefinition selected;
+            using (new EditorGUI.DisabledScope(automatic)) selected = (DungeonDefinition)EditorGUILayout.ObjectField(dungeon, typeof(DungeonDefinition), false, GUILayout.Width(240));
             if (selected != dungeon) { EndStroke(); dungeon = selected; floorIndex = 0; SelectFloor(); status = null; }
             using (new EditorGUI.DisabledScope(EditorApplication.isPlaying))
+            {
+                if (GUILayout.Button(automatic ? "미리보기 닫기" : "자동 생성", EditorStyles.toolbarButton))
+                { EndStroke(); automatic = !automatic; floorIndex = 0; DungeonGenerationPreview.Discard(preview); preview = null; status = null; SelectFloor(); }
+            }
+            using (new EditorGUI.DisabledScope(EditorApplication.isPlaying || automatic))
             {
                 if (GUILayout.Button("새 던전", EditorStyles.toolbarButton)) CreateDungeon();
                 if (GUILayout.Button("검증", EditorStyles.toolbarButton)) status = dungeon != null && dungeon.IsValid(out _) ? "도면과 층 연결이 정상입니다." : dungeon == null ? "던전을 선택하세요." : ValidateError();
                 if (GUILayout.Button("저장 + 게임에 등록", EditorStyles.toolbarButton))
                     status = DungeonAuthoringService.SaveAndRegister(dungeon, out string error) ? "저장 완료. 다음 새 탐험부터 게임에서 사용합니다." : error;
             }
-            using (new EditorGUI.DisabledScope(!EditorApplication.isPlaying || !GameSession.HasActiveGame || GameSession.IsLoading || DungeonRunController.Instance != null || dungeon == null))
+            using (new EditorGUI.DisabledScope(automatic || !EditorApplication.isPlaying || !GameSession.HasActiveGame || GameSession.IsLoading || DungeonRunController.Instance != null || dungeon == null))
                 if (GUILayout.Button("선택 던전 입장", EditorStyles.toolbarButton)) status = GameSession.EnterDungeon(out string error, dungeon) ? "선택한 던전으로 입장했습니다." : error;
         }
         if (!string.IsNullOrEmpty(status)) EditorGUILayout.HelpBox(status, MessageType.Info);
+        if (automatic)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                using (new EditorGUI.DisabledScope(EditorApplication.isPlaying)) DrawAutomaticSidebar();
+                DrawGrid();
+            }
+            return;
+        }
         if (dungeon == null)
         {
             EditorGUILayout.HelpBox("새 던전을 만들거나 Project의 DungeonDefinition 에셋을 선택하세요. 벽·바닥을 그린 뒤 저장하면 카탈로그에 자동 등록됩니다.\n테스트: MainMenu에서 새 게임으로 마을에 간 뒤 '선택 던전 입장'을 누르세요.", MessageType.Info);
@@ -64,6 +86,7 @@ public sealed class DungeonBuilderWindow : EditorWindow
         using var column = new EditorGUILayout.VerticalScope(GUILayout.Width(310));
         sidebarScroll = EditorGUILayout.BeginScrollView(sidebarScroll);
         EditorGUILayout.LabelField("던전", EditorStyles.boldLabel);
+        if (dungeon.generationVersion > 0) EditorGUILayout.LabelField($"자동 생성 시드: {dungeon.generationSeed} · 생성기 v{dungeon.generationVersion}",EditorStyles.miniLabel);
         var settings = new SerializedObject(dungeon); settings.Update();
         EditorGUILayout.PropertyField(settings.FindProperty("displayName"), new GUIContent("표시 이름"));
         using (new EditorGUI.DisabledScope(true)) EditorGUILayout.PropertyField(settings.FindProperty("dungeonId"), new GUIContent("저장 식별 ID"));
@@ -136,7 +159,7 @@ public sealed class DungeonBuilderWindow : EditorWindow
             EditorGUI.DrawRect(rect, color); if (marker != null) GUI.Label(rect, marker, EditorStyles.whiteBoldLabel);
         }
         Event current = Event.current;
-        if (!EditorApplication.isPlaying && area.Contains(current.mousePosition) && (current.type == EventType.MouseDown || current.type == EventType.MouseDrag) && current.button <= 1)
+        if (!automatic && !EditorApplication.isPlaying && area.Contains(current.mousePosition) && (current.type == EventType.MouseDown || current.type == EventType.MouseDrag) && current.button <= 1)
         {
             var cell = new Vector2Int(Mathf.FloorToInt((current.mousePosition.x - origin.x) / cellSize), map.height - 1 - Mathf.FloorToInt((current.mousePosition.y - origin.y) / cellSize));
             if (cell.x >= 0 && cell.y >= 0 && cell.x < map.width && cell.y < map.height)
@@ -187,6 +210,97 @@ public sealed class DungeonBuilderWindow : EditorWindow
         if (string.IsNullOrEmpty(path)) return;
         dungeon = DungeonAuthoringService.Create(path, System.IO.Path.GetFileNameWithoutExtension(path)); floorIndex = 0; SelectFloor();
         status = DungeonAuthoringService.SaveAndRegister(dungeon, out string error) ? "새 던전을 만들고 게임에 등록했습니다." : error;
+    }
+
+    private void DrawAutomaticSidebar()
+    {
+        using var column = new EditorGUILayout.VerticalScope(GUILayout.Width(320));
+        sidebarScroll = EditorGUILayout.BeginScrollView(sidebarScroll);
+        EditorGUILayout.LabelField("자동 생성 조건",EditorStyles.boldLabel);
+        generatedName = EditorGUILayout.TextField("던전 이름",generatedName);
+        generation.floorCount = EditorGUILayout.IntSlider("층 수",generation.floorCount,1,DungeonExpeditionData.MaximumFloors);
+        generation.width = EditorGUILayout.IntSlider("기본 가로 칸",generation.width,4,DungeonFloorMap.MaximumSize);
+        generation.height = EditorGUILayout.IntSlider("기본 세로 칸",generation.height,4,DungeonFloorMap.MaximumSize);
+        generation.individualSizes = EditorGUILayout.Toggle("층마다 크기 지정",generation.individualSizes);
+        generation.floorSizes ??= new System.Collections.Generic.List<Vector2Int>();
+        while (generation.floorSizes.Count < generation.floorCount) generation.floorSizes.Add(new Vector2Int(generation.width,generation.height));
+        while (generation.floorSizes.Count > generation.floorCount) generation.floorSizes.RemoveAt(generation.floorSizes.Count-1);
+        if (generation.individualSizes)
+        {
+            EditorGUILayout.LabelField("각 행: 가로 / 세로",EditorStyles.miniLabel);
+            for (int i = 0; i < generation.floorCount; i++)
+            {
+                using var row = new EditorGUILayout.HorizontalScope();
+                EditorGUILayout.LabelField($"{i+1}층",GUILayout.Width(36)); var size = generation.floorSizes[i];
+                size.x = EditorGUILayout.IntField(size.x); size.y = EditorGUILayout.IntField(size.y); generation.floorSizes[i] = size;
+            }
+        }
+        generation.seed = EditorGUILayout.IntField("생성 시드",generation.seed);
+        EditorGUILayout.HelpBox("칸 수는 벽과 빈 공간을 포함한 도면의 가로·세로 크기입니다. 같은 조건과 시드는 같은 도면을 만듭니다.",MessageType.None);
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            if (GUILayout.Button("조건으로 생성")) GeneratePreview(false);
+            if (GUILayout.Button("다시 생성 (새 시드)")) GeneratePreview(true);
+        }
+        if (preview != null)
+        {
+            EditorGUILayout.Space(); EditorGUILayout.LabelField($"등록 전 후보 · 시드 {preview.generationSeed}",EditorStyles.boldLabel);
+            preview.displayName = generatedName;
+            int next = EditorGUILayout.Popup("미리볼 층",Mathf.Clamp(floorIndex,0,preview.floors.Length-1),
+                preview.floors.Select((floor,index) => $"{index+1}층 · {floor.map.width} × {floor.map.height}").ToArray());
+            if (next != floorIndex) { floorIndex = next; gridScroll = Vector2.zero; }
+            cellSize = EditorGUILayout.Slider("확대",cellSize,12,48);
+            int floorCells = Floor.map.tiles.Count(tile => tile == (int)DungeonTile.Floor);
+            EditorGUILayout.LabelField($"바닥 {floorCells}칸 · 스폰 용량 {Floor.map.PopulationCapacity}개");
+            var spawnSettings = new SerializedObject(preview); spawnSettings.Update();
+            EditorGUILayout.PropertyField(spawnSettings.FindProperty("extraExitFloor"),new GUIContent("추가 포탈 층 (-1 무작위)"));
+            spawnSettings.ApplyModifiedProperties();
+            showPreviewSpawns = EditorGUILayout.Foldout(showPreviewSpawns,"이 층의 몬스터·시체 설정",true);
+            if (showPreviewSpawns)
+            {
+                var floorSettings = new SerializedObject(Floor); floorSettings.Update();
+                EditorGUILayout.PropertyField(floorSettings.FindProperty("monsters"),new GUIContent("몬스터"),true);
+                EditorGUILayout.PropertyField(floorSettings.FindProperty("corpses"),new GUIContent("시체"),true);
+                floorSettings.ApplyModifiedProperties();
+            }
+            bool current = PreviewMatchesInput();
+            if (!current) EditorGUILayout.HelpBox("입력 조건이 바뀌었습니다. 다시 생성한 결과를 확인한 뒤 채택하세요.",MessageType.Warning);
+            EditorGUILayout.HelpBox("미리보기에서 모든 층을 확인하세요. 채택하면 새 던전 에셋으로 저장하고 게임에 등록합니다. 이후 수동 벽 편집도 가능합니다. 창을 닫으면 등록하지 않은 후보는 해제됩니다.",MessageType.Info);
+            using (new EditorGUI.DisabledScope(!current))
+                if (GUILayout.Button("이 후보 채택 · 저장 + 게임 등록",GUILayout.Height(34))) AdoptPreview();
+        }
+        else EditorGUILayout.HelpBox("조건을 입력하고 생성하세요. 채택 전에는 게임에 등록되지 않습니다.",MessageType.Info);
+        EditorGUILayout.EndScrollView();
+    }
+    private bool PreviewMatchesInput()
+    {
+        if (preview == null || !generation.IsValid(out _) || preview.floors.Length != generation.floorCount || preview.generationSeed != generation.seed) return false;
+        for (int i = 0; i < preview.floors.Length; i++)
+            if (generation.Size(i) != new Vector2Int(preview.floors[i].map.width,preview.floors[i].map.height)) return false;
+        return true;
+    }
+    private void GeneratePreview(bool newSeed)
+    {
+        if (newSeed) { int seed = Guid.NewGuid().GetHashCode(); generation.seed = seed != generation.seed ? seed : unchecked(seed+1); }
+        try
+        {
+            var candidate = DungeonGenerationPreview.Create(generation,generatedName);
+            DungeonGenerationPreview.Discard(preview); preview = candidate;
+            floorIndex = 0; gridScroll = Vector2.zero;
+            status = "후보를 생성했습니다. 각 층을 확인하고 채택하거나 다시 생성하세요.";
+        }
+        catch (Exception error) { status = error.Message; }
+    }
+    private void AdoptPreview()
+    {
+        if (!preview.IsValid(out string error)) { status = error; return; }
+        string path = EditorUtility.SaveFilePanelInProject("후보를 새 던전으로 저장","generated-dungeon","asset","새 던전 에셋의 저장 위치","Assets/Resources/Dungeons");
+        if (string.IsNullOrEmpty(path)) return;
+        var saved = DungeonGenerationPreview.Adopt(preview,path,out error);
+        if (saved == null) { status = error; return; }
+        DungeonGenerationPreview.Discard(preview); preview = null; automatic = false;
+        dungeon = saved; floorIndex = 0; SelectFloor();
+        status = "후보를 채택하고 저장·등록했습니다. 마을에서 선택 던전 입장으로 테스트할 수 있습니다.";
     }
 }
 

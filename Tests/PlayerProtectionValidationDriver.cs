@@ -103,6 +103,7 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         DungeonPrefabChecks.RunAuthoring(Check);
         DungeonPoolChecks.RunLocal(Check);
         DungeonBuilderChecks.RunData(Check);
+        DungeonGenerationChecks.Run(Check);
         if (capture)
         {
             // 숨겨진 Windows 창도 실제 backbuffer를 생성하도록 먼저 다른 크기로 갱신한다.

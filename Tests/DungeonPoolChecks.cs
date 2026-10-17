@@ -154,9 +154,11 @@ public static class DungeonPoolChecks
         DungeonActorPool.ClearInactive();
         var definition = DungeonCatalog.Active.dungeons[0];
         var originalMonsters = definition.monsters; var originalCorpses = definition.corpses;
+        var originalFloors = definition.floors;
         int capacity = DungeonLayoutFactory.PopulationCapacity(definition.layoutIndex);
         try
         {
+            definition.floors = Array.Empty<DungeonFloorDefinition>();
             definition.monsters = new[] { new MonsterSpawnEntry { prefab = DungeonCatalog.Active.FindMonster("monster.goblin"), count = capacity / 2 } };
             definition.corpses = new[] { new CorpseSpawnEntry { prefab = DungeonCatalog.Active.FindCorpse("corpse.orc"), count = capacity - capacity / 2 } };
             Shell("OnApplicationFocus", true); Shell("Resume");
@@ -175,7 +177,7 @@ public static class DungeonPoolChecks
             check(DungeonActorPool.InactiveCount == retained && DungeonActorPool.LeasedCount == 0,
                 "maximum population retains only " + retained + " actors after return");
         }
-        finally { definition.monsters = originalMonsters; definition.corpses = originalCorpses; }
+        finally { definition.monsters = originalMonsters; definition.corpses = originalCorpses; definition.floors = originalFloors; }
         Shell("ReturnToMain");
         while (!Ready("MainMenu")) { timeout(); yield return null; }
         check(DungeonActorPool.InactiveCount == 0 && DungeonActorPool.LeasedCount == 0, "main menu releases dungeon actor cache");

@@ -36,6 +36,7 @@ public static class GameFlowSmokeChecks
         SessionState.SetInt(CountKey, 0);
         SessionState.SetBool("DungeonValidation.FloorsComplete", false);
         floorTrials = null;
+        DungeonGenerationEditorChecks.Run(Check);
         SessionState.SetFloat("DungeonValidation.Deadline", (float)EditorApplication.timeSinceStartup + 240f);
         Application.runInBackground = true;
         EditorSceneManager.OpenScene("Assets/Scenes/MainMenu.unity");
@@ -110,6 +111,7 @@ public static class GameFlowSmokeChecks
                     DungeonPrefabChecks.RunAuthoring(Check);
                     DungeonPoolChecks.RunLocal(Check);
                     DungeonBuilderChecks.RunData(Check);
+                    DungeonGenerationChecks.Run(Check);
                     Next(1);
                     break;
                 case 1:

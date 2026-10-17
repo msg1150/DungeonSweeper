@@ -15,6 +15,7 @@ public static class DungeonPrefabChecks
         check(catalog != null && catalog.CollectIssues().Count == 0 && catalog.dungeons.Length >= 3, "independent dungeon configuration assets validate");
         check(catalog.dungeons[0] != catalog.dungeons[1] && catalog.dungeons[1] != catalog.dungeons[2], "dungeon spawn arrays belong to separate assets");
         var clone = UnityEngine.Object.Instantiate(catalog.dungeons[0]);
+        clone.floors = Array.Empty<DungeonFloorDefinition>(); // 코드 기반 단층 스폰 규칙을 독립적으로 검증한다.
         var goblin = catalog.FindMonster("monster.goblin");
         var slime = catalog.FindMonster("monster.slime");
         var orcCorpse = catalog.FindCorpse("corpse.orc");
@@ -114,8 +115,9 @@ public static class DungeonPrefabChecks
         var catalog = DungeonCatalog.Active;
         var originalMonsters = new MonsterSpawnEntry[catalog.dungeons.Length][];
         var originalCorpses = new CorpseSpawnEntry[catalog.dungeons.Length][];
+        var originalFloors = new DungeonFloorDefinition[catalog.dungeons.Length][];
         for (int i = 0; i < catalog.dungeons.Length; i++)
-        { originalMonsters[i] = catalog.dungeons[i].monsters; originalCorpses[i] = catalog.dungeons[i].corpses; }
+        { originalMonsters[i] = catalog.dungeons[i].monsters; originalCorpses[i] = catalog.dungeons[i].corpses; originalFloors[i] = catalog.dungeons[i].floors; }
         var goblin = catalog.FindMonster("monster.goblin"); var slime = catalog.FindMonster("monster.slime");
         var orc = catalog.FindMonster("monster.orc"); var corpse = catalog.FindCorpse("corpse.orc");
         int damage = goblin.stats.attackDamage, successes = corpse.requiredSuccesses;
@@ -124,6 +126,7 @@ public static class DungeonPrefabChecks
             for (int trial = 0; trial < 4; trial++)
             {
                 var config = catalog.dungeons[trial % 3];
+                config.floors = Array.Empty<DungeonFloorDefinition>();
                 config.monsters = trial == 0 ? new[] { new MonsterSpawnEntry { prefab = goblin, count = 2 }, new MonsterSpawnEntry { prefab = slime, count = 1 } }
                     : trial == 2 ? new[] { new MonsterSpawnEntry { prefab = orc, count = 2 } } : Array.Empty<MonsterSpawnEntry>();
                 config.corpses = trial == 0 ? new[] { new CorpseSpawnEntry { prefab = corpse, count = 4 } }
@@ -182,7 +185,7 @@ public static class DungeonPrefabChecks
         finally
         {
             for (int i = 0; i < catalog.dungeons.Length; i++)
-            { catalog.dungeons[i].monsters = originalMonsters[i]; catalog.dungeons[i].corpses = originalCorpses[i]; }
+            { catalog.dungeons[i].monsters = originalMonsters[i]; catalog.dungeons[i].corpses = originalCorpses[i]; catalog.dungeons[i].floors = originalFloors[i]; }
             goblin.stats.attackDamage = damage; corpse.requiredSuccesses = successes;
         }
     }

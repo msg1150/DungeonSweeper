@@ -28,6 +28,7 @@ public sealed class DungeonDefinition : ScriptableObject
     public DungeonFloorDefinition[] floors = Array.Empty<DungeonFloorDefinition>();
     [Tooltip("추가 탈출 포탈이 나올 층. -1은 입장 시 전체 층 중 하나를 무작위 선택합니다.")]
     public int extraExitFloor = -1;
+    [HideInInspector] public int generationVersion, generationSeed;
 
     public bool IsValid(out string error)
     {

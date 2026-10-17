@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 /// <summary>데모의 상태를 그리는 표시 계층. 게임 규칙을 변경하지 않는다.</summary>
 public class DungeonDemoHud : MonoBehaviour
@@ -16,6 +17,13 @@ public class DungeonDemoHud : MonoBehaviour
     private float bagCell;
     private bool legacyFogRemoved;
     private Vector2 pendingLootScroll;
+    private const float MinimapViewportSize = 210f;
+    // 층 이동 때 HUD가 다시 생성되어도 사용자가 고른 내부 지도 배율은 유지한다.
+    private static readonly float[] minimapZoomLevels = { 1f, 1.5f, 2f, 3f };
+    private static int minimapZoomIndex = 1;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetMinimapZoom() => minimapZoomIndex = 1;
 
     public void Initialize(DungeonRunController controller) => run = controller;
 
@@ -37,12 +45,40 @@ public class DungeonDemoHud : MonoBehaviour
 
     private void Update()
     {
+        UpdateMinimapZoom();
         if (run == null || !run.IsLootPlacementOpen || GameShell.IsGameplayInputBlocked)
         {
             draggingLootIndex = -1;
             draggingStoredItemId = 0;
             if (run == null || !run.IsLootPlacementOpen) { rotatedLoot.Clear(); pendingLootScroll = Vector2.zero; }
         }
+    }
+
+    private void UpdateMinimapZoom()
+    {
+        if (run == null || !run.IsRunActive || run.IsLootPlacementOpen || GameShell.IsGameplayInputBlocked) return;
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard == null) return;
+        int direction = (keyboard.rightBracketKey.wasPressedThisFrame ? 1 : 0)
+            - (keyboard.leftBracketKey.wasPressedThisFrame ? 1 : 0);
+        minimapZoomIndex = Mathf.Clamp(minimapZoomIndex + direction, 0, minimapZoomLevels.Length - 1);
+    }
+
+    private static float MinimapCellSize(int columns, int rows)
+    {
+        return Mathf.Min(MinimapViewportSize / columns, MinimapViewportSize / rows) * minimapZoomLevels[minimapZoomIndex];
+    }
+
+    private static Vector2 MinimapOrigin(int columns, int rows, float cell, Vector2Int playerCell)
+    {
+        // 전체 지도가 들어가는 축은 중앙 정렬한다. 확대된 축은 플레이어를 따라가되
+        // 지도 끝에서 멈춰, 빈 공간보다 실제 던전이 많이 보이도록 한다.
+        float width = columns * cell, height = rows * cell;
+        return new Vector2(
+            width <= MinimapViewportSize ? (MinimapViewportSize - width) * .5f
+                : Mathf.Clamp(MinimapViewportSize * .5f - (playerCell.x + .5f) * cell, MinimapViewportSize - width, 0f),
+            height <= MinimapViewportSize ? (MinimapViewportSize - height) * .5f
+                : Mathf.Clamp(MinimapViewportSize * .5f - (rows - playerCell.y - .5f) * cell, MinimapViewportSize - height, 0f));
     }
 
     private void RemoveLegacyWorldFog()
@@ -81,32 +117,67 @@ public class DungeonDemoHud : MonoBehaviour
         if (run.Player == null) return;
         Vector2Int playerCell = DungeonLayoutFactory.WorldToCell(run.Player.position);
 
-        float cell = Mathf.Min(7f, 160f / DungeonLayoutFactory.Width, 140f / DungeonLayoutFactory.Height);
-        float width = DungeonLayoutFactory.Width * cell;
-        float height = DungeonLayoutFactory.Height * cell;
-        float bagHeight = CompactBagCell * run.Inventory.Rows;
-        Rect panel = new Rect(GameGuiScope.Width - width - 30f, Mathf.Max(210f, bagHeight + 120f), width + 16f, height + 38f);
+        float panelY = Mathf.Max(210f, CompactBagCell * run.Inventory.Rows + 120f);
+        float cell = MinimapCellSize(DungeonLayoutFactory.Width, DungeonLayoutFactory.Height);
+        float panelWidth = MinimapViewportSize + 16f;
+        Rect panel = new Rect(GameGuiScope.Width - panelWidth - 14f, panelY, panelWidth, MinimapViewportSize + 64f);
         GUI.color = GameUiTheme.Paper;
         GUI.DrawTexture(panel, Texture2D.whiteTexture);
         GUI.color = Color.white;
         GUI.skin.label.fontSize = 13;
         GUI.skin.label.alignment = TextAnchor.UpperLeft;
-        GUI.Label(new Rect(panel.x + 8f, panel.y + 6f, width, 18f), $"탐색 지도 · {run.FloorIndex + 1}층");
-        for (int x = 0; x < DungeonLayoutFactory.Width; x++)
-        for (int y = 0; y < DungeonLayoutFactory.Height; y++)
+        GUI.Label(new Rect(panel.x + 8f, panel.y + 6f, panel.width - 16f, 18f), $"탐색 지도 · {run.FloorIndex + 1}층");
+        Rect mapArea = new Rect(panel.x + 8f, panel.y + 28f, MinimapViewportSize, MinimapViewportSize);
+        GUI.color = new Color(.08f, .13f, .17f);
+        GUI.DrawTexture(mapArea, Texture2D.whiteTexture);
+        // 지도 내용만 잘라내며 외곽 UI는 고정한다. 예외 시에도 IMGUI 영역을 닫는다.
+        GUI.BeginGroup(mapArea);
+        try
         {
+            DrawMinimapContents(playerCell, cell);
+        }
+        finally { GUI.EndGroup(); }
+        GUI.color = Color.white;
+        GUI.skin.label.fontSize = 12;
+        GUI.Label(new Rect(panel.x + 8f, mapArea.yMax + 5f, panel.width - 16f, 22f),
+            $"[ 축소   ·   ] 확대   {Mathf.RoundToInt(minimapZoomLevels[minimapZoomIndex] * 100f)}%");
+    }
+
+    private void DrawMinimapContents(Vector2Int playerCell, float cell)
+    {
+        int columns = DungeonLayoutFactory.Width, rows = DungeonLayoutFactory.Height;
+        Vector2 origin = MinimapOrigin(columns, rows, cell, playerCell);
+        var map = DungeonLayoutFactory.ActiveMap;
+        float gap = Mathf.Min(.6f, cell * .12f);
+        // 확대해서 화면 밖으로 나간 칸은 탐색 상태 조회와 그리기를 생략한다.
+        int firstColumn = Mathf.Max(0, Mathf.FloorToInt(-origin.x / cell));
+        int lastColumn = Mathf.Min(columns - 1, Mathf.CeilToInt((MinimapViewportSize - origin.x) / cell) - 1);
+        int firstRow = Mathf.Max(0, Mathf.FloorToInt(-origin.y / cell));
+        int lastRow = Mathf.Min(rows - 1, Mathf.CeilToInt((MinimapViewportSize - origin.y) / cell) - 1);
+        for (int x = firstColumn; x <= lastColumn; x++)
+        for (int screenRow = firstRow; screenRow <= lastRow; screenRow++)
+        {
+            int y = rows - 1 - screenRow;
             if (!run.IsCellDiscovered(x, y)) continue;
-            Rect tile = new Rect(panel.x + 8f + x * cell, panel.y + 28f + (DungeonLayoutFactory.Height - 1 - y) * cell, cell - 1f, cell - 1f);
-            GUI.color = new Vector2Int(x, y) == playerCell ? mint : new Color(.3f, .43f, .52f);
-            var map = DungeonLayoutFactory.ActiveMap;
-            if (new Vector2Int(x,y) != playerCell && map != null)
+            Vector2Int location = new(x, y);
+            Rect tile = new Rect(origin.x + x * cell + gap * .5f, origin.y + screenRow * cell + gap * .5f, cell - gap, cell - gap);
+            GUI.color = new Color(.57f, .68f, .75f);
+            if (map != null)
             {
-                if (map.hasStairsUp && map.stairsUp == new Vector2Int(x,y)) GUI.color = new Color(.55f,.7f,1);
-                if (map.hasStairsDown && map.stairsDown == new Vector2Int(x,y)) GUI.color = new Color(.3f,1,.65f);
+                if (map.hasStairsUp && map.stairsUp == location) GUI.color = new Color(.4f, .65f, 1f);
+                if (map.hasStairsDown && map.stairsDown == location) GUI.color = new Color(1f, .73f, .3f);
             }
             GUI.DrawTexture(tile, Texture2D.whiteTexture);
         }
+        // 작은 지도에서도 위치를 찾을 수 있게 플레이어 표식을 마지막에 덧그린다.
+        float markerSize = Mathf.Max(5f, cell - gap);
+        Vector2 markerCenter = new(origin.x + (playerCell.x + .5f) * cell,
+            origin.y + (rows - playerCell.y - .5f) * cell);
+        Rect marker = new Rect(markerCenter.x - markerSize * .5f, markerCenter.y - markerSize * .5f, markerSize, markerSize);
         GUI.color = Color.white;
+        GUI.DrawTexture(new Rect(marker.x - 1f, marker.y - 1f, marker.width + 2f, marker.height + 2f), Texture2D.whiteTexture);
+        GUI.color = mint;
+        GUI.DrawTexture(marker, Texture2D.whiteTexture);
     }
 
     private float CompactBagCell => Mathf.Min(24f, 144f / run.Inventory.Columns, 144f / run.Inventory.Rows);
