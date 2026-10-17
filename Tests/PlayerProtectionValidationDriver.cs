@@ -156,7 +156,12 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         DungeonPopulationChecks.RunPatrol(Check);
         DungeonRunController run = DungeonRunController.Instance;
         Check(run != null && run.IsRunActive && Resources.Load<Shader>("VisionOverlay") != null, "release dungeon and vision shader exist");
-        if (ThreeDPresentationConfig.SpritesEnabled) CheckSpriteDepth();
+        if (ThreeDPresentationConfig.SpritesEnabled)
+        {
+            CheckSpriteDepth();
+            var wallContacts = CheckSpriteWallContacts();
+            while (wallContacts.MoveNext()) yield return wallContacts.Current;
+        }
         Check(GameSaveService.TryLoad(-1, out var entry, out _) && entry.area == SaveArea.Dungeon, "dungeon entry checkpoint persisted");
         Call(Shell, "OpenPause");
         Check(run.Inventory.TryPlace(LootDefinition.CreateShaped("회수품", 50, TownProgress.ContractTarget,
@@ -396,6 +401,17 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
             if(copy.enabled && copy.sprite == source.sprite && copy.flipX == source.flipX && copy.color.a == source.color.a)
                 copied = true;
         Check(copied, "billboard preserves sprite pose, facing and dash cross-fade alpha");
+        foreach (var copy in view.Copies) if (copy.enabled)
+        {
+            Check(Vector3.Dot(copy.transform.up, Vector3.up) > .999f,
+                "actor sprite stands upright instead of leaning its upper body into walls");
+            Vector3 actual = world.WorldCamera.WorldToViewportPoint(copy.transform.position + copy.transform.up * copy.transform.lossyScale.y)
+                - world.WorldCamera.WorldToViewportPoint(copy.transform.position);
+            Vector3 expected = world.WorldCamera.WorldToViewportPoint(copy.transform.position + world.WorldCamera.transform.up * source.transform.lossyScale.y)
+                - world.WorldCamera.WorldToViewportPoint(copy.transform.position);
+            Check(Mathf.Abs(actual.y - expected.y) < .0001f,
+                "upright sprite compensation preserves its projected artwork height");
+        }
         if (!world.IsDungeon) return;
         Check(GameObject.Find("Dungeon 3D Walls")?.GetComponent<MeshRenderer>() != null,
             "2.5D dungeon retains actual wall thickness");
@@ -408,6 +424,74 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         Vector3 bottom = material.GetVector("_Ground00"), top = material.GetVector("_Ground01");
         Check(material.GetFloat("_Orthographic") == 1 && Mathf.Abs(bottom.y) < .001f && top.z > bottom.z,
             "darkness projects onto orthographic ground in the correct orientation");
+    }
+
+    private IEnumerator CheckSpriteWallContacts()
+    {
+        var run = DungeonRunController.Instance;
+        var player = run.Player;
+        var body = player.GetComponent<Rigidbody2D>();
+        var shape = player.GetComponent<Collider2D>();
+        var view = player.GetComponent<SpriteDepthView>();
+        var world = ThreeDWorldView.Current;
+        Vector2 originalPosition = body.position;
+        float originalScale = Time.timeScale;
+        var originalInterpolation = body.interpolation;
+        var originalSimulation = Physics2D.simulationMode;
+        var walls = GameObject.Find("Runtime Dungeon Layout").GetComponentsInChildren<BoxCollider2D>();
+        var hits = new System.Collections.Generic.List<RaycastHit2D>();
+        // AI와 이동은 멈추고 HUD를 표시한 상태로 실제 물리 경계에 붙여 촬영한다.
+        Time.timeScale = 0f;
+        body.interpolation = RigidbodyInterpolation2D.None;
+        Physics2D.simulationMode = SimulationMode2D.Script;
+        world.PreviewCamera(true);
+        try
+        {
+            foreach (var side in new[] { "North", "West", "East" })
+            {
+                Vector2 direction = side == "North" ? Vector2.up : side == "West" ? Vector2.left : Vector2.right;
+                var wall = Array.Find(walls, item => item.name.StartsWith(side, StringComparison.Ordinal));
+                Check(wall != null, "wall contact fixture contains " + side + " boundary");
+                Vector2 center = (Vector2)wall.transform.position - direction * .725f;
+                player.position = center; body.position = center; body.linearVelocity = Vector2.zero;
+                Physics2D.SyncTransforms(); hits.Clear(); shape.Cast(direction, hits, 1.45f);
+                int contact = hits.FindIndex(item => item.collider == wall);
+                Check(contact >= 0, "player capsule detects " + side + " wall before crossing it");
+                foreach (float speed in new[] { DungeonTuning.Active.playerMoveSpeed, DungeonTuning.Active.playerDashSpeed })
+                {
+                    player.position = center; body.position = center; Physics2D.SyncTransforms();
+                    for (int step = 0; step < 12; step++)
+                    {
+                        body.linearVelocity = direction * speed;
+                        Physics2D.Simulate(.02f);
+                    }
+                    body.linearVelocity = Vector2.zero;
+                    var distance = shape.Distance(wall);
+                    // Box2D의 접촉 해석기는 작은 접촉 여유를 허용한다. 깊은 관통은 거부한다.
+                    Check(distance.isValid && distance.distance >= -.025f && distance.distance < .05f,
+                        $"player movement at {speed:F1} stops against {side} wall (gap {distance.distance:F4})");
+                }
+                Call(world, "UpdateCamera", true); view.Sync();
+                if (side == "North")
+                {
+                    float wallFront = wall.bounds.min.y;
+                    bool outsideWall = true;
+                    foreach (var copy in view.Copies) if (copy.enabled)
+                        foreach (var vertex in copy.sprite.vertices)
+                            outsideWall &= copy.transform.TransformPoint(vertex).z < wallFront;
+                    Check(outsideWall, "entire player sprite stays in front of the north wall at physical contact");
+                }
+                yield return null;
+                Snapshot("release-wall-" + side.ToLowerInvariant());
+                yield return null; yield return null;
+            }
+        }
+        finally
+        {
+            player.position = originalPosition; body.position = originalPosition; body.linearVelocity = Vector2.zero;
+            Physics2D.SyncTransforms(); body.interpolation = originalInterpolation; Physics2D.simulationMode = originalSimulation;
+            world.PreviewCamera(false); view.Sync(); Time.timeScale = originalScale;
+        }
     }
 
     private IEnumerator CheckFlatConceptArt()

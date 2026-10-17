@@ -76,6 +76,13 @@ public sealed class SpriteDepthView : MonoBehaviour
         if (display == null || world == null || world.WorldCamera == null) return;
         if (boundWorld != world) BindWorld(); // 재입장 후 새 월드 자원을 연결하며 표시 객체는 재사용한다.
         var camera = world.WorldCamera;
+        // 카메라의 기울기까지 따라 눕히면 그림의 상체가 지면 깊이 방향으로 뻗어
+        // 발의 충돌 판정이 벽에 닿기 전에 머리/몸통부터 벽 메시를 뚫게 된다.
+        // 지면에 수직으로 세우고 정사영에서 줄어드는 세로 길이만 보정한다.
+        Vector3 facing = Vector3.ProjectOnPlane(camera.transform.forward, Vector3.up);
+        Quaternion rotation = facing.sqrMagnitude > .0001f ? Quaternion.LookRotation(facing, Vector3.up) : Quaternion.identity;
+        float verticalProjection = Mathf.Max(.1f, Mathf.Abs(Vector3.Dot(camera.transform.up, Vector3.up)));
+        Vector3 visualUp = Vector3.up / verticalProjection;
         Vector3 ground = ThreeDWorldView.Map(transform.position, world.FloorHeight(transform.position) + .025f);
         display.transform.position = ground;
         display.transform.rotation = Quaternion.identity;
@@ -93,10 +100,10 @@ public sealed class SpriteDepthView : MonoBehaviour
             copy.sortingOrder = order + source.sortingOrder;
             copy.spriteSortPoint = SpriteSortPoint.Pivot;
             Vector3 offset = source.transform.position - transform.position;
-            copy.transform.position = ground + camera.transform.up * (footLift + offset.y) + camera.transform.right * offset.x;
-            copy.transform.rotation = camera.transform.rotation;
+            copy.transform.position = ground + visualUp * (footLift + offset.y) + camera.transform.right * offset.x;
+            copy.transform.rotation = rotation;
             Vector3 scale = source.transform.lossyScale;
-            copy.transform.localScale = new Vector3(scale.x, scale.y, 1);
+            copy.transform.localScale = new Vector3(scale.x, scale.y / verticalProjection, 1);
         }
         shadow.enabled = visible;
         shadow.transform.position = ground;
