@@ -4,11 +4,22 @@ using UnityEngine;
 /// <summary>3x2 시트의 윗줄은 이동, 아랫줄은 공격으로 재생한다.</summary>
 public sealed class MonsterVisualAnimator : MonoBehaviour, IDungeonPoolResettable
 {
-    private sealed class Frames { public Sprite[] Walk; public Sprite[] Attack; }
+    private sealed class Frames { public Sprite[] Walk; public Sprite[] Attack; public Texture2D Texture; }
     private static readonly Dictionary<string, Frames> cache = new();
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-    private static void ResetCache() => cache.Clear();
+    private static void ResetCache()
+    {
+        foreach (var frames in cache.Values) Release(frames);
+        cache.Clear();
+    }
+    private static void Release(Frames frames)
+    {
+        if (frames == null) return;
+        if (frames.Walk != null) foreach (var sprite in frames.Walk) if (sprite != null) Destroy(sprite);
+        if (frames.Attack != null) foreach (var sprite in frames.Attack) if (sprite != null) Destroy(sprite);
+        if (frames.Texture != null) Destroy(frames.Texture);
+    }
     private SpriteRenderer target;
     private Sprite[] walk;
     private Sprite[] attack;
@@ -25,6 +36,7 @@ public sealed class MonsterVisualAnimator : MonoBehaviour, IDungeonPoolResettabl
             target.sprite = walk[0];
             return;
         }
+        Release(cached);
         Texture2D source = Resources.Load<Texture2D>(resourcePath);
         if (source == null) return;
         Texture2D transparent = CasualArtLibrary.CreateReadableCopy(source);
@@ -37,7 +49,7 @@ public sealed class MonsterVisualAnimator : MonoBehaviour, IDungeonPoolResettabl
         attack = SliceRow(transparent, 0, resourcePath);
         // 시트 가공이 끝난 사본은 렌더링만 사용하므로 CPU 픽셀 버퍼를 해제한다.
         transparent.Apply(false, true);
-        cache[resourcePath] = new Frames { Walk = walk, Attack = attack };
+        cache[resourcePath] = new Frames { Walk = walk, Attack = attack, Texture = transparent };
         target.sprite = walk[0];
     }
 

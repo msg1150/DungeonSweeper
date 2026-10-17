@@ -5,6 +5,7 @@ using UnityEngine;
 public static class CasualArtLibrary
 {
     private static readonly Dictionary<string, Sprite[]> sheets = new();
+    private static readonly List<Texture2D> ownedTextures = new();
     private static Sprite whiteSprite;
 
     public static Sprite WhiteSprite
@@ -13,6 +14,7 @@ public static class CasualArtLibrary
         {
             if (whiteSprite != null) return whiteSprite;
             Texture2D texture = new Texture2D(1, 1) { filterMode = FilterMode.Point };
+            ownedTextures.Add(texture);
             texture.SetPixel(0, 0, Color.white); texture.Apply();
             return whiteSprite = Sprite.Create(texture, new Rect(0, 0, 1, 1), new Vector2(.5f, .5f), 1f);
         }
@@ -20,7 +22,20 @@ public static class CasualArtLibrary
 
     // Domain Reload가 꺼져 있어도 이전 Play 세션의 파괴된 Unity 객체를 재사용하지 않는다.
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-    private static void ResetCache() { sheets.Clear(); whiteSprite = null; }
+    private static void ResetCache()
+    {
+        // 캐시 참조만 비우면 Domain Reload를 끈 반복 실행에서 네이티브 자원이 남는다.
+        // 직접 생성한 Sprite/Texture만 해제하며 Resources 원본은 소유하지 않는다.
+        foreach (var frames in sheets.Values) ReleaseFrames(frames);
+        if (whiteSprite != null) Object.Destroy(whiteSprite);
+        foreach (var texture in ownedTextures) if (texture != null) Object.Destroy(texture);
+        sheets.Clear(); ownedTextures.Clear(); whiteSprite = null;
+    }
+
+    private static void ReleaseFrames(Sprite[] frames)
+    {
+        if (frames != null) foreach (var frame in frames) if (frame != null) Object.Destroy(frame);
+    }
 
     public static Sprite LoadFull(string path, float pixelsPerUnit = 100f)
     {
@@ -38,6 +53,7 @@ public static class CasualArtLibrary
             throw new System.ArgumentException("Invalid sprite sheet dimensions or pixel scale.");
         string key = $"{path}:{columns}:{rows}:{pixelsPerUnit}:{removeBackdrop}:{pivotY}";
         if (sheets.TryGetValue(key, out Sprite[] cached) && cached != null && cached.Length > 0 && cached[0] != null) return cached;
+        ReleaseFrames(cached);
         sheets.Remove(key);
         Texture2D source = Resources.Load<Texture2D>(path);
         if (source == null) return System.Array.Empty<Sprite>();
@@ -46,6 +62,7 @@ public static class CasualArtLibrary
         if (removeBackdrop)
         {
             texture = CreateReadableCopy(source);
+            ownedTextures.Add(texture);
             Color[] pixels = texture.GetPixels();
             RemoveConnectedBackdrop(pixels, source.width, source.height);
             texture.SetPixels(pixels); texture.Apply(false, false);

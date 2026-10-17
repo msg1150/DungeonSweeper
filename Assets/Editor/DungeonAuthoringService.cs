@@ -9,9 +9,28 @@ using UnityEngine;
 /// <summary>에디터의 도면 파일 생성과 카탈로그 등록. 기존 저장용 프리팹 등록은 제거하지 않는다.</summary>
 public static class DungeonAuthoringService
 {
+    /// <summary>수동 생성과 자동 후보 채택에 같은 신규 에셋 경로 규칙을 적용한다.</summary>
+    public static bool TryNewAssetPath(string requested, out string path, out string error)
+    {
+        path = null; error = "Assets 아래에 존재하지 않는 새 .asset 경로를 선택하세요.";
+        requested = (requested ?? "").Replace('\\', '/');
+        if (!requested.StartsWith("Assets/", StringComparison.Ordinal) || !requested.EndsWith(".asset", StringComparison.OrdinalIgnoreCase)) return false;
+        try
+        {
+            string root = Path.GetFullPath(Application.dataPath) + Path.DirectorySeparatorChar;
+            string absolute = Path.GetFullPath(Path.Combine(Application.dataPath, "..", requested));
+            if (!absolute.StartsWith(root, StringComparison.OrdinalIgnoreCase) || File.Exists(absolute) || Directory.Exists(absolute)) return false;
+            string candidate = "Assets/" + absolute.Substring(root.Length).Replace('\\', '/');
+            if (!AssetDatabase.IsValidFolder(Path.GetDirectoryName(candidate).Replace('\\', '/'))) return false;
+            path = candidate; error = null; return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException || exception is NotSupportedException || exception is IOException || exception is UnauthorizedAccessException)
+        { return false; }
+    }
+
     public static DungeonDefinition Create(string path, string name)
     {
-        if (!path.StartsWith("Assets/", StringComparison.Ordinal) || File.Exists(path)) throw new InvalidOperationException("새 Assets 경로를 선택하세요.");
+        if (!TryNewAssetPath(path, out path, out string error)) throw new InvalidOperationException(error);
         var dungeon = ScriptableObject.CreateInstance<DungeonDefinition>();
         dungeon.dungeonId = "dungeon." + Guid.NewGuid().ToString("N"); dungeon.displayName = name;
         AssetDatabase.CreateAsset(dungeon, path);
@@ -25,6 +44,7 @@ public static class DungeonAuthoringService
     }
     public static DungeonFloorDefinition AddFloor(DungeonDefinition dungeon)
     {
+        if (dungeon == null || !EditorUtility.IsPersistent(dungeon)) throw new InvalidOperationException("먼저 던전 에셋을 저장하세요.");
         var list = dungeon.floors == null ? new List<DungeonFloorDefinition>() : new List<DungeonFloorDefinition>(dungeon.floors);
         if (list.Count >= DungeonExpeditionData.MaximumFloors) throw new InvalidOperationException("최대 16층까지 지원합니다.");
         string path = AssetDatabase.GetAssetPath(dungeon);
@@ -34,22 +54,22 @@ public static class DungeonAuthoringService
         floor.floorId = "floor." + Guid.NewGuid().ToString("N"); floor.displayName = $"{list.Count + 1}층";
         floor.map = DungeonLayoutFactory.LegacyMap(list.Count == 0 ? dungeon.layoutIndex : list.Count % 3);
         floor.monsters = dungeon.monsters != null && dungeon.monsters.Length > 0 ? Clone(dungeon.monsters)
-            : DungeonCatalog.Active.monsterPrefabs.Select(prefab => new MonsterSpawnEntry { prefab = prefab, count = 1 }).ToArray();
+            : (DungeonCatalog.Active?.monsterPrefabs ?? Array.Empty<MonsterPrefab>()).Select(prefab => new MonsterSpawnEntry { prefab = prefab, count = 1 }).ToArray();
         floor.corpses = dungeon.corpses != null && dungeon.corpses.Length > 0 ? Clone(dungeon.corpses)
-            : DungeonCatalog.Active.corpsePrefabs.Select(prefab => new CorpseSpawnEntry { prefab = prefab, count = 1 }).ToArray();
+            : (DungeonCatalog.Active?.corpsePrefabs ?? Array.Empty<CorpsePrefab>()).Select(prefab => new CorpseSpawnEntry { prefab = prefab, count = 1 }).ToArray();
         AssetDatabase.CreateAsset(floor, AssetDatabase.GenerateUniqueAssetPath(directory + $"/floor-{list.Count + 1:00}.asset"));
         Undo.RecordObject(dungeon, "Add dungeon floor"); list.Add(floor); dungeon.floors = list.ToArray();
         NormalizeStairs(dungeon); EditorUtility.SetDirty(dungeon);
         return floor;
     }
-    private static MonsterSpawnEntry[] Clone(MonsterSpawnEntry[] rows) => rows.Select(row => new MonsterSpawnEntry { prefab = row.prefab, count = row.count }).ToArray();
-    private static CorpseSpawnEntry[] Clone(CorpseSpawnEntry[] rows) => rows.Select(row => new CorpseSpawnEntry { prefab = row.prefab, count = row.count }).ToArray();
+    private static MonsterSpawnEntry[] Clone(MonsterSpawnEntry[] rows) => rows.Select(row => row == null ? null : new MonsterSpawnEntry { prefab = row.prefab, count = row.count }).ToArray();
+    private static CorpseSpawnEntry[] Clone(CorpseSpawnEntry[] rows) => rows.Select(row => row == null ? null : new CorpseSpawnEntry { prefab = row.prefab, count = row.count }).ToArray();
 
     public static void NormalizeStairs(DungeonDefinition dungeon)
     {
         for (int i = 0; i < dungeon.floors.Length; i++)
         {
-            var floor = dungeon.floors[i]; if (floor == null) continue;
+            var floor = dungeon.floors[i]; if (floor == null || floor.map == null) continue;
             Undo.RecordObject(floor, "Connect dungeon stairs"); var map = floor.map;
             map.hasStairsUp = i > 0; map.hasStairsDown = i < dungeon.floors.Length - 1;
             var available = new List<Vector2Int>();
@@ -71,12 +91,13 @@ public static class DungeonAuthoringService
         if (!dungeon.IsValid(out error)) return false;
         var catalog = DungeonCatalog.Active;
         if (catalog == null) { error = "Resources/DungeonCatalog.asset이 없습니다."; return false; }
+        if (catalog.dungeons == null || catalog.monsterPrefabs == null || catalog.corpsePrefabs == null)
+        { error = "카탈로그의 던전·프리팹 목록을 확인하세요."; return false; }
         if (catalog.dungeons.Any(item => item != null && item != dungeon && item.dungeonId == dungeon.dungeonId))
         { error = "다른 던전과 ID가 중복되었습니다."; return false; }
         var monsters = new List<MonsterPrefab>(catalog.monsterPrefabs); var corpses = new List<CorpsePrefab>(catalog.corpsePrefabs);
-        if (dungeon.floors != null && dungeon.floors.Length > 0)
-            foreach (var floor in dungeon.floors) { foreach (var row in floor.monsters) if (row.count > 0) monsters.Add(row.prefab); foreach (var row in floor.corpses) if (row.count > 0) corpses.Add(row.prefab); }
-        else { foreach (var row in dungeon.monsters) if (row.count > 0) monsters.Add(row.prefab); foreach (var row in dungeon.corpses) if (row.count > 0) corpses.Add(row.prefab); }
+        foreach (var row in dungeon.MonsterSpawns()) if (row.count > 0) monsters.Add(row.prefab);
+        foreach (var row in dungeon.CorpseSpawns()) if (row.count > 0) corpses.Add(row.prefab);
         var candidate = UnityEngine.Object.Instantiate(catalog);
         try
         {

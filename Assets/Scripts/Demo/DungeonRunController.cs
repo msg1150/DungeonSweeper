@@ -82,8 +82,6 @@ public class DungeonRunController : MonoBehaviour
         entrance = DungeonLayoutFactory.Entrance;
         player.position = entrance;
         if (playerBody != null) playerBody.position = entrance;
-        DungeonVisionFog legacyWorldFog = FindAnyObjectByType<DungeonVisionFog>();
-        if (legacyWorldFog != null) legacyWorldFog.gameObject.SetActive(false);
         if (saved == null || (expedition != null && !expedition.Current.visited))
         {
             BuildDemoWorld();
@@ -298,15 +296,6 @@ public class DungeonRunController : MonoBehaviour
         foreach (EnemyAgent enemy in enemies) if (enemy != null) enemy.HearNoise(noisePosition);
     }
 
-    public void NotifyPlayerCaught()
-    {
-        if (!IsRunActive) return;
-        if (dismantleSession != null) EndDismantling("몬스터가 접근해 작업을 취소했습니다!");
-        player.position = entrance + new Vector2(.7f, 0f);
-        if (playerBody != null) playerBody.linearVelocity = Vector2.zero;
-        Say("발각됨! 공격할 수 없으니 대시로 거리를 벌리세요.");
-    }
-
     public void HandlePlayerDeath()
     {
         if (!IsRunActive) return;
@@ -432,12 +421,13 @@ public class DungeonRunController : MonoBehaviour
         foreach (LootDefinition loot in pendingLoot) data.pendingLoot.Add(LootSaveData.Capture(loot));
         if (expedition != null)
         {
-            var current = expedition.Current;
+            // 먼저 독립 사본을 만든다. 반환할 현재 층 목록을 실제 탐험에 연결하면
+            // 저장 호출자의 편집이 내부 층 상태까지 바꾸게 된다.
+            data.expedition = expedition.Copy();
+            var current = data.expedition.Current;
             current.visited = true; current.corpses = data.corpses; current.enemies = data.enemies;
             current.discoveredCells = data.discoveredCells; current.specialGate = specialGate;
-            // 저장 호출자가 스냅샷을 편집해도 현재 탐험 데이터가 바뀌지 않는다.
-            data.expedition = JsonUtility.FromJson<DungeonExpeditionData>(JsonUtility.ToJson(expedition));
-            data.mapSnapshot = data.expedition.Current.map;
+            data.mapSnapshot = current.map;
             data.hasMapSnapshot = true; data.expeditionVersion = 1;
         }
         return data;

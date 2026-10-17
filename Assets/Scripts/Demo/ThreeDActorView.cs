@@ -19,7 +19,7 @@ public sealed class ThreeDActorView : MonoBehaviour
     public string CurrentAnimation => state;
     public Vector2 VisibleForward => faceOrigin != null && faceForward != null
         ? new Vector2(faceForward.position.x-faceOrigin.position.x, faceForward.position.z-faceOrigin.position.z).normalized
-        : new Vector2(model.transform.forward.x, model.transform.forward.z);
+        : model != null ? new Vector2(model.transform.forward.x, model.transform.forward.z) : Vector2.down;
 
     public static ThreeDActorView Attach(GameObject owner, string kind, bool defeated = false, GameObject modelPrefab = null)
     {
@@ -107,12 +107,12 @@ public sealed class ThreeDActorView : MonoBehaviour
             Face(direction, next == "Attack" || (movement != null && movement.IsDashing));
         }
         SetState(next);
-        if (next == "Attack" && animation != null)
+        if (next == "Attack" && animation != null && animation["Attack"] != null)
         {
             animation["Attack"].normalizedTime = enemy.AttackProgress;
             animation.Sample(); // 판정 시점과 같은 정규화 시간으로 무기를 표시한다.
         }
-        if (next == "Walk" && animation != null)
+        if (next == "Walk" && animation != null && animation["Walk"] != null)
             animation["Walk"].speed = Mathf.Clamp(velocity.magnitude / (movement != null ? 4f : 1.6f), .65f, 2.2f);
     }
 

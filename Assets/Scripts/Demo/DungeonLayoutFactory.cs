@@ -19,6 +19,11 @@ public static class DungeonLayoutFactory
     private static readonly Vector2Int[] searchQueue = new Vector2Int[DungeonFloorMap.MaximumSize * DungeonFloorMap.MaximumSize];
     private static readonly Vector2Int[] directions = { Vector2Int.left, Vector2Int.right, Vector2Int.down, Vector2Int.up };
     private static readonly List<Vector2> roamCandidates = new(Columns * Rows), roamDistant = new(Columns * Rows);
+    private static readonly List<Vector2> spawnFloorPoints = new(), spawnCandidates = new();
+    private static readonly List<float> spawnEntranceDistancesSquared = new();
+    private static readonly List<Vector2> spawnOccupiedPoints = new();
+    private static readonly List<float> spawnClearancesSquared = new();
+    private static bool spawnPointsReady;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetRuntimeState()
@@ -28,6 +33,9 @@ public static class DungeonLayoutFactory
         floorSprite = null;
         wallSprite = null;
         System.Array.Clear(floor, 0, floor.Length);
+        spawnPointsReady = false;
+        spawnFloorPoints.Clear(); spawnCandidates.Clear(); spawnEntranceDistancesSquared.Clear();
+        spawnOccupiedPoints.Clear(); spawnClearancesSquared.Clear();
     }
 
     public static Vector2 Entrance => activeMap == null ? CellCenter(2, 1) : activeMap.Center(activeMap.entrance);
@@ -45,6 +53,7 @@ public static class DungeonLayoutFactory
     public static void CreateLayout(DungeonFloorMap map, int savedLayoutIndex = 0)
     {
         if (GameObject.Find("Runtime Dungeon Layout") != null) return;
+        spawnPointsReady = false;
         System.Array.Clear(floor, 0, floor.Length);
         if (map == null) BuildFloorPlan(savedLayoutIndex);
         else
@@ -78,29 +87,26 @@ public static class DungeonLayoutFactory
 
     public static Vector2 RandomFloorPosition(float minimumDistance)
     {
-        List<Vector2> candidates = new List<Vector2>();
-        List<Vector2> available = new List<Vector2>();
-        float farthestDistance = 0f;
-        for (int x = 0; x < Columns; x++)
-        for (int y = 0; y < Rows; y++)
+        EnsureSpawnPoints();
+        spawnCandidates.Clear();
+        float minimumSquared = Mathf.Max(0f, minimumDistance) * Mathf.Max(0f, minimumDistance);
+        float farthestSquared = 0f;
+        for (int i = 0; i < spawnFloorPoints.Count; i++)
         {
-            if (!floor[x, y]) continue;
-            Vector2 position = CellCenter(x, y);
-            float distance = Vector2.Distance(position, Entrance);
-            available.Add(position);
-            farthestDistance = Mathf.Max(farthestDistance, distance);
-            if (distance >= minimumDistance) candidates.Add(position);
+            float distanceSquared = spawnEntranceDistancesSquared[i];
+            farthestSquared = Mathf.Max(farthestSquared, distanceSquared);
+            if (distanceSquared >= minimumSquared) spawnCandidates.Add(spawnFloorPoints[i]);
         }
 
         // Extra monster types may request a distance beyond the map's bounds.
         // Keep their spawns in the deeper part of the available layout instead.
-        if (candidates.Count == 0)
-            foreach (Vector2 position in available)
-                if (Vector2.Distance(position, Entrance) >= farthestDistance * .75f)
-                    candidates.Add(position);
+        if (spawnCandidates.Count == 0)
+            for (int i = 0; i < spawnFloorPoints.Count; i++)
+                if (spawnEntranceDistancesSquared[i] >= farthestSquared * .75f * .75f)
+                    spawnCandidates.Add(spawnFloorPoints[i]);
 
-        if (candidates.Count == 0) return Entrance;
-        return candidates[Random.Range(0, candidates.Count)];
+        if (spawnCandidates.Count == 0) return Entrance;
+        return spawnCandidates[Random.Range(0, spawnCandidates.Count)];
     }
 
     public static Vector2 RandomRoamPosition(Vector2 origin, Vector2? previousOrigin = null, float? minimumOverride = null)
@@ -135,24 +141,66 @@ public static class DungeonLayoutFactory
 
     public static Vector2 PickSpawnPosition(float minimumDistance, float maximumDistance, IReadOnlyList<Vector2> occupied, float separation)
     {
-        var distances = ReachableDistances(ToFloorCell(Entrance));
-        var candidates = new List<Vector2>();
+        EnsureSpawnPoints();
+        UpdateSpawnClearances(occupied);
+        spawnCandidates.Clear();
+        float minimumSquared = Mathf.Max(0f, minimumDistance) * Mathf.Max(0f, minimumDistance);
+        float maximumSquared = Mathf.Max(0f, maximumDistance) * Mathf.Max(0f, maximumDistance);
+        float separationSquared = Mathf.Max(0f, separation) * Mathf.Max(0f, separation);
         Vector2 fallback = Entrance;
-        float bestGap = -1f;
-        for (int x = 0; x < Columns; x++)
-        for (int y = 0; y < Rows; y++)
+        float bestGapSquared = -1f;
+        for (int i = 0; i < spawnFloorPoints.Count; i++)
+        {
+            Vector2 point = spawnFloorPoints[i];
+            float entranceSquared = spawnEntranceDistancesSquared[i];
+            if (IsReserved(point)) continue;
+            float gapSquared = spawnClearancesSquared[i];
+            if (gapSquared < .0001f) continue; // 밀집 설정에서도 같은 칸을 중복 사용하지 않는다.
+            if (gapSquared > bestGapSquared) { fallback = point; bestGapSquared = gapSquared; }
+            if (entranceSquared >= minimumSquared && entranceSquared <= maximumSquared && gapSquared >= separationSquared) spawnCandidates.Add(point);
+        }
+        return spawnCandidates.Count > 0 ? spawnCandidates[Random.Range(0, spawnCandidates.Count)] : fallback;
+    }
+
+    private static void EnsureSpawnPoints()
+    {
+        if (spawnPointsReady) return;
+        spawnFloorPoints.Clear(); spawnEntranceDistancesSquared.Clear();
+        spawnOccupiedPoints.Clear(); spawnClearancesSquared.Clear();
+        // 입구에서 닿는 바닥은 층 구성당 한 번만 찾는다. AI의 공용 BFS 버퍼와 분리해
+        // 순찰/추적 탐색이 실행되어도 스폰 후보 캐시가 덮어써지지 않게 한다.
+        var distances = ReachableDistances(ToFloorCell(Entrance));
+        Vector2 entrance = Entrance;
+        for (int x = 0; x < Columns; x++) for (int y = 0; y < Rows; y++)
         {
             if (distances[x, y] < 0) continue;
             Vector2 point = CellCenter(x, y);
-            float entranceDistance = Vector2.Distance(point, Entrance);
-            if (IsReserved(point)) continue;
-            float gap = entranceDistance;
-            if (occupied != null) foreach (Vector2 other in occupied) gap = Mathf.Min(gap, Vector2.Distance(point, other));
-            if (gap < .01f) continue; // 밀집 설정에서도 같은 칸을 중복 사용하지 않는다.
-            if (gap > bestGap) { fallback = point; bestGap = gap; }
-            if (entranceDistance >= minimumDistance && entranceDistance <= maximumDistance && gap >= separation) candidates.Add(point);
+            float distanceSquared = (point - entrance).sqrMagnitude;
+            spawnFloorPoints.Add(point); spawnEntranceDistancesSquared.Add(distanceSquared); spawnClearancesSquared.Add(distanceSquared);
         }
-        return candidates.Count > 0 ? candidates[Random.Range(0, candidates.Count)] : fallback;
+        spawnPointsReady = true;
+    }
+
+    private static void UpdateSpawnClearances(IReadOnlyList<Vector2> occupied)
+    {
+        int count = occupied?.Count ?? 0;
+        bool rebuild = count < spawnOccupiedPoints.Count;
+        for (int i = 0; !rebuild && i < spawnOccupiedPoints.Count; i++)
+            rebuild = !spawnOccupiedPoints[i].Equals(occupied[i]);
+        if (rebuild)
+        {
+            spawnOccupiedPoints.Clear();
+            for (int i = 0; i < spawnFloorPoints.Count; i++) spawnClearancesSquared[i] = spawnEntranceDistancesSquared[i];
+        }
+        // 스폰 계획은 기존 배치 뒤에 하나씩 추가한다. 새 위치만 반영하여 큰 맵에서도
+        // 같은 개체와의 거리를 모든 후속 스폰에서 다시 계산하지 않는다.
+        // 목록이 축소되거나 기존 위치가 바뀐 경우에는 위에서 안전하게 다시 계산한다.
+        for (int j = spawnOccupiedPoints.Count; j < count; j++)
+        {
+            Vector2 point = occupied[j]; spawnOccupiedPoints.Add(point);
+            for (int i = 0; i < spawnFloorPoints.Count; i++)
+                spawnClearancesSquared[i] = Mathf.Min(spawnClearancesSquared[i], (spawnFloorPoints[i] - point).sqrMagnitude);
+        }
     }
 
     private static int[,] ReachableDistances(Vector2Int start)
@@ -204,21 +252,9 @@ public static class DungeonLayoutFactory
 
     public static Vector2 CellCenter(int x, int y) => new Vector2((x - (Columns - 1) * .5f) * CellSize, (y - (Rows - 1) * .5f) * CellSize);
 
-    public static Vector2 GetNextPathPoint(Vector2 from, Vector2 destination)
-    {
-        if (!GameSaveData.Finite(from) || !GameSaveData.Finite(destination)) return from;
-        Vector2Int start = ToFloorCell(from);
-        Vector2Int end = ToFloorCell(destination);
-        if (start == end) return IsWalkablePosition(destination) ? destination : CellCenter(end.x, end.y);
-        Search(start, end);
-        if (searchDistances[end.x, end.y] < 0) return CellCenter(start.x, start.y);
-        Vector2Int step = end;
-        while (searchPrevious[step.x, step.y] != start) step = searchPrevious[step.x, step.y];
-        return CellCenter(step.x, step.y);
-    }
-
     private static void BuildFloorPlan(int savedLayoutIndex)
     {
+        spawnPointsReady = false;
         activeMap = null; Columns = 20; Rows = 12;
         layoutIndex = savedLayoutIndex >= 0 && savedLayoutIndex < 3 ? savedLayoutIndex : Random.Range(0, 3);
         AddRoom(0, 0, 4, 3); // 모든 템플릿은 같은 시작 방을 공유한다.
@@ -289,10 +325,11 @@ public static class DungeonLayoutFactory
             Mathf.Clamp(Mathf.RoundToInt(position.x / CellSize + (Columns - 1) * .5f), 0, Columns - 1),
             Mathf.Clamp(Mathf.RoundToInt(position.y / CellSize + (Rows - 1) * .5f), 0, Rows - 1));
         if (IsFloor(nearest.x, nearest.y)) return nearest;
-        for (int radius = 1; radius < Columns; radius++)
+        for (int radius = 1; radius < Mathf.Max(Columns, Rows); radius++)
         for (int x = Mathf.Max(0, nearest.x - radius); x <= Mathf.Min(Columns - 1, nearest.x + radius); x++)
         for (int y = Mathf.Max(0, nearest.y - radius); y <= Mathf.Min(Rows - 1, nearest.y + radius); y++)
-            if (IsFloor(x, y)) return new Vector2Int(x, y);
+            if ((Mathf.Abs(x - nearest.x) == radius || Mathf.Abs(y - nearest.y) == radius) && IsFloor(x, y))
+                return new Vector2Int(x, y);
         return new Vector2Int(2, 1);
     }
     private static void CreateFloor(Transform parent, Vector2 position)

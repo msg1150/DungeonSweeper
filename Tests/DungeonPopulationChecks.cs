@@ -15,6 +15,8 @@ public static class DungeonPopulationChecks
         var grid = (bool[,])typeof(DungeonLayoutFactory).GetField("floor", flags).GetValue(null);
         var originalGrid = (bool[,])grid.Clone();
         int originalIndex = DungeonLayoutFactory.LayoutIndex;
+        int originalWidth = DungeonLayoutFactory.Width, originalHeight = DungeonLayoutFactory.Height;
+        var originalMap = DungeonLayoutFactory.ActiveMap;
         var random = UnityEngine.Random.state;
         var database = MonsterDatabase.Active;
         var definitions = database.monsters;
@@ -71,6 +73,34 @@ public static class DungeonPopulationChecks
                 check(spawnsValid, "layout " + layout + " spreads corpses and enemies across 100 seeds with an early recovery target");
                 check(pathsValid, "layout " + layout + " reaches every spawn and follows corridors without cutting corners");
                 check(widePatrol, "layout " + layout + " starts every patrol with a distant destination");
+                var occupied = new List<Vector2>();
+                for (int x = 0; x < DungeonLayoutFactory.Width; x++) for (int y = 0; y < DungeonLayoutFactory.Height; y++)
+                {
+                    Vector2 point = DungeonLayoutFactory.CellCenter(x, y);
+                    if (DungeonLayoutFactory.IsWalkableCell(x, y) && !DungeonLayoutFactory.IsReserved(point)) occupied.Add(point);
+                }
+                Vector2 onlyFree = occupied[0]; occupied.RemoveAt(0);
+                check(DungeonLayoutFactory.PickSpawnPosition(0f, float.PositiveInfinity, occupied, 0f) == onlyFree,
+                    "dense spawn sampling finds the only unoccupied cell");
+                Vector2 newlyFree = occupied[0]; occupied[0] = onlyFree;
+                check(DungeonLayoutFactory.PickSpawnPosition(0f, float.PositiveInfinity, occupied, 0f) == newlyFree,
+                    "replacing an occupied position invalidates cached spawn clearance");
+                occupied.Clear();
+                var cleared = DungeonLayoutFactory.PickSpawnPosition(0f, float.PositiveInfinity, occupied, 0f);
+                check(DungeonLayoutFactory.IsWalkablePosition(cleared) && !DungeonLayoutFactory.IsReserved(cleared),
+                    "clearing occupied positions resets the spawn clearance cache");
+            }
+            foreach (Vector2Int size in new[] { new Vector2Int(4, 64), new Vector2Int(64, 4) })
+            {
+                Array.Clear(grid, 0, grid.Length);
+                typeof(DungeonLayoutFactory).GetField("Columns", flags).SetValue(null, size.x);
+                typeof(DungeonLayoutFactory).GetField("Rows", flags).SetValue(null, size.y);
+                int x = size.x > size.y ? 60 : 1, y = size.y > size.x ? 60 : 1;
+                for (int dx = 0; dx < 2; dx++) for (int dy = 0; dy < 2; dy++) grid[x + dx, y + dy] = true;
+                var expected = new Vector2Int(x, y);
+                var found = DungeonLayoutFactory.WorldToCell(DungeonLayoutFactory.CellCenter(0, 0));
+                check(found == expected && DungeonLayoutFactory.IsWalkableCell(found.x, found.y),
+                    "nearest floor search reaches distant rooms in a " + size.x + " by " + size.y + " map");
             }
         }
         finally
@@ -78,6 +108,10 @@ public static class DungeonPopulationChecks
             database.monsters = definitions;
             Array.Copy(originalGrid, grid, grid.Length);
             typeof(DungeonLayoutFactory).GetField("layoutIndex", flags).SetValue(null, originalIndex);
+            typeof(DungeonLayoutFactory).GetField("Columns", flags).SetValue(null, originalWidth);
+            typeof(DungeonLayoutFactory).GetField("Rows", flags).SetValue(null, originalHeight);
+            typeof(DungeonLayoutFactory).GetField("activeMap", flags).SetValue(null, originalMap);
+            typeof(DungeonLayoutFactory).GetField("spawnPointsReady", flags).SetValue(null, false);
             UnityEngine.Random.state = random;
         }
     }

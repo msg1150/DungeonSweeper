@@ -37,6 +37,13 @@ public static class TownEconomyChecks
                 "warehouse groups quantities while preserving individual price tiers");
             prices[0].quantity = 999;
             check(TownProgress.MaterialCount(LootKinds.GoblinHide) == 3, "warehouse views cannot mutate authoritative quantities");
+            check(TownProgress.MaterialCostPreview(LootKinds.GoblinHide, 3) == 220,
+                "material preview consumes the cheapest price tiers first");
+            long allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            for (int preview = 0; preview < 8; preview++) TownProgress.MaterialCostPreview(LootKinds.GoblinHide, 3);
+            check(GC.GetAllocatedBytesForCurrentThread() == allocatedBefore,
+                "unchanged material cost previews allocate no managed memory after warmup");
+            check(TownProgress.MaterialCostPreview(LootKinds.GoblinHide, -1) == 0, "negative material preview quantities cannot produce negative prices");
             var cachePanel = UnityEngine.Object.FindAnyObjectByType<TownCommercePanel>();
             var groupsMethod = typeof(TownCommercePanel).GetMethod("WarehouseGroups", BindingFlags.Instance | BindingFlags.NonPublic);
             var stacksMethod = typeof(TownCommercePanel).GetMethod("WarehouseStacks", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -54,6 +61,8 @@ public static class TownEconomyChecks
             TownProgress.SetSaleLock(LootKinds.GoblinHide, false);
             check(TownProgress.TrySellOne(prices[0].id, out _) && TownProgress.Gold == 40 && TownProgress.MaterialCount(LootKinds.GoblinHide) == 2,
                 "selling removes exactly one chosen price-tier item");
+            check(TownProgress.MaterialCostPreview(LootKinds.GoblinHide, 3) == 180,
+                "selling refreshes the cached material cost without retaining depleted stacks");
             var soldStacks = (List<WarehouseStackData>)stacksMethod.Invoke(cachePanel, new object[] { LootKinds.GoblinHide });
             check(!ReferenceEquals(cachedStacks, soldStacks) && soldStacks.Count == 1 && soldStacks[0].quantity == 2,
                 "sale refreshes cached quantities and removes depleted price tiers");

@@ -189,7 +189,7 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
 
     public EnemySaveData Capture() => new()
     {
-        prefabId = PrefabId, definition = definition, position = transform.position, roamTarget = roamTarget,
+        prefabId = PrefabId, definition = definition?.Copy(), position = transform.position, roamTarget = roamTarget,
         investigationTarget = investigationTarget, attackCooldown = attackCooldown, attackTimer = attackTimer,
         roamSeconds = patrolPauseRemaining, investigationSeconds = investigationRemaining,
         damageApplied = damageApplied, wasChasing = wasChasing, wasInvestigating = wasInvestigating,

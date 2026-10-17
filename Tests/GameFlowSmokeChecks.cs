@@ -175,15 +175,17 @@ public static class GameFlowSmokeChecks
                     foreach (var wall in layoutRoot.GetComponentsInChildren<BoxCollider2D>())
                     {
                         bool vertical = wall.name.StartsWith("West") || wall.name.StartsWith("East");
+                        bool solid = wall.name.StartsWith("Painted Wall");
                         Vector3 scale = wall.transform.lossyScale;
                         float width = wall.size.x * Mathf.Abs(scale.x), height = wall.size.y * Mathf.Abs(scale.y);
-                        Check(Mathf.Abs(width - (vertical ? .18f : 1.63f)) < .001f
-                            && Mathf.Abs(height - (vertical ? 1.63f : .18f)) < .001f, "native wall has intended world dimensions");
+                        Check(Mathf.Abs(width - (solid ? 1.45f : vertical ? .18f : 1.63f)) < .001f
+                            && Mathf.Abs(height - (solid ? 1.45f : vertical ? 1.63f : .18f)) < .001f, "native wall has intended world dimensions");
                         Vector2 axis = vertical ? Vector2.right : Vector2.up;
-                        Vector2 origin = (Vector2)wall.transform.position - axis * .5f;
+                        float thickness = vertical ? width : height;
+                        Vector2 origin = (Vector2)wall.transform.position - axis * (thickness * .5f + .5f);
                         bool hitExpectedWall = false;
                         foreach (RaycastHit2D hit in Physics2D.RaycastAll(origin, axis, 1f))
-                            if (hit.collider == wall && Mathf.Abs(hit.distance - .41f) < .005f) hitExpectedWall = true;
+                            if (hit.collider == wall && Mathf.Abs(hit.distance - .5f) < .005f) hitExpectedWall = true;
                         Check(hitExpectedWall, "native physics ray hits the visible wall boundary");
                     }
                     CallShell("OpenPause");

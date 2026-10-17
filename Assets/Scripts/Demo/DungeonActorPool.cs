@@ -29,7 +29,7 @@ public sealed class DungeonActorPool : MonoBehaviour
         private readonly Collider2D[] colliders;
         private readonly bool[] colliderEnabled;
         private readonly Rigidbody2D[] bodies;
-        private MonoBehaviour[] behaviours;
+        private readonly List<MonoBehaviour> behaviours = new();
 
         public Actor(MonoBehaviour prefab, Transform parent)
         {
@@ -71,8 +71,8 @@ public sealed class DungeonActorPool : MonoBehaviour
         public void Reset()
         {
             Object.SetActive(false);
-            // 첫 Spawn에서 추가되는 애니메이터까지 포함해 한 번만 캐시한다.
-            behaviours ??= Object.GetComponentsInChildren<MonoBehaviour>(true);
+            // 이후 대여에서 추가된 컴포넌트도 빠짐없이 초기화한다. 리스트 용량은 재사용한다.
+            Object.GetComponentsInChildren(true, behaviours);
             foreach (var behaviour in behaviours)
                 if (behaviour != null && behaviour is IDungeonPoolResettable resettable) resettable.ResetForPool();
             foreach (var body in bodies) if (body != null) { body.linearVelocity = Vector2.zero; body.angularVelocity = 0f; }

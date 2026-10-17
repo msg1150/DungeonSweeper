@@ -33,13 +33,6 @@ public sealed class GridInventory
         return null;
     }
 
-    public bool ContainsShape(LootShape shape)
-    {
-        foreach (StoredLoot item in items)
-            if (item.Definition.Shape == shape) return true;
-        return false;
-    }
-
     public bool TryPlace(LootDefinition loot, int startX, int startY)
     {
         if (loot == null) return false;

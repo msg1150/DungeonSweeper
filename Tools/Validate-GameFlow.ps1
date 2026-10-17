@@ -20,6 +20,14 @@ foreach ($taskFolder in @('Scripts', 'Resources', 'Prefabs', 'Scenes', 'Settings
     $taskFolderMeta = Join-Path $taskProjectRoot "Assets/$taskFolder.meta"
     if (Test-Path -LiteralPath $taskFolderMeta) { Copy-Item -LiteralPath $taskFolderMeta -Destination "$taskValidationRoot/Assets" -Force }
 }
+# Directory copies do not remove old files. Drop only the retired empty source placeholders
+# from this isolated fixture so compilation also verifies their removal from the real project.
+foreach ($taskRetiredSource in @('DungeonDemoBootstrap.cs', 'DungeonTestVerticalSlice.cs', 'DungeonVisionFog.cs')) {
+    $taskRetiredPath = Join-Path $taskValidationRoot "Assets/Scripts/Demo/$taskRetiredSource"
+    foreach ($taskRetiredFile in @($taskRetiredPath, ($taskRetiredPath + '.meta'))) {
+        if (Test-Path -LiteralPath $taskRetiredFile) { Remove-Item -LiteralPath $taskRetiredFile -Force }
+    }
+}
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'ProjectSettings') -Destination $taskValidationRoot -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Packages/manifest.json'), (Join-Path $taskProjectRoot 'Packages/packages-lock.json') -Destination "$taskValidationRoot/Packages" -Force
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/GameFlowSmokeChecks.cs') -Destination "$taskValidationRoot/Assets/Editor/GameFlowSmokeChecks.cs" -Force

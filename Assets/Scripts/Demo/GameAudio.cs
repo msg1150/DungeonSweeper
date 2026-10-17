@@ -4,7 +4,6 @@ public sealed class GameAudio : MonoBehaviour
 {
     private AudioSource music, effects;
     private AudioListener fallbackListener;
-    private GameSettingsData appliedSettings;
 
     private void Awake()
     {
@@ -22,7 +21,6 @@ public sealed class GameAudio : MonoBehaviour
         if (GameSettings.Current == null) return;
         music.volume = GameSettings.Current.musicVolume;
         effects.volume = GameSettings.Current.effectsVolume;
-        appliedSettings = GameSettings.Current;
         music.outputAudioMixerGroup = MainMenuPresentationConfig.Active.musicMixerGroup;
         effects.outputAudioMixerGroup = MainMenuPresentationConfig.Active.effectsMixerGroup;
     }
@@ -44,7 +42,6 @@ public sealed class GameAudio : MonoBehaviour
         if (clip != null) music.Play();
     }
     public void PlayButton() { if (MainMenuPresentationConfig.Active.buttonSound != null) effects.PlayOneShot(MainMenuPresentationConfig.Active.buttonSound); }
-    private void Update() { if (!ReferenceEquals(appliedSettings, GameSettings.Current)) ApplyVolumes(); }
     public void PlayEffect(AudioClip clip) { if (clip != null) effects.PlayOneShot(clip); }
     private void OnDestroy() => GameSettings.Changed -= ApplyVolumes;
 }

@@ -53,15 +53,7 @@ public static class DungeonGenerationPreview
         if (!draft.IsValid(out error)) return null;
         var catalog = DungeonCatalog.Active;
         if (catalog == null || catalog.FindDungeon(draft.dungeonId) != null) { error = "카탈로그가 없거나 이미 채택한 후보입니다."; return null; }
-        path = (path ?? "").Replace('\\','/');
-        string assetsRoot = Path.GetFullPath(Application.dataPath) + Path.DirectorySeparatorChar;
-        string absolute;
-        try { absolute = Path.GetFullPath(path); }
-        catch (Exception exception) when (exception is ArgumentException || exception is NotSupportedException) { error = "올바른 Assets 경로를 선택하세요."; return null; }
-        if (!path.StartsWith("Assets/",StringComparison.Ordinal) || !absolute.StartsWith(assetsRoot,StringComparison.OrdinalIgnoreCase)
-            || !path.EndsWith(".asset",StringComparison.OrdinalIgnoreCase) || File.Exists(path)
-            || !AssetDatabase.IsValidFolder(Path.GetDirectoryName(path).Replace('\\','/')))
-        { error = "Assets 아래에 존재하지 않는 새 .asset 경로를 선택하세요."; return null; }
+        if (!DungeonAuthoringService.TryNewAssetPath(path, out path, out error)) return null;
         string folder = AssetDatabase.GenerateUniqueAssetPath(Path.GetDirectoryName(path).Replace('\\','/') + "/" + Path.GetFileNameWithoutExtension(path) + "-floors");
         var oldDungeons = catalog.dungeons; var oldMonsters = catalog.monsterPrefabs; var oldCorpses = catalog.corpsePrefabs;
         var created = new List<string>(); DungeonDefinition saved = null; bool ownsFolder = false;

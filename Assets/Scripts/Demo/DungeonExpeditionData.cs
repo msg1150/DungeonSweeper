@@ -14,6 +14,17 @@ public sealed class DungeonFloorState
     public List<CorpseSaveData> corpses = new();
     public List<EnemySaveData> enemies = new();
     public List<Vector2Int> discoveredCells = new();
+    public DungeonFloorState Copy()
+    {
+        var copy = (DungeonFloorState)MemberwiseClone();
+        copy.map = map?.Copy();
+        copy.monsterIds = monsterIds == null ? null : (string[])monsterIds.Clone();
+        copy.corpseIds = corpseIds == null ? null : (string[])corpseIds.Clone();
+        copy.corpses = corpses?.ConvertAll(item => item?.Copy());
+        copy.enemies = enemies?.ConvertAll(item => item?.Copy());
+        copy.discoveredCells = discoveredCells == null ? null : new List<Vector2Int>(discoveredCells);
+        return copy;
+    }
 }
 
 [Serializable]
@@ -23,6 +34,13 @@ public sealed class DungeonExpeditionData
     public int version = 1, currentFloor, exitFloor;
     public List<DungeonFloorState> floors = new();
     public DungeonFloorState Current => floors[currentFloor];
+    /// <summary>JSON 문자열과 파서 없이 가변 목록·도면·능력치를 모두 독립적으로 복사한다.</summary>
+    public DungeonExpeditionData Copy()
+    {
+        var copy = (DungeonExpeditionData)MemberwiseClone();
+        copy.floors = floors?.ConvertAll(floor => floor?.Copy());
+        return copy;
+    }
     public static DungeonExpeditionData Create(DungeonDefinition dungeon)
     {
         if (dungeon.floors == null || dungeon.floors.Length == 0) return null; // 이전 단층 저장과 호환한다.

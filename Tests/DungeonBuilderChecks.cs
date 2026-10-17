@@ -33,6 +33,20 @@ public static class DungeonBuilderChecks
         check(roundtrip.IsValid() && roundtrip.ResolvedExpedition == null && roundtrip.ResolvedMap == null, "legacy single-floor JSON ignores materialized empty optional objects");
         var journey = DungeonExpeditionData.Create(demo);
         check(journey.IsValid() && journey.exitFloor == 1 && journey.floors[0].map != demo.floors[0].map, "run snapshots copy authored maps and select exactly one extra exit floor");
+        journey.Current.enemies.Add(new EnemySaveData { definition = DungeonCatalog.Active.monsterPrefabs[0].stats.Copy() });
+        journey.Current.corpses.Add(new CorpseSaveData { session = new DismantleSaveData { successes = 1 },
+            loot = new List<LootSaveData> { LootSaveData.Capture(new LootDefinition("복사 검사", 1, 1, 7)) } });
+        var copied = journey.Copy();
+        copied.Current.map.tiles[0] = 99; copied.Current.monsterIds[0] = "changed";
+        copied.Current.enemies[0].definition.attackDamage++;
+        copied.Current.corpses[0].session.successes++;
+        copied.Current.corpses[0].loot[0].cells[0] = Vector2Int.one;
+        copied.Current.discoveredCells.Add(Vector2Int.one);
+        check(journey.Current.map.tiles[0] != 99 && journey.Current.monsterIds[0] != "changed"
+            && copied.Current.enemies[0].definition.attackDamage != journey.Current.enemies[0].definition.attackDamage
+            && journey.Current.corpses[0].session.successes == 1 && journey.Current.corpses[0].loot[0].cells[0] == Vector2Int.zero
+            && journey.Current.discoveredCells.Count == 0, "typed expedition copies isolate maps, spawn IDs, stats, loot geometry, sessions and exploration");
+        journey.Current.enemies.Clear(); journey.Current.corpses.Clear();
         journey.floors[1].map.tiles[0] = 99;
         check(!journey.IsValid() && demo.floors[1].map.tiles[0] != 99, "corrupt inactive maps are rejected without changing source assets");
         check(DungeonLayoutFactory.LegacyMap(0).IsValid(out _), "legacy template remains available for conversion");
@@ -62,6 +76,12 @@ public static class DungeonBuilderChecks
         check(run.FloorIndex == 0 && run.FloorCount == 2 && GameObject.Find("입구") != null && GameObject.Find("특수 탈출 게이트") == null,
             "first floor contains original portal and stairs but no second exit portal");
         var first = run.CaptureSave();
+        var liveJourney = (DungeonExpeditionData)typeof(DungeonRunController)
+            .GetField("expedition", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(run);
+        check(!ReferenceEquals(first.corpses, liveJourney.Current.corpses)
+            && !ReferenceEquals(first.enemies, liveJourney.Current.enemies)
+            && !ReferenceEquals(first.discoveredCells, liveJourney.Current.discoveredCells),
+            "capturing the active floor cannot attach caller-owned lists to the live expedition");
         first.health = 61; first.corpses[0].processed = true; first.enemies[0].attackCooldown = 2.75f;
         check(GameSaveService.TrySave(6, new GameSaveData { area = SaveArea.Dungeon, dungeon = first, town = TownProgress.Capture() }, out _)
             && GameSession.LoadSlot(6, out _), "multifloor checkpoint uses the protected save service");

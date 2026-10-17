@@ -129,6 +129,8 @@ git clone https://github.com/msg1150/DungeonSweeper.git
 
 `DungeonTuning`의 **Pool Capacity Per Prefab**은 기본 32개, **Pool Total Capacity**는 기본 128개입니다. 이는 비활성 인스턴스의 보관 한도이며 던전 스폰 수를 제한하지 않습니다. 0으로 설정하면 반환 시 보관하지 않습니다. 코드 검토 내용, 새 컴포넌트의 초기화 규칙과 측정 범위는 [성능 검토 문서](Docs/PERFORMANCE_REVIEW.md)를 참고하세요.
 
+2026-10-18 중간 점검에서는 스폰 거리 캐시, 탐험 스냅샷 복사, 창고 재료 가격 조회, 풀 초기화와 층별 출시 검사를 보완했습니다. 변경 내용과 검증 범위는 [코드 중간 점검 기록](Docs/CODE_REVIEW_2026-10-18.md)에 정리했습니다.
+
 ### 메뉴 미디어
 
 `MainMenuPresentation`의 **Background Image / Logo / Background Video**에 에셋을 지정하면 메뉴에 표시됩니다. 영상이 준비되기 전이나 재생에 실패하면 배경 이미지로 돌아갑니다. 영상 자체의 음성은 사용하지 않습니다.

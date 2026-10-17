@@ -30,6 +30,27 @@ public sealed class DungeonDefinition : ScriptableObject
     public int extraExitFloor = -1;
     [HideInInspector] public int generationVersion, generationSeed;
 
+    /// <summary>층이 있으면 층별 설정만 사용한다. 남아 있는 구 단층 설정은 스폰·등록·출시 검사에서 제외한다.</summary>
+    public IEnumerable<MonsterSpawnEntry> MonsterSpawns()
+    {
+        if (floors != null && floors.Length > 0)
+        {
+            foreach (var floor in floors) if (floor?.monsters != null)
+                foreach (var row in floor.monsters) if (row != null) yield return row;
+        }
+        else if (monsters != null) foreach (var row in monsters) if (row != null) yield return row;
+    }
+
+    public IEnumerable<CorpseSpawnEntry> CorpseSpawns()
+    {
+        if (floors != null && floors.Length > 0)
+        {
+            foreach (var floor in floors) if (floor?.corpses != null)
+                foreach (var row in floor.corpses) if (row != null) yield return row;
+        }
+        else if (corpses != null) foreach (var row in corpses) if (row != null) yield return row;
+    }
+
     public bool IsValid(out string error)
     {
         error = null;
@@ -54,21 +75,7 @@ public sealed class DungeonDefinition : ScriptableObject
         }
         if (!LootKinds.ValidId(dungeonId) || string.IsNullOrWhiteSpace(displayName) || layoutIndex < 0 || layoutIndex > 2
             || monsters == null || corpses == null) { error = "던전 기본 설정이 올바르지 않습니다."; return false; }
-        long total = 0;
-        foreach (var row in monsters)
-        {
-            if (row == null || row.count < 0 || (row.count > 0 && (row.prefab == null || !row.prefab.IsValid())))
-            { error = "몬스터 프리팹 또는 생성 수가 올바르지 않습니다."; return false; }
-            total += row.count;
-        }
-        foreach (var row in corpses)
-        {
-            if (row == null || row.count < 0 || (row.count > 0 && (row.prefab == null || !row.prefab.IsValid())))
-            { error = "시체 프리팹 또는 생성 수가 올바르지 않습니다."; return false; }
-            total += row.count;
-        }
-        if (total > DungeonLayoutFactory.PopulationCapacity(layoutIndex)) { error = "생성 수가 던전의 배치 가능한 바닥 수를 초과했습니다."; return false; }
-        return true;
+        return ValidateSpawns(monsters, corpses, DungeonLayoutFactory.PopulationCapacity(layoutIndex), out error, out _);
     }
     public static bool ValidateSpawns(MonsterSpawnEntry[] monsters, CorpseSpawnEntry[] corpses, int capacity, out string error, out long total)
     {

@@ -17,10 +17,17 @@ public static partial class TownProgress
 {
     private static List<WarehouseStackData> warehouse = new();
     private static readonly HashSet<string> saleLocks = new();
+    private static readonly List<WarehouseStackData> priceOrderedWarehouse = new();
+    private static bool priceOrderReady;
     private static int nextWarehouseId = 1;
     // UI는 창고 변경 때만 그룹화·정렬·깊은 복사를 다시 수행한다.
     public static uint WarehouseRevision { get; private set; }
-    private static void WarehouseChanged() => WarehouseRevision = unchecked(WarehouseRevision + 1);
+    private static void WarehouseChanged()
+    {
+        WarehouseRevision = unchecked(WarehouseRevision + 1);
+        priceOrderReady = false;
+        priceOrderedWarehouse.Clear(); // 교체된 창고 스냅샷을 캐시가 붙잡지 않는다.
+    }
     public static int BagLevel { get; private set; }
     public static int LastRecoveredCount { get; private set; }
     public static int LastRecoveredValue { get; private set; }
@@ -42,7 +49,13 @@ public static partial class TownProgress
     private static void RestoreWarehouse(TownProgressData data)
     {
         warehouse = new();
-        if (data.warehouse != null) foreach (var stack in data.warehouse) warehouse.Add(stack.Copy());
+        if (data.warehouse != null) foreach (var stack in data.warehouse)
+        {
+            var copy = stack.Copy();
+            // 구 저장의 비어 있는 종류 ID와 원점이 다른 도형은 불러올 때 한 번만 정규화한다.
+            copy.loot = LootSaveData.Capture(stack.loot.Restore());
+            warehouse.Add(copy);
+        }
         if (data.saleLockedKinds != null) foreach (string id in data.saleLockedKinds) saleLocks.Add(id);
         foreach (var stack in warehouse) if (stack.saleLocked) saleLocks.Add(stack.loot.Restore().KindId);
         BagLevel = data.bagLevel; LastRecoveredCount = data.lastRecoveredCount; LastRecoveredValue = data.lastRecoveredValue;
@@ -141,9 +154,18 @@ public static partial class TownProgress
     }
     public static long MaterialCostPreview(string kindId, int quantity)
     {
-        long cost = 0;
-        foreach (var stack in GetStacks(kindId))
+        if (quantity <= 0) return 0;
+        if (!priceOrderReady)
         {
+            priceOrderedWarehouse.AddRange(warehouse);
+            priceOrderedWarehouse.Sort((a, b) => a.unitPrice != b.unitPrice ? a.unitPrice.CompareTo(b.unitPrice) : a.id.CompareTo(b.id));
+            priceOrderReady = true;
+        }
+        long cost = 0;
+        // 읽기 전용 내부 조회에는 가격별 깊은 복사본을 만들지 않는다.
+        foreach (var stack in priceOrderedWarehouse)
+        {
+            if (stack.loot.kindId != kindId) continue;
             int count = Math.Min(quantity, stack.quantity); cost += (long)count * stack.unitPrice; quantity -= count;
             if (quantity == 0) break;
         }

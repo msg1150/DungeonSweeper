@@ -15,7 +15,6 @@ public class DungeonDemoHud : MonoBehaviour
     private Vector2 dragMousePosition;
     private Rect bagGrid;
     private float bagCell;
-    private bool legacyFogRemoved;
     private Vector2 pendingLootScroll;
     private const float MinimapViewportSize = 210f;
     // 층 이동 때 HUD가 다시 생성되어도 사용자가 고른 내부 지도 배율은 유지한다.
@@ -31,7 +30,6 @@ public class DungeonDemoHud : MonoBehaviour
     {
         if (run == null || GameShell.IsGameplayInputBlocked) return;
         using var gui = new GameGuiScope(true);
-        RemoveLegacyWorldFog();
         DrawHeader();
         DrawHealth();
         DrawMinimap();
@@ -79,14 +77,6 @@ public class DungeonDemoHud : MonoBehaviour
                 : Mathf.Clamp(MinimapViewportSize * .5f - (playerCell.x + .5f) * cell, MinimapViewportSize - width, 0f),
             height <= MinimapViewportSize ? (MinimapViewportSize - height) * .5f
                 : Mathf.Clamp(MinimapViewportSize * .5f - (rows - playerCell.y - .5f) * cell, MinimapViewportSize - height, 0f));
-    }
-
-    private void RemoveLegacyWorldFog()
-    {
-        if (legacyFogRemoved) return;
-        foreach (DungeonVisionFog fog in FindObjectsByType<DungeonVisionFog>())
-            fog.gameObject.SetActive(false);
-        legacyFogRemoved = true;
     }
 
     private void DrawHeader()

@@ -21,7 +21,6 @@ public sealed class DungeonTuning : ScriptableObject
     [Min(.1f)] public float lootValueMultiplier = 1f;
 
     [Header("Player Vision")]
-    [Min(10f)] public float fogWorldSize = 32f;
     [Min(.1f)] public float clearSightRadius = 4.5f;
     [Min(.1f)] public float darkSightRadius = 11f;
     [Range(0f, 1f)] public float outerDarkness = .5f;

@@ -70,16 +70,7 @@ public sealed class ReleaseBuildValidator : IPreprocessBuildWithReport
                 if (prefab != null) ValidatePrefab(prefab.gameObject, prefab.IsValid(), issues);
             if (catalog.corpsePrefabs != null) foreach (var prefab in catalog.corpsePrefabs)
                 if (prefab != null) ValidatePrefab(prefab.gameObject, prefab.IsValid(), issues);
-            if (catalog.dungeons != null) foreach (var dungeon in catalog.dungeons)
-            {
-                if (dungeon == null) continue;
-                if (dungeon.corpses != null) foreach (var row in dungeon.corpses)
-                {
-                    if (row?.prefab == null) continue;
-                    if (row.count > 0 && row.prefab.loot != null) foreach (var loot in row.prefab.loot)
-                        if (loot != null && loot.dropChance > 0f) lootKinds.Add(loot.kindId ?? "");
-                }
-            }
+            lootKinds = CollectLootSources(catalog);
         }
         TownEconomyConfig economy = Resources.Load<TownEconomyConfig>("TownEconomyConfig");
         if (economy?.bagUpgrades == null) issues.Add("Missing town economy config.");
@@ -126,6 +117,20 @@ public sealed class ReleaseBuildValidator : IPreprocessBuildWithReport
     }
 
     public static string[] EnabledScenes() => EditorBuildSettings.scenes.Where(scene => scene.enabled).Select(scene => scene.path).ToArray();
+    public static HashSet<string> CollectLootSources(DungeonCatalog catalog)
+    {
+        var kinds = new HashSet<string>();
+        if (catalog?.dungeons == null) return kinds;
+        foreach (var dungeon in catalog.dungeons)
+        {
+            if (dungeon == null) continue;
+            foreach (var row in dungeon.CorpseSpawns())
+                if (row.count > 0 && row.prefab != null && row.prefab.loot != null)
+                    foreach (var loot in row.prefab.loot)
+                        if (loot != null && loot.dropChance > 0f) kinds.Add(loot.kindId ?? "");
+        }
+        return kinds;
+    }
     private static void ValidatePrefab(GameObject prefab, bool valid, List<string> issues)
     {
         if (!PrefabUtility.IsPartOfPrefabAsset(prefab) || !valid || !prefab.activeSelf

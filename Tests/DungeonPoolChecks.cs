@@ -37,7 +37,9 @@ public static class DungeonPoolChecks
             second.GetComponentInChildren<SpriteRenderer>().enabled = false;
             second.GetComponent<BoxCollider2D>().enabled = false;
             second.transform.localScale = Vector3.one * 9f;
-            second.Capture().definition.attackDamage++;
+            var detached = second.Capture(); detached.definition.attackDamage++;
+            check(second.Capture().definition.attackDamage == monster.stats.attackDamage,
+                "editing a captured enemy definition cannot mutate its live actor");
             check(first.Capture().definition.attackDamage == monster.stats.attackDamage,
                 "pooled monster stats remain independent from prefab and other actors");
             check(DungeonActorPool.Return(first.gameObject) && DungeonActorPool.Return(second.gameObject), "actors return to their own prefab bucket");
@@ -56,7 +58,9 @@ public static class DungeonPoolChecks
                 && reused.GetComponent<BoxCollider2D>().enabled && reused.transform.localScale == monster.transform.localScale
                 && renderer.sprite == sprite, "reuse restores visuals and collider while honoring disabled sheet animation");
             monster.useSpriteSheetAnimation = originalAnimation;
+            var addedAfterReuse = reused.gameObject.AddComponent<PoolResetProbe>();
             DungeonActorPool.Return(reused.gameObject);
+            check(addedAfterReuse.WasReset, "components added after the first pool return also receive reset callbacks");
             var corpsePrefab = DungeonCatalog.Active.FindCorpse("corpse.orc");
             var corpse = corpsePrefab.Spawn(Vector2.zero); objects.Add(corpse.Visual);
             check(!corpse.Visual.GetComponentInChildren<SpriteRenderer>().sprite.texture.isReadable,
@@ -182,4 +186,10 @@ public static class DungeonPoolChecks
         while (!Ready("MainMenu")) { timeout(); yield return null; }
         check(DungeonActorPool.InactiveCount == 0 && DungeonActorPool.LeasedCount == 0, "main menu releases dungeon actor cache");
     }
+}
+
+public sealed class PoolResetProbe : MonoBehaviour, IDungeonPoolResettable
+{
+    public bool WasReset { get; private set; }
+    public void ResetForPool() => WasReset = true;
 }

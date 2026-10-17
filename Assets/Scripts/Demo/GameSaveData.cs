@@ -45,7 +45,7 @@ public sealed class WarehouseStackData
     public bool saleLocked;
     public LootSaveData loot;
     public WarehouseStackData Copy() => new() { id = id, quantity = quantity, unitPrice = unitPrice,
-        saleLocked = saleLocked, loot = LootSaveData.Capture(loot.Restore()) };
+        saleLocked = saleLocked, loot = loot.Copy() };
 }
 
 [Serializable]
@@ -84,6 +84,12 @@ public sealed class LootSaveData
     public int value;
     public LootShape shape;
     public Vector2Int[] cells;
+    public LootSaveData Copy()
+    {
+        var copy = (LootSaveData)MemberwiseClone();
+        copy.cells = cells == null ? null : (Vector2Int[])cells.Clone();
+        return copy;
+    }
     public static LootSaveData Capture(LootDefinition loot)
     {
         Vector2Int[] cells = new Vector2Int[loot.OccupiedCells.Count];
@@ -116,6 +122,7 @@ public sealed class DismantleSaveData
 {
     public int successes, failures;
     public float pointer, windowStart, direction;
+    public DismantleSaveData Copy() => (DismantleSaveData)MemberwiseClone();
 }
 
 [Serializable]
@@ -129,6 +136,13 @@ public sealed class CorpseSaveData
     public bool processed;
     public List<LootSaveData> loot = new();
     public DismantleSaveData session;
+    public CorpseSaveData Copy()
+    {
+        var copy = (CorpseSaveData)MemberwiseClone();
+        copy.loot = loot?.ConvertAll(item => item?.Copy());
+        copy.session = session?.Copy();
+        return copy;
+    }
 }
 
 [Serializable]
@@ -142,6 +156,12 @@ public sealed class EnemySaveData
     public int patrolStateVersion;
     public Vector2 previousPatrolOrigin;
     public bool hasPreviousPatrolOrigin, wasInvestigating;
+    public EnemySaveData Copy()
+    {
+        var copy = (EnemySaveData)MemberwiseClone();
+        copy.definition = definition?.Copy();
+        return copy;
+    }
 }
 
 [Serializable]
