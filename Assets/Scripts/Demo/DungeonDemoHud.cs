@@ -28,7 +28,10 @@ public class DungeonDemoHud : MonoBehaviour
 
     private void OnGUI()
     {
-        if (run == null || GameShell.IsGameplayInputBlocked) return;
+        if (run == null || !GameShell.IsGameplayHudVisible) return;
+        // Keep Layout/Repaint available while paused or unfocused; ignore UI input events.
+        if (GameShell.IsGameplayInputBlocked && Event.current.type != EventType.Layout
+            && Event.current.type != EventType.Repaint) return;
         using var gui = new GameGuiScope(true);
         DrawHeader();
         DrawHealth();

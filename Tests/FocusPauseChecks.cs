@@ -14,10 +14,12 @@ public static class FocusPauseChecks
         Call("OnApplicationFocus", false);
         check(Time.timeScale == 0f && !GameShell.IsMenuOpen && GameShell.IsGameplayInputBlocked,
             "focus loss freezes gameplay without opening a menu");
+        check(GameShell.IsGameplayHudVisible, "focus loss keeps the HUD visible for frame inspection");
         Call("OnApplicationFocus", false);
         Call("OnApplicationFocus", true);
         check(Time.timeScale == 1f && !GameShell.IsMenuOpen && GameShell.IsFocusInputBlocked,
             "focus return automatically resumes and blocks the return input frame");
+        check(GameShell.IsGameplayHudVisible, "return input blocking does not hide the HUD");
         Time.timeScale = .5f;
         Call("OnApplicationFocus", false);
         Call("OnApplicationFocus", true);
@@ -27,6 +29,7 @@ public static class FocusPauseChecks
         Call("OnApplicationFocus", false);
         Call("OnApplicationFocus", true);
         check(Time.timeScale == 0f && GameShell.IsMenuOpen, "focus return keeps a manually opened pause menu");
+        check(!GameShell.IsGameplayHudVisible, "manual pause menu still hides the gameplay HUD");
         Call("Resume");
         Call("OnApplicationFocus", false);
         Call("OpenPause");
@@ -41,6 +44,7 @@ public static class FocusPauseChecks
         Call("OnApplicationFocus", true);
         check(Time.timeScale == 0f && TownCommercePanel.IsOpen && !GameShell.IsMenuOpen,
             "warehouse stays open and paused across focus changes");
+        check(!GameShell.IsGameplayHudVisible, "warehouse still hides the gameplay HUD");
         panel.Close();
         check(Time.timeScale == 1f, "closing warehouse after focus changes resumes gameplay");
     }

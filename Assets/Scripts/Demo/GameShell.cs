@@ -12,6 +12,8 @@ public sealed class GameShell : MonoBehaviour
     private static readonly string[] pauseLabels = { "계속하기", "저장하기", "불러오기", "옵션", "메인 화면", "게임종료" };
     private static GameShell instance;
     public static bool IsMenuOpen => instance != null && instance.page != Page.Playing;
+    // Losing Game view focus blocks input, but must not hide the frame being inspected.
+    public static bool IsGameplayHudVisible => !IsMenuOpen && !GameSession.IsLoading && !TownCommercePanel.IsOpen;
     public static bool IsFocusInputBlocked => instance != null && (!instance.hasFocus || instance.blockInputFrame == Time.frameCount);
     public static bool IsGameplayInputBlocked
     {
