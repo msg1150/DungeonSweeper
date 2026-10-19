@@ -296,6 +296,7 @@ public static class DungeonPopulationChecks
                 "noise at the hearing boundary starts investigation and expands actual perception by the configured multiplier");
             Call(actor, "Tick", .1f);
             check(actor.Capture().wasChasing, "noise alert actually detects a player outside the normal radius");
+            check(actor.Awareness == MonsterAwareness.Detected, "a visible acquired player selects the exclamation indicator");
             Vector2 lastSeen = run.Player.position;
             check(actor.Capture().hasLastSeenPlayerPosition && actor.Capture().lastSeenPlayerPosition == lastSeen,
                 "visible players provide a remembered pursuit destination");
@@ -304,6 +305,7 @@ public static class DungeonPopulationChecks
             Physics2D.SyncTransforms();
             Call(actor, "Tick", .1f);
             check(!actor.Capture().wasChasing && actor.CurrentDetectionRange == 6f, "expanded visual perception still respects blocking walls");
+            check(actor.Awareness == MonsterAwareness.Searching, "lost line of sight selects the question indicator while pursuing the last sighting");
             check(actor.Capture().hasLastSeenPlayerPosition && actor.Capture().lastSeenPlayerPosition == lastSeen,
                 "losing line of sight retains the last actually observed player position");
             wall.SetActive(false);
@@ -353,6 +355,7 @@ public static class DungeonPopulationChecks
                 "hiding reveal uses the individual monster radius including its boundary");
             actor.ForgetHiddenPlayer();
             var forgotten = actor.Capture();
+            check(actor.Awareness == MonsterAwareness.None, "successful hiding removes the awareness indicator immediately");
             check(!forgotten.hasLastSeenPlayerPosition && !forgotten.wasChasing && !forgotten.wasInvestigating
                 && forgotten.attackTimer == 0f && forgotten.investigationSeconds == 0f,
                 "successful hiding immediately clears attacks, pursuit memories and pending noise investigation");

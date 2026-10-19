@@ -11,7 +11,8 @@ public sealed class SpriteDepthView : MonoBehaviour
     private GameObject display;
     private SpriteRenderer shadow;
     private ThreeDWorldView boundWorld;
-    private float footLift, width;
+    private float footLift, width, headOffset;
+    public Vector3 HeadPosition { get; private set; }
     public GameObject Display => display;
     public SpriteRenderer[] Copies => copies;
 
@@ -47,6 +48,8 @@ public sealed class SpriteDepthView : MonoBehaviour
             // 최초 자세의 실제 불투명 발 위치를 사용한다. 공격 궤적/프레임 여백에 따라 출렁이지 않는다.
             footLift = ThreeDWorldView.Current.FootLift(reference.sprite) * Mathf.Abs(reference.transform.lossyScale.y);
             width = reference.sprite.bounds.size.x * Mathf.Abs(reference.transform.lossyScale.x);
+            headOffset = footLift + ThreeDWorldView.Current.HeadTop(reference.sprite) * Mathf.Abs(reference.transform.lossyScale.y)
+                + reference.transform.position.y - transform.position.y;
         }
         var shadowObject = new GameObject("Ground contact shadow");
         shadowObject.transform.SetParent(display.transform, false);
@@ -88,6 +91,7 @@ public sealed class SpriteDepthView : MonoBehaviour
         float verticalProjection = Mathf.Max(.1f, Mathf.Abs(Vector3.Dot(camera.transform.up, Vector3.up)));
         Vector3 visualUp = Vector3.up / verticalProjection;
         Vector3 ground = ThreeDWorldView.Map(transform.position, world.FloorHeight(transform.position) + .025f);
+        HeadPosition = ground + visualUp * headOffset;
         display.transform.position = ground;
         display.transform.rotation = Quaternion.identity;
         int order = 1000 - Mathf.RoundToInt(transform.position.y * 20);

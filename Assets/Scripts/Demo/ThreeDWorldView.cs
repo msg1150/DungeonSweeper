@@ -19,6 +19,7 @@ public sealed class ThreeDWorldView : MonoBehaviour
     private readonly List<Material> ownedMaterials = new();
     private readonly List<Mesh> ownedMeshes = new();
     private readonly Dictionary<Sprite, float> footLifts = new();
+    private readonly Dictionary<Sprite, float> headTops = new();
     private Sprite contactShadow;
     private Texture2D shadowTexture;
     private SpriteRenderer townGround;
@@ -116,15 +117,27 @@ public sealed class ThreeDWorldView : MonoBehaviour
         {
             Rect rect = sprite.rect;
             var pixels = readable.GetPixels((int)rect.x, (int)rect.y, (int)rect.width, (int)rect.height);
-            int width = (int)rect.width, bottom = 0;
+            int width = (int)rect.width, height = (int)rect.height, bottom = 0;
             bool found = false;
-            for (int y = 0; y < (int)rect.height && !found; y++)
+            for (int y = 0; y < height && !found; y++)
                 for (int x = width / 5; x < width * 4 / 5; x++)
                     if (pixels[y * width + x].a > .2f) { bottom = y; found = true; break; }
+            // 같은 픽셀 읽기로 머리 위치도 구한다. 프레임 여백 대신 초기 자세의 불투명 영역을 기준으로 한다.
+            int top = height - 1; found = false;
+            for (int y = height - 1; y >= 0 && !found; y--)
+                for (int x = width / 5; x < width * 4 / 5; x++)
+                    if (pixels[y * width + x].a > .2f) { top = y; found = true; break; }
+            headTops[sprite] = (top + 1 - sprite.pivot.y) / sprite.pixelsPerUnit;
             value = (sprite.pivot.y - bottom) / sprite.pixelsPerUnit;
             footLifts[sprite] = value; return value;
         }
         finally { Destroy(readable); }
+    }
+    public float HeadTop(Sprite sprite)
+    {
+        if (sprite == null) return 0f;
+        if (!headTops.ContainsKey(sprite)) FootLift(sprite);
+        return headTops.TryGetValue(sprite, out float top) ? top : sprite.bounds.max.y;
     }
     private void BuildIllustratedTown()
     {

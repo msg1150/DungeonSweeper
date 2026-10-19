@@ -48,6 +48,7 @@ public static class DungeonPoolChecks
             check(!DungeonActorPool.Return(first.gameObject) && DungeonActorPool.InactiveCount == 2, "duplicate return does not add another cached actor");
             check(second.Capture().definition == null && second.NoiseAlertRemaining == 0f && second.CurrentDetectionRange == 0f,
                 "return clears old stats, player state and noise alert");
+            check(second.Awareness == MonsterAwareness.None, "returning a monster to the pool clears its awareness indicator state");
             monster.useSpriteSheetAnimation = false;
             var reused = monster.Spawn(player.transform, Vector2.up, Vector2.right);
             objects.Add(reused.gameObject);

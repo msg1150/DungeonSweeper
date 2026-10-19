@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+public enum MonsterAwareness { None, Detected, Searching }
+
 /// <summary>순찰·추격·마지막 목격 지점 추적·소음 조사와 공격을 담당한다.</summary>
 public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
 {
@@ -22,6 +24,7 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
     private bool wasInvestigating;
     private Vector2 lastSeenPlayerPosition;
     private bool hasLastSeenPlayerPosition;
+    private bool seesPlayer;
     private readonly List<Vector2> path = new();
     private readonly List<RaycastHit2D> sightHits = new(16);
     private readonly List<RaycastHit2D> movementHits = new(16);
@@ -37,6 +40,8 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
     public float HearingRange => definition == null ? 0f : definition.hasMovementStats ? definition.hearingRange : DungeonTuning.Active.hearingRange;
     public float NoiseAlertRemaining => noiseAlertRemaining;
     public float HidingRevealRange => definition?.HidingRevealRange ?? 0f;
+    public MonsterAwareness Awareness => definition == null || !isActiveAndEnabled || IsTargetHidden ? MonsterAwareness.None
+        : seesPlayer ? MonsterAwareness.Detected : hasLastSeenPlayerPosition ? MonsterAwareness.Searching : MonsterAwareness.None;
     private bool IsTargetHidden => DungeonRunController.Instance != null && DungeonRunController.Instance.Player == player
         && DungeonRunController.Instance.IsPlayerHidden;
     // 판정과 디버그 표시는 같은 값을 사용한다. 소음 청취 반경과는 별개인, 벽에 차단되는 시야 거리다.
@@ -49,14 +54,14 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
     public void NoticeHidingAttempt()
     {
         if (player == null || definition == null) return;
-        lastSeenPlayerPosition = player.position; hasLastSeenPlayerPosition = true; pathMode = -1;
+        lastSeenPlayerPosition = player.position; hasLastSeenPlayerPosition = seesPlayer = true; pathMode = -1;
     }
 
     /// <summary>은신 성공 시 공격·목격 기록·기존 소음 조사를 즉시 끊는다. 경계 반경의 남은 시간은 유지한다.</summary>
     public void ForgetHiddenPlayer()
     {
         if (definition == null) return;
-        hasLastSeenPlayerPosition = wasChasing = wasInvestigating = damageApplied = false;
+        hasLastSeenPlayerPosition = wasChasing = wasInvestigating = damageApplied = seesPlayer = false;
         lastSeenPlayerPosition = investigationTarget = Vector2.zero;
         investigationRemaining = attackTimer = 0f;
         path.Clear(); pathIndex = 0; pathMode = -1;
@@ -83,6 +88,7 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
         hasPreviousPatrolOrigin = true;
         patrolPauseRemaining = 0f;
         pathMode = -1;
+        MonsterAwarenessIndicator.Ensure(this);
     }
 
     /// <summary>이전 런의 공격·조사·경로·플레이어 참조를 다음 대여에 넘기지 않는다.</summary>
@@ -91,7 +97,7 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
         player = null; playerHealth = null; definition = null; visual = null; navigationCollider = null; PrefabId = null;
         roamTarget = investigationTarget = previousPatrolOrigin = lastSeenPlayerPosition = Vector2.zero;
         attackCooldown = attackTimer = patrolPauseRemaining = investigationRemaining = noiseAlertRemaining = 0f;
-        damageApplied = hasPreviousPatrolOrigin = wasChasing = wasInvestigating = hasLastSeenPlayerPosition = false;
+        damageApplied = hasPreviousPatrolOrigin = wasChasing = wasInvestigating = hasLastSeenPlayerPosition = seesPlayer = false;
         path.Clear(); sightHits.Clear(); movementHits.Clear(); pathIndex = 0; pathMode = -1; pathTargetCell = default;
     }
 
@@ -120,6 +126,7 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
         noiseAlertRemaining = Mathf.Max(0f, noiseAlertRemaining - elapsed);
         float distance = Vector2.Distance(transform.position, player.position);
         bool isChasing = !IsTargetHidden && distance < CurrentDetectionRange && HasClearSight(player.position);
+        seesPlayer = isChasing;
         if (isChasing)
         {
             // 공격 준비 중에도 실제로 보인 위치만 갱신한다. 시야를 잃은 뒤의 위치는 따라 읽지 않는다.
@@ -304,7 +311,7 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
         investigationTarget = investigationTarget, attackCooldown = attackCooldown, attackTimer = attackTimer,
         roamSeconds = patrolPauseRemaining, investigationSeconds = investigationRemaining,
         noiseAlertSeconds = noiseAlertRemaining,
-        damageApplied = damageApplied, wasChasing = wasChasing, wasInvestigating = wasInvestigating,
+        damageApplied = damageApplied, wasChasing = seesPlayer, wasInvestigating = wasInvestigating,
         lastSeenPlayerPosition = lastSeenPlayerPosition, hasLastSeenPlayerPosition = hasLastSeenPlayerPosition,
         patrolStateVersion = 1, previousPatrolOrigin = previousPatrolOrigin, hasPreviousPatrolOrigin = hasPreviousPatrolOrigin
     };
@@ -321,6 +328,7 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
         noiseAlertRemaining = Mathf.Clamp(state.noiseAlertSeconds, 0f, definition.NoiseAlertSeconds);
         damageApplied = state.damageApplied;
         wasChasing = state.wasChasing;
+        seesPlayer = state.wasChasing;
         wasInvestigating = state.wasInvestigating;
         lastSeenPlayerPosition = state.lastSeenPlayerPosition;
         hasLastSeenPlayerPosition = state.hasLastSeenPlayerPosition;
