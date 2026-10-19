@@ -170,6 +170,7 @@ public static class GameFlowSmokeChecks
                     DungeonPopulationChecks.CheckLivePopulation(Check);
                     DungeonPrefabChecks.CheckLive(Check);
                     DungeonPopulationChecks.RunPatrol(Check);
+                    DungeonPopulationChecks.RunPerception(Check);
                     var layoutRoot = GameObject.Find("Runtime Dungeon Layout");
                     Physics2D.SyncTransforms();
                     foreach (var wall in layoutRoot.GetComponentsInChildren<BoxCollider2D>())

@@ -154,6 +154,7 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         DungeonPopulationChecks.CheckLivePopulation(Check);
         DungeonPrefabChecks.CheckLive(Check);
         DungeonPopulationChecks.RunPatrol(Check);
+        DungeonPopulationChecks.RunPerception(Check);
         DungeonRunController run = DungeonRunController.Instance;
         Check(run != null && run.IsRunActive && Resources.Load<Shader>("VisionOverlay") != null, "release dungeon and vision shader exist");
         if (ThreeDPresentationConfig.SpritesEnabled)

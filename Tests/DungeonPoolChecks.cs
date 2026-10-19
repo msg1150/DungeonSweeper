@@ -31,6 +31,8 @@ public static class DungeonPoolChecks
             var second = monster.Spawn(player.transform, Vector2.zero, Vector2.one); objects.Add(second.gameObject);
             var state = second.Capture();
             state.attackTimer = .3f; state.attackCooldown = 2f; state.investigationSeconds = 4f;
+            state.noiseAlertSeconds = 3f;
+            state.hasLastSeenPlayerPosition = true; state.lastSeenPlayerPosition = Vector2.right * 3f;
             state.wasChasing = state.wasInvestigating = state.damageApplied = true;
             second.Restore(state);
             second.GetComponentInChildren<SpriteRenderer>().flipX = true;
@@ -44,13 +46,15 @@ public static class DungeonPoolChecks
                 "pooled monster stats remain independent from prefab and other actors");
             check(DungeonActorPool.Return(first.gameObject) && DungeonActorPool.Return(second.gameObject), "actors return to their own prefab bucket");
             check(!DungeonActorPool.Return(first.gameObject) && DungeonActorPool.InactiveCount == 2, "duplicate return does not add another cached actor");
-            check(second.Capture().definition == null, "return clears references to old stats and player state");
+            check(second.Capture().definition == null && second.NoiseAlertRemaining == 0f && second.CurrentDetectionRange == 0f,
+                "return clears old stats, player state and noise alert");
             monster.useSpriteSheetAnimation = false;
             var reused = monster.Spawn(player.transform, Vector2.up, Vector2.right);
             objects.Add(reused.gameObject);
             var fresh = reused.Capture();
-            check(reused == second && fresh.attackTimer == 0f && fresh.attackCooldown == 0f && fresh.investigationSeconds == 0f
-                && !fresh.wasChasing && !fresh.wasInvestigating && !fresh.damageApplied, "reuse resets combat, patrol and investigation state");
+            check(reused == second && fresh.attackTimer == 0f && fresh.attackCooldown == 0f && fresh.investigationSeconds == 0f && fresh.noiseAlertSeconds == 0f
+                && !fresh.wasChasing && !fresh.wasInvestigating && !fresh.damageApplied && !fresh.hasLastSeenPlayerPosition
+                && fresh.lastSeenPlayerPosition == Vector2.zero, "reuse resets combat, patrol, investigation and last-seen state");
             var renderer = reused.GetComponentInChildren<SpriteRenderer>();
             var sprite = renderer.sprite;
             reused.GetComponent<MonsterVisualAnimator>().Tick(true, .8f, true, Vector2.left);

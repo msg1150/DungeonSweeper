@@ -42,6 +42,12 @@ public sealed class DungeonTuning : ScriptableObject
     [Min(.1f)] public float hearingRange = 8f;
     [Min(.1f)] public float investigationSeconds = 6f;
 
+#if UNITY_EDITOR
+    [Header("Editor Debug")]
+    [Tooltip("에디터에서만 몬스터 기본 인식·소음 청취·경계 중 인식 반경을 표시합니다. 플레이 중에도 전환 가능합니다.")]
+    public bool showMonsterPerceptionRanges;
+#endif
+
     [Header("Inactive Actor Pool")]
     [Tooltip("Cached instances per prefab. Zero disables retention; this does not limit active spawns.")]
     [Min(0)] public int poolCapacityPerPrefab = 32;

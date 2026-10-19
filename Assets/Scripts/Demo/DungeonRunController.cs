@@ -44,6 +44,7 @@ public class DungeonRunController : MonoBehaviour
     public bool HasEscaped => hasEscaped;
     public bool IsRunActive => enabled && !actorsReleased && !hasEscaped && !isDead;
     public Transform Player => player;
+    public IReadOnlyList<EnemyAgent> Enemies => enemies;
     public IReadOnlyList<LootDefinition> PendingLootItems => pendingLoot;
     public LootDefinition PendingLoot => pendingLoot.Count > 0 ? pendingLoot[0] : null;
     public bool IsLootPlacementOpen => lootPlacementOpen;
@@ -94,6 +95,9 @@ public class DungeonRunController : MonoBehaviour
         ThreeDWorldView.Create(player, true);
         DungeonDemoHud hud = new GameObject("Dungeon Demo HUD").AddComponent<DungeonDemoHud>();
         hud.Initialize(this);
+#if UNITY_EDITOR
+        hud.gameObject.AddComponent<MonsterPerceptionDebugView>().Initialize(this);
+#endif
         Say(TownProgress.HasAcceptedContract ? $"의뢰 목표: {TownProgress.ContractTargetName}을 회수해 마을 길드에 제출하세요." : "입구입니다. 시체를 해체하고 전리품을 가방에 배치해 회수하세요.", 6f);
     }
 

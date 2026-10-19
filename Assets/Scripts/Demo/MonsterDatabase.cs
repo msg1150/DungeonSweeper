@@ -45,15 +45,30 @@ public sealed class MonsterDefinition
     [Min(.1f)] public float attackAnimationSeconds = .6f;
     // Old saves lack this flag and continue using their original global movement tuning.
     [HideInInspector] public bool hasMovementStats;
-    [Min(.01f)] public float patrolSpeed = 1.35f, chaseSpeed = 2.15f, detectionRange = 3.8f, hearingRange = 8f;
+    [Min(.01f)] public float patrolSpeed = 1.35f, chaseSpeed = 2.15f;
+    [Tooltip("평상시 플레이어를 발견하는 반경. 벽에 가리면 발견하지 못합니다.")]
+    [Min(.01f)] public float detectionRange = 3.8f;
+    [Tooltip("해체 실패 소음을 들을 수 있는 반경. 소리를 들으면 조사와 일시적인 인식 반경 확대가 시작됩니다.")]
+    [Min(.01f)] public float hearingRange = 8f;
     [Min(.01f)] public float investigationSeconds = 6f, patrolTravelDistance = 10f;
     [Min(0f)] public float patrolArrivalPause = .75f;
+    [Header("Noise Alert")]
+    [Tooltip("소음을 들은 뒤 기본 플레이어 인식 반경에 곱할 배율. 벽에 가린 플레이어는 발견하지 못합니다.")]
+    [Range(1.01f, 5f)] public float noiseDetectionMultiplier = 2f;
+    [Tooltip("소음을 들은 순간부터 인식 반경이 확대되는 시간(초). 다시 들으면 이 시간으로 갱신합니다.")]
+    [Min(.1f)] public float noiseAlertSeconds = 6f;
+    // 이전 저장에 필드가 없으면 0이다. 기존 저장을 거부하지 않고 새 기본값으로 해석한다.
+    public float NoiseDetectionMultiplier => noiseDetectionMultiplier == 0f ? 2f : noiseDetectionMultiplier;
+    public float NoiseAlertSeconds => noiseAlertSeconds == 0f ? 6f : noiseAlertSeconds;
     [HideInInspector]
     public List<MonsterLootEntry> loot = new();
 
     public bool IsValid() => LootKinds.ValidId(id) && !string.IsNullOrWhiteSpace(displayName)
         && attackDamage >= 1 && Positive(attackRange) && Nonnegative(attackCooldown) && Positive(attackAnimationSeconds)
         && Enum.IsDefined(typeof(MonsterAttackStyle), attackStyle)
+        && Nonnegative(noiseDetectionMultiplier) && NoiseDetectionMultiplier >= 1.01f && NoiseDetectionMultiplier <= 5f
+        && Nonnegative(noiseAlertSeconds) && Positive(NoiseAlertSeconds)
+        && (!hasMovementStats || Positive(detectionRange * NoiseDetectionMultiplier))
         && (!hasMovementStats || (Positive(patrolSpeed) && Positive(chaseSpeed) && Positive(detectionRange)
             && Positive(hearingRange) && Positive(investigationSeconds) && Positive(patrolTravelDistance) && Nonnegative(patrolArrivalPause)));
     public static bool Positive(float value) => Nonnegative(value) && value > 0f;

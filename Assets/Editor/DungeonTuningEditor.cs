@@ -19,8 +19,6 @@ public sealed class DungeonTuningEditor : Editor
 
         Help("Loot Value Multiplier",
             "높이면 모든 회수품의 정산 골드가 함께 증가합니다. 낮추면 회수 한 번의 보상이 줄어들어 의뢰 보너스의 비중이 커집니다.");
-        Help("Fog World Size",
-            "안개가 덮는 전체 월드 크기입니다. 카메라 화면보다 충분히 크게 두면 됩니다. 보통 32~48을 권장합니다.");
         Help("Clear Sight Radius",
             "월드 단위 반경입니다. 높이면 플레이어 주변의 완전히 밝은 원이 넓어집니다. 4.5는 현재 화면에서 중심부가 선명하게 보이는 기준값입니다.");
         Help("Dark Sight Radius / Outer Darkness",
@@ -31,6 +29,8 @@ public sealed class DungeonTuningEditor : Editor
             "높이면 벽에 가리지 않은 적이 더 먼 거리에서 플레이어를 발견합니다. 낮추면 가까이 접근해야 추적을 시작합니다.");
         Help("Hearing Range / Investigation Seconds",
             "Hearing Range를 높이면 해체 실패 소리를 듣는 적의 범위가 넓어집니다. Investigation Seconds를 높이면 적이 소리 난 시체를 더 오래 조사합니다.");
+        Help("Show Monster Perception Ranges (에디터 전용)",
+            "플레이 중 체크하면 Game 뷰에 모든 몬스터의 기본 인식(노랑), 소음 청취(하늘색 점선), 소음 후 인식(빨강)을 표시합니다. 실제 게임 빌드에는 표시 코드가 포함되지 않습니다. 개별 수치는 Assets/Prefabs/Monsters의 Monster Prefab > Stats에서 설정합니다. Noise Detection Multiplier와 Noise Alert Seconds가 소음 후 확대 배율·지속 시간입니다.");
         Help("Player Move / Dash",
             "Move Speed는 평상시 속도, Dash Speed는 대시 속도입니다. Dash Duration은 대시 유지 시간, Dash Cooldown은 다시 사용할 때까지의 대기 시간입니다.");
         Help("Pool Capacity Per Prefab / Pool Total Capacity",

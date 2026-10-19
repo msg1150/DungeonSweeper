@@ -198,4 +198,6 @@ MonoBehaviour:
     investigationSeconds: 6
     patrolTravelDistance: 10
     patrolArrivalPause: 0.75
+    noiseDetectionMultiplier: 2
+    noiseAlertSeconds: 6
     loot: []

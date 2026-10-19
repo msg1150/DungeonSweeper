@@ -152,10 +152,13 @@ public sealed class EnemySaveData
     public MonsterDefinition definition;
     public Vector2 position, roamTarget, investigationTarget;
     public float attackCooldown, attackTimer, roamSeconds, investigationSeconds;
+    public float noiseAlertSeconds;
     public bool damageApplied, wasChasing;
     public int patrolStateVersion;
     public Vector2 previousPatrolOrigin;
     public bool hasPreviousPatrolOrigin, wasInvestigating;
+    public Vector2 lastSeenPlayerPosition;
+    public bool hasLastSeenPlayerPosition;
     public EnemySaveData Copy()
     {
         var copy = (EnemySaveData)MemberwiseClone();
@@ -267,8 +270,10 @@ public sealed class DungeonSaveData
             if (enemy?.definition == null || !enemy.definition.IsValid() || !GameSaveData.Finite(enemy.position) || !GameSaveData.Finite(enemy.roamTarget)
                 || !GameSaveData.Finite(enemy.investigationTarget) || !Finite(enemy.attackCooldown)
                 || !Finite(enemy.attackTimer) || !Finite(enemy.roamSeconds) || !Finite(enemy.investigationSeconds)
+                || !MonsterDefinition.Nonnegative(enemy.noiseAlertSeconds)
                 || enemy.patrolStateVersion < 0 || enemy.patrolStateVersion > 1
                 || (enemy.hasPreviousPatrolOrigin && !GameSaveData.Finite(enemy.previousPatrolOrigin))
+                || (enemy.hasLastSeenPlayerPosition && !GameSaveData.Finite(enemy.lastSeenPlayerPosition))
                 || !Finite(enemy.definition.attackAnimationSeconds) || enemy.definition.attackAnimationSeconds <= 0f
                 || !Finite(enemy.definition.attackRange) || enemy.definition.attackRange <= 0f
                 || !Finite(enemy.definition.attackCooldown) || enemy.definition.attackCooldown < 0f) return false;

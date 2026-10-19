@@ -211,6 +211,128 @@ public static class DungeonPopulationChecks
         }
     }
 
+    public static void RunPerception(Action<bool, string> check)
+    {
+        var run = DungeonRunController.Instance;
+        Vector3 playerPosition = run.Player.position;
+        var obj = new GameObject("Perception validation");
+        var wall = new GameObject("Perception sight blocker");
+        var other = new GameObject("Independent perception validation");
+        try
+        {
+            // 도면 밖의 빈 공간을 사용해 랜덤 던전의 벽·배치와 독립적으로 실제 시야 판정을 검증한다.
+            Vector2 origin = new(1000f, 1000f);
+            obj.transform.position = origin;
+            run.Player.position = origin + Vector2.right * 4f;
+            var data = new MonsterDefinition { hasMovementStats = true, detectionRange = 2f, hearingRange = 6f,
+                noiseDetectionMultiplier = 3f, noiseAlertSeconds = 4f };
+            var actor = obj.AddComponent<EnemyAgent>();
+            actor.Initialize(run.Player, origin, origin, data, null);
+            var idle = actor.Capture(); idle.roamSeconds = 1000f; actor.Restore(idle);
+            Physics2D.SyncTransforms();
+            Call(actor, "Tick", .1f);
+            check(!actor.Capture().wasChasing && actor.CurrentDetectionRange == 2f, "base detection does not acquire a player outside its radius");
+            actor.HearNoise(origin + Vector2.up * 7f);
+            check(actor.NoiseAlertRemaining == 0f && actor.Capture().investigationSeconds == 0f,
+                "inaudible noise neither expands perception nor starts investigation");
+            actor.HearNoise(origin + Vector2.up * 6f);
+            check(actor.CurrentDetectionRange == 6f && actor.NoiseAlertRemaining == 4f && actor.Capture().investigationSeconds > 0f,
+                "noise at the hearing boundary starts investigation and expands actual perception by the configured multiplier");
+            Call(actor, "Tick", .1f);
+            check(actor.Capture().wasChasing, "noise alert actually detects a player outside the normal radius");
+            Vector2 lastSeen = run.Player.position;
+            check(actor.Capture().hasLastSeenPlayerPosition && actor.Capture().lastSeenPlayerPosition == lastSeen,
+                "visible players provide a remembered pursuit destination");
+            wall.transform.position = origin + Vector2.right * 2f;
+            wall.AddComponent<BoxCollider2D>();
+            Physics2D.SyncTransforms();
+            Call(actor, "Tick", .1f);
+            check(!actor.Capture().wasChasing && actor.CurrentDetectionRange == 6f, "expanded visual perception still respects blocking walls");
+            check(actor.Capture().hasLastSeenPlayerPosition && actor.Capture().lastSeenPlayerPosition == lastSeen,
+                "losing line of sight retains the last actually observed player position");
+            wall.SetActive(false);
+            actor.HearNoise(origin);
+            check(actor.NoiseAlertRemaining == 4f && actor.CurrentDetectionRange == 6f,
+                "repeated audible noise refreshes the timer without stacking the radius");
+            Call(actor, "Tick", 1f);
+            var snapshot = JsonUtility.FromJson<EnemySaveData>(JsonUtility.ToJson(actor.Capture()));
+            Call(actor, "Tick", 10f);
+            check(actor.CurrentDetectionRange == 2f && actor.NoiseAlertRemaining == 0f,
+                "perception returns to its base radius when the alert expires");
+            actor.Restore(snapshot);
+            check(actor.NoiseAlertRemaining == 3f && actor.CurrentDetectionRange == 6f,
+                "serialized enemy state restores the remaining alert and actual radius");
+            check(actor.Capture().hasLastSeenPlayerPosition == snapshot.hasLastSeenPlayerPosition
+                && actor.Capture().lastSeenPlayerPosition == snapshot.lastSeenPlayerPosition,
+                "serialized enemy state restores the last observed player position");
+            float originalTimeScale = Time.timeScale;
+            try
+            {
+                Time.timeScale = 0f; Call(actor, "Update");
+                check(actor.NoiseAlertRemaining == 3f, "paused gameplay does not consume the remaining noise alert");
+            }
+            finally { Time.timeScale = originalTimeScale; }
+            snapshot.attackTimer = 1f; snapshot.noiseAlertSeconds = .2f;
+            actor.Restore(snapshot); Call(actor, "Tick", .25f);
+            check(actor.IsAttacking && actor.NoiseAlertRemaining == 0f && actor.CurrentDetectionRange == 2f,
+                "noise alert expires even during an attack animation");
+            var second = other.AddComponent<EnemyAgent>();
+            other.transform.position = origin;
+            var secondData = data.Copy(); secondData.detectionRange = 1f; secondData.noiseDetectionMultiplier = 4f; secondData.noiseAlertSeconds = 2f;
+            second.Initialize(run.Player, origin, origin, secondData, null); second.HearNoise(origin);
+            check(second.CurrentDetectionRange == 4f && second.NoiseAlertRemaining == 2f && actor.BaseDetectionRange == 2f,
+                "individual monsters use independent base radii, alert multipliers and durations");
+            secondData.noiseDetectionMultiplier = secondData.noiseAlertSeconds = 0f;
+            check(secondData.IsValid() && secondData.NoiseDetectionMultiplier == 2f && secondData.NoiseAlertSeconds == 6f,
+                "old monster snapshots without alert settings retain compatible defaults");
+            secondData.noiseDetectionMultiplier = float.NaN;
+            check(!secondData.IsValid(), "non-finite perception settings are rejected");
+            secondData.noiseDetectionMultiplier = 1f;
+            check(!secondData.IsValid(), "configured noise perception must expand beyond the base radius");
+            var saved = run.CaptureSave(); saved.enemies[0].noiseAlertSeconds = float.NaN;
+            check(!saved.IsValid(), "saved non-finite alert timers are rejected");
+            saved.enemies[0].noiseAlertSeconds = -1f;
+            check(!saved.IsValid(), "saved negative alert timers are rejected");
+            saved.enemies[0].noiseAlertSeconds = 0f;
+            check(saved.IsValid(), "old enemy snapshots without an alert timer remain loadable");
+            saved.enemies[0].hasLastSeenPlayerPosition = true;
+            saved.enemies[0].lastSeenPlayerPosition = new Vector2(float.NaN, 0f);
+            check(!saved.IsValid(), "non-finite active pursuit memories are rejected");
+            saved.enemies[0].hasLastSeenPlayerPosition = false;
+            saved.enemies[0].lastSeenPlayerPosition = Vector2.zero;
+            check(saved.IsValid(), "old snapshots without pursuit memories remain loadable");
+            var liveStates = new List<EnemySaveData>();
+            foreach (var enemy in run.Enemies) liveStates.Add(enemy.Capture());
+            try
+            {
+                Vector2 failurePosition = run.Enemies[0].transform.position;
+                Call(run, "AlertNearbyMonsters", failurePosition);
+                bool matchesHearing = true;
+                for (int i = 0; i < run.Enemies.Count; i++)
+                {
+                    var enemy = run.Enemies[i];
+                    bool heard = Vector2.Distance(enemy.transform.position, failurePosition) <= enemy.HearingRange;
+                    matchesHearing &= heard
+                        ? enemy.NoiseAlertRemaining == liveStates[i].definition.NoiseAlertSeconds && enemy.CurrentDetectionRange > enemy.BaseDetectionRange
+                        : enemy.NoiseAlertRemaining == liveStates[i].noiseAlertSeconds;
+                }
+                check(matchesHearing, "the dismantle-failure dispatch expands only monsters that can hear the failure location");
+            }
+            finally { for (int i = 0; i < run.Enemies.Count; i++) run.Enemies[i].Restore(liveStates[i]); }
+#if UNITY_EDITOR
+            check(UnityEngine.Object.FindAnyObjectByType<MonsterPerceptionDebugView>() != null && !DungeonTuning.Active.showMonsterPerceptionRanges,
+                "editor perception view is attached with debug rendering disabled by default");
+#endif
+        }
+        finally
+        {
+            run.Player.position = playerPosition;
+            obj.SetActive(false); wall.SetActive(false); other.SetActive(false);
+            UnityEngine.Object.Destroy(obj); UnityEngine.Object.Destroy(wall); UnityEngine.Object.Destroy(other);
+            Physics2D.SyncTransforms();
+        }
+    }
+
     public static IEnumerator CheckFreshEntries(Action<bool, string> check, Action timeout, Action<int> snapshot)
     {
         var seen = new HashSet<int>();

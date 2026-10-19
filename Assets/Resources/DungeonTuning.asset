@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: DungeonTuning
   m_EditorClassIdentifier: Assembly-CSharp::DungeonTuning
   lootValueMultiplier: 1
-  fogWorldSize: 48
   clearSightRadius: 3
   darkSightRadius: 5
   outerDarkness: 0.9
@@ -30,5 +29,6 @@ MonoBehaviour:
   detectionRange: 3.8
   hearingRange: 8
   investigationSeconds: 6
+  showMonsterPerceptionRanges: 1
   poolCapacityPerPrefab: 32
   poolTotalCapacity: 128
