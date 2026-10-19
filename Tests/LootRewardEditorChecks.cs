@@ -30,6 +30,7 @@ public static class LootRewardEditorChecks
             UnityEngine.Random.InitState(413);
             var actual = baseline.Roll();
             check(Same(expected, actual) && UnityEngine.Random.value == expectedNext, "unconfigured plans preserve default drops, prices and random consumption");
+            CheckAuthoring(corpse, source, check);
 
             dungeonTable.entries.Add(Row(corpse, "reward.test.a", 1f, 2, 2));
             dungeonTable.entries.Add(Row(corpse, "reward.test.b", 1f, 3, 3));
@@ -110,6 +111,74 @@ public static class LootRewardEditorChecks
     }
 
     private static MonsterLootEntry Item(string id, string name, float chance) => new() { kindId = id, lootName = name, dropChance = chance, minPrice = 7, maxPrice = 7 };
+
+    private static void CheckAuthoring(CorpsePrefab corpse, CorpsePrefab other, Action<bool, string> check)
+    {
+        var table = ScriptableObject.CreateInstance<LootRewardTable>();
+        var parent = ScriptableObject.CreateInstance<LootRewardTable>();
+        var originalLoot = new List<MonsterLootEntry>(corpse.loot);
+        try
+        {
+            // 기존 행을 바꾸지 않고 같은 시체의 항목들을 한 묶음으로 표시한다.
+            table.entries.Add(Row(corpse, "reward.test.a", .23f, 2, 4));
+            table.entries.Add(Row(corpse, "reward.test.b", .81f, 3, 5));
+            using var settings = new SerializedObject(table);
+            settings.Update();
+            check(LootRewardTableAuthoring.GetCorpses(settings).SequenceEqual(new[] { corpse }) && !settings.hasModifiedProperties
+                && table.entries[0].dropChance == .23f && table.entries[1].maxQuantity == 5,
+                "legacy item rows appear in one corpse group without changing serialized values");
+            check(LootRewardTableAuthoring.GetBaseLoot(corpse).SequenceEqual(corpse.loot), "one corpse exposes every base loot item in prefab order");
+            LootRewardTableAuthoring.AddCorpse(settings, corpse); LootRewardTableAuthoring.AddCorpse(settings, corpse);
+            LootRewardTableAuthoring.AddCorpse(settings, other); settings.ApplyModifiedProperties();
+            check(LootRewardTableAuthoring.GetCorpses(settings).Count == 2 && settings.FindProperty("displayedCorpses").arraySize == 2
+                && table.entries.Count == 2, "registering a corpse twice creates one group without adding override rows");
+            LootRewardTableAuthoring.SetOverride(settings, corpse, "reward.test.a", true); settings.ApplyModifiedProperties();
+            check(table.entries.Count == 2 && table.entries[0].dropChance == .23f && table.entries[0].minQuantity == 2,
+                "enabling an existing item preserves customized chance and quantity");
+
+            parent.entries.Add(Row(corpse, "reward.test.a", 1f, 7, 7));
+            LootRewardTableAuthoring.SetOverride(settings, corpse, "reward.test.a", false); settings.ApplyModifiedProperties();
+            check(LootRewardTable.Resolve(corpse, "reward.test.a", parent, table) == parent.entries[0]
+                && table.Find(corpse, "reward.test.b").maxQuantity == 5, "turning off one item restores parent inheritance without affecting siblings");
+            LootRewardTableAuthoring.SetOverride(settings, corpse, "reward.test.b", false); settings.ApplyModifiedProperties();
+            check(table.entries.Count == 0 && LootRewardTableAuthoring.GetCorpses(settings).Count == 2 && table.IsValid(out _),
+                "all-inherited groups remain visible and valid with no override rows");
+            foreach (var item in LootRewardTableAuthoring.GetBaseLoot(corpse)) LootRewardTableAuthoring.SetOverride(settings, corpse, item.kindId, true);
+            settings.ApplyModifiedProperties();
+            check(table.entries.Count == 2 && table.Find(corpse, "reward.test.a").dropChance == corpse.loot[0].dropChance
+                && table.entries.All(row => row.minQuantity == 1 && row.maxQuantity == 1), "bulk enable initializes every loot item from prefab defaults");
+            corpse.loot.Add(Item("reward.test.new", "새 전리품", .5f));
+            check(LootRewardTableAuthoring.GetBaseLoot(corpse).Count == 3 && table.Find(corpse, "reward.test.new") == null
+                && LootRewardTable.Resolve(corpse, "reward.test.new", parent, table) == null,
+                "new prefab loot appears automatically and inherits until explicitly overridden");
+            corpse.loot.RemoveAt(0);
+            check(!table.IsValid(out _) && table.Find(corpse, "reward.test.a") != null,
+                "removed base loot retains its old override for explicit repair instead of silent data loss");
+            LootRewardTableAuthoring.SetOverride(settings, corpse, "reward.test.a", false); settings.ApplyModifiedProperties();
+            check(table.IsValid(out _), "removing a stale override restores table validity");
+            corpse.loot = new List<MonsterLootEntry>(originalLoot);
+
+            // 그룹 제거와 항목 제거가 하나의 Undo 작업으로 함께 복구되는지 확인한다.
+            Undo.IncrementCurrentGroup(); int undoGroup = Undo.GetCurrentGroup();
+            LootRewardTableAuthoring.RemoveCorpse(settings, corpse); settings.ApplyModifiedProperties();
+            Undo.CollapseUndoOperations(undoGroup);
+            check(table.entries.Count == 0 && LootRewardTableAuthoring.GetCorpses(settings).SequenceEqual(new[] { other }),
+                "removing a corpse removes all its settings and leaves other groups intact");
+            Undo.PerformUndo(); settings.Update();
+            check(table.Find(corpse, "reward.test.b") != null && LootRewardTableAuthoring.GetCorpses(settings).Count == 2,
+                "undo restores the removed corpse group and its reward settings together");
+            Undo.PerformRedo(); settings.Update();
+            check(table.entries.Count == 0 && LootRewardTableAuthoring.GetCorpses(settings).SequenceEqual(new[] { other }),
+                "redo removes the restored group and settings together");
+        }
+        finally
+        {
+            corpse.loot = originalLoot;
+            Undo.ClearUndo(table);
+            UnityEngine.Object.DestroyImmediate(table); UnityEngine.Object.DestroyImmediate(parent);
+        }
+    }
+
     private static LootRewardOverride Row(CorpsePrefab corpse, string kind, float chance, int min, int max)
         => new() { corpse = corpse, kindId = kind, dropChance = chance, minQuantity = min, maxQuantity = max };
     private static bool Same(IReadOnlyList<LootDefinition> a, IReadOnlyList<LootDefinition> b)
@@ -125,6 +194,18 @@ public static class LootRewardEditorChecks
         DungeonDefinition preview = null;
         try
         {
+            var groupOnly = ScriptableObject.CreateInstance<LootRewardTable>();
+            string groupPath = folder + "/inherited-rewards.asset";
+            AssetDatabase.CreateAsset(groupOnly, groupPath);
+            using (var settings = new SerializedObject(groupOnly))
+            {
+                LootRewardTableAuthoring.AddCorpse(settings, corpse); settings.ApplyModifiedProperties();
+            }
+            AssetDatabase.SaveAssetIfDirty(groupOnly);
+            AssetDatabase.ImportAsset(groupPath, ImportAssetOptions.ForceUpdate);
+            using (var settings = new SerializedObject(AssetDatabase.LoadAssetAtPath<LootRewardTable>(groupPath)))
+                check(LootRewardTableAuthoring.GetCorpses(settings).SequenceEqual(new[] { corpse }) && groupOnly.entries.Count == 0,
+                    "all-inherited corpse groups survive asset save and reimport without creating overrides");
             var table = ScriptableObject.CreateInstance<LootRewardTable>();
             table.entries.Add(Row(corpse, corpse.loot[0].kindId, 1f, 2, 2));
             AssetDatabase.CreateAsset(table, folder + "/rewards.asset");

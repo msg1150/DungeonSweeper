@@ -15,6 +15,9 @@ public sealed class LootRewardOverride
 [CreateAssetMenu(fileName = "LootRewardTable", menuName = "Dungeon Sweeper/Loot Reward Table")]
 public sealed class LootRewardTable : ScriptableObject
 {
+    public const int MaximumEntries = 1024;
+    // Inspector의 시체별 묶음을 기억한다. 개별 설정을 켠 항목만 entries에 저장하므로 상속 의미는 유지된다.
+    [SerializeField, HideInInspector] private List<CorpsePrefab> displayedCorpses = new();
     public List<LootRewardOverride> entries = new();
 
     public LootRewardOverride Find(CorpsePrefab corpse, string kindId)
@@ -30,7 +33,7 @@ public sealed class LootRewardTable : ScriptableObject
     public bool IsValid(out string error)
     {
         error = null;
-        if (entries == null || entries.Count > 1024) { error = "보상 테이블은 최대 1024행입니다."; return false; }
+        if (entries == null || entries.Count > MaximumEntries) { error = "보상 테이블은 최대 1024행입니다."; return false; }
         var seen = new Dictionary<CorpsePrefab, HashSet<string>>();
         foreach (var entry in entries)
         {
