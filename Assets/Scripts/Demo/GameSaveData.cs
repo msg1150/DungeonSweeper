@@ -197,6 +197,8 @@ public sealed class DungeonSaveData
     public int ResolvedHeight => bagHeight == 0 ? GridInventory.Height : bagHeight;
     public int layoutIndex, health, totalValue;
     public Vector2 playerPosition, specialGate;
+    public bool playerHidden;
+    public Vector2Int hidingCell;
     public int activeCorpseIndex = -1;
     public bool lootPlacementOpen;
     public List<CorpseSaveData> corpses = new();
@@ -210,6 +212,9 @@ public sealed class DungeonSaveData
     public bool IsValid()
     {
         if (hasMapSnapshot && (mapSnapshot == null || !mapSnapshot.IsValid(out _))) return false;
+        if (playerHidden && (ResolvedMap == null || !ResolvedMap.HasHidingSpot(hidingCell)
+            || Vector2.Distance(playerPosition, ResolvedMap.Center(hidingCell)) > DungeonRunController.HidingInteractionRange
+            || activeCorpseIndex >= 0 || lootPlacementOpen || (motion != null && motion.isDashing))) return false;
         if (expeditionVersion < 0 || expeditionVersion > 1 || (expeditionVersion == 1 && (expedition == null || !expedition.IsValid() || !hasMapSnapshot))) return false;
         if (!string.IsNullOrEmpty(dungeonId) && (!LootKinds.ValidId(dungeonId)
             || DungeonCatalog.Active?.FindDungeon(dungeonId) == null)) return false;

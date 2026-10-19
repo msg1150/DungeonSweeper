@@ -50,6 +50,9 @@ public sealed class MonsterDefinition
     [Min(.01f)] public float detectionRange = 3.8f;
     [Tooltip("해체 실패 소음을 들을 수 있는 반경. 소리를 들으면 조사와 일시적인 인식 반경 확대가 시작됩니다.")]
     [Min(.01f)] public float hearingRange = 8f;
+    [Tooltip("숨기를 시도하는 플레이어가 이 반경 안에 있으면 은신을 발각합니다. 숨는 순간 거리로 판정하며 소음 확대 배율은 적용하지 않습니다.")]
+    [Min(.1f)] public float hidingRevealRange = 2f;
+    public float HidingRevealRange => hidingRevealRange == 0f ? 2f : hidingRevealRange;
     [Min(.01f)] public float investigationSeconds = 6f, patrolTravelDistance = 10f;
     [Min(0f)] public float patrolArrivalPause = .75f;
     [Header("Noise Alert")]
@@ -68,6 +71,7 @@ public sealed class MonsterDefinition
         && Enum.IsDefined(typeof(MonsterAttackStyle), attackStyle)
         && Nonnegative(noiseDetectionMultiplier) && NoiseDetectionMultiplier >= 1.01f && NoiseDetectionMultiplier <= 5f
         && Nonnegative(noiseAlertSeconds) && Positive(NoiseAlertSeconds)
+        && Nonnegative(hidingRevealRange) && Positive(HidingRevealRange)
         && (!hasMovementStats || Positive(detectionRange * NoiseDetectionMultiplier))
         && (!hasMovementStats || (Positive(patrolSpeed) && Positive(chaseSpeed) && Positive(detectionRange)
             && Positive(hearingRange) && Positive(investigationSeconds) && Positive(patrolTravelDistance) && Nonnegative(patrolArrivalPause)));

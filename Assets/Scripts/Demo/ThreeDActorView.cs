@@ -84,6 +84,10 @@ public sealed class ThreeDActorView : MonoBehaviour
     private void LateUpdate()
     {
         EnsureModel(); if (model == null) return;
+        var run = DungeonRunController.Instance;
+        bool hidden = run != null && run.Player == transform && run.IsPlayerHidden;
+        model.SetActive(!hidden);
+        if (hidden) { previous = transform.position; return; }
         Vector2 position = transform.position;
         model.transform.position = ThreeDWorldView.Map(position);
         Vector2 velocity = Time.deltaTime > 0 ? (position - previous) / Time.deltaTime : Vector2.zero;

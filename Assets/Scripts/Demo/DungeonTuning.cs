@@ -44,7 +44,7 @@ public sealed class DungeonTuning : ScriptableObject
 
 #if UNITY_EDITOR
     [Header("Editor Debug")]
-    [Tooltip("에디터에서만 몬스터 기본 인식·소음 청취·경계 중 인식 반경을 표시합니다. 플레이 중에도 전환 가능합니다.")]
+    [Tooltip("에디터에서만 몬스터 기본 인식·소음 청취·경계 중 인식·은신 발각 반경을 표시합니다. 플레이 중에도 전환 가능합니다.")]
     public bool showMonsterPerceptionRanges;
 #endif
 

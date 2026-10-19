@@ -195,6 +195,7 @@ MonoBehaviour:
     chaseSpeed: 2.15
     detectionRange: 3.8
     hearingRange: 8
+    hidingRevealRange: 2
     investigationSeconds: 6
     patrolTravelDistance: 10
     patrolArrivalPause: 0.75

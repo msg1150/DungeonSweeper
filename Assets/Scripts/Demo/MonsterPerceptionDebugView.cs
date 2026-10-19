@@ -8,6 +8,7 @@ public sealed class MonsterPerceptionDebugView : MonoBehaviour
     private static readonly Color BaseColor = new(1f, .83f, .2f, .9f);
     private static readonly Color HearingColor = new(.25f, .9f, 1f, .7f);
     private static readonly Color AlertColor = new(1f, .3f, .25f, .95f);
+    private static readonly Color HidingColor = new(.85f, .4f, 1f, .95f);
     private readonly Vector2[] circle = new Vector2[Segments + 1];
     private DungeonRunController run;
     private GUIStyle label;
@@ -45,16 +46,17 @@ public sealed class MonsterPerceptionDebugView : MonoBehaviour
                 float height = world != null ? world.FloorHeight(center) + .04f : 0f;
                 DrawCircle(camera, inverse, center, height, enemy.HearingRange, HearingColor, true);
                 DrawCircle(camera, inverse, center, height, enemy.BaseDetectionRange, BaseColor, false);
+                DrawCircle(camera, inverse, center, height, enemy.HidingRevealRange, HidingColor, false);
                 if (enemy.NoiseAlertRemaining > 0f)
                     DrawCircle(camera, inverse, center, height, enemy.CurrentDetectionRange, AlertColor, false);
                 if (!Project(camera, inverse, center, height, out var point)
                     || point.x < 0 || point.x > GameGuiScope.Width || point.y < 0 || point.y > GameGuiScope.Height) continue;
-                string text = $"{enemy.DisplayName}  인식 {enemy.CurrentDetectionRange:0.0} / 기본 {enemy.BaseDetectionRange:0.0} / 청취 {enemy.HearingRange:0.0}";
+                string text = $"{enemy.DisplayName}  인식 {enemy.CurrentDetectionRange:0.0} / 기본 {enemy.BaseDetectionRange:0.0} / 청취 {enemy.HearingRange:0.0} / 은신 발각 {enemy.HidingRevealRange:0.0}";
                 if (enemy.NoiseAlertRemaining > 0f) text += $"  경계 {enemy.NoiseAlertRemaining:0.0}초";
-                DrawLabel(new Rect(Mathf.Clamp(point.x - 140f, 8f, GameGuiScope.Width - 400f), point.y + 8f, 390f, 23f), text);
+                DrawLabel(new Rect(Mathf.Clamp(point.x - 140f, 8f, GameGuiScope.Width - 480f), point.y + 8f, 470f, 23f), text);
             }
-            DrawLabel(new Rect(8, 108, 510, 58),
-                "몬스터 인식 디버그 · DungeonTuning에서 표시 전환\n노랑: 기본 인식   하늘색 점선: 소음 청취   빨강: 소음 후 실제 인식\n원은 거리 기준입니다. 플레이어 발견에는 벽에 가리지 않은 시야도 필요합니다.");
+            DrawLabel(new Rect(8, 108, 550, 76),
+                "몬스터 인식 디버그 · DungeonTuning에서 표시 전환\n노랑: 기본 인식   하늘색 점선: 소음 청취   빨강: 소음 후 실제 인식\n보라: 은신 발각 · 숨는 순간 이 반경 안이면 은신 실패 (벽과 무관)\n기본·확장 시야는 벽에 가리면 발견하지 못합니다.");
         }
         finally { GUI.depth = depth; }
     }

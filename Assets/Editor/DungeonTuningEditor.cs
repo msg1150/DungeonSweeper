@@ -30,7 +30,7 @@ public sealed class DungeonTuningEditor : Editor
         Help("Hearing Range / Investigation Seconds",
             "Hearing Range를 높이면 해체 실패 소리를 듣는 적의 범위가 넓어집니다. Investigation Seconds를 높이면 적이 소리 난 시체를 더 오래 조사합니다.");
         Help("Show Monster Perception Ranges (에디터 전용)",
-            "플레이 중 체크하면 Game 뷰에 모든 몬스터의 기본 인식(노랑), 소음 청취(하늘색 점선), 소음 후 인식(빨강)을 표시합니다. 실제 게임 빌드에는 표시 코드가 포함되지 않습니다. 개별 수치는 Assets/Prefabs/Monsters의 Monster Prefab > Stats에서 설정합니다. Noise Detection Multiplier와 Noise Alert Seconds가 소음 후 확대 배율·지속 시간입니다.");
+            "플레이 중 체크하면 Game 뷰에 모든 몬스터의 기본 인식(노랑), 소음 청취(하늘색 점선), 소음 후 인식(빨강), 은신 발각(보라)을 표시합니다. 실제 게임 빌드에는 표시 코드가 포함되지 않습니다. 개별 수치는 Assets/Prefabs/Monsters의 Monster Prefab > Stats에서 설정합니다. Hiding Reveal Range는 숨는 순간 은신을 발각하는 반경입니다. Noise Detection Multiplier와 Noise Alert Seconds는 소음 후 시야 확대 배율·시간입니다.");
         Help("Player Move / Dash",
             "Move Speed는 평상시 속도, Dash Speed는 대시 속도입니다. Dash Duration은 대시 유지 시간, Dash Cooldown은 다시 사용할 때까지의 대기 시간입니다.");
         Help("Pool Capacity Per Prefab / Pool Total Capacity",

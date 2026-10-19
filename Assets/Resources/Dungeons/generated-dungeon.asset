@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fa7e574d3854475596b3c5379f66163d, type: 3}
   m_Name: generated-dungeon
   m_EditorClassIdentifier: Assembly-CSharp::DungeonDefinition
+  generationHidingSpotsPerFloor: 0
   dungeonId: dungeon.1b5d1dd103c34b918a4649eac3443bc4
   displayName: "\uC790\uB3D9 \uC0DD\uC131 \uB358\uC804"
   layoutIndex: 0

@@ -18,6 +18,7 @@ public sealed class CorpseSpawnEntry
 [CreateAssetMenu(fileName = "Dungeon", menuName = "Dungeon Sweeper/Dungeon")]
 public sealed class DungeonDefinition : ScriptableObject
 {
+    [HideInInspector] public int generationHidingSpotsPerFloor;
     public string dungeonId = "dungeon.custom", displayName = "던전";
     [Range(0, 2)] public int layoutIndex;
     [Header("Monsters · 프리팹과 생성 수")]

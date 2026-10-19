@@ -201,12 +201,68 @@ public static class DungeonPopulationChecks
             saved.patrolStateVersion = 0; saved.roamSeconds = 5f;
             actor.Restore(saved);
             check(actor.Capture().roamSeconds == 0f, "legacy short retarget timers do not interrupt restored patrols");
+            RunDiagonalMovement(check);
         }
         finally
         {
             run.Player.position = playerPosition;
             if (actor != null) { actor.gameObject.SetActive(false); UnityEngine.Object.Destroy(actor.gameObject); }
             UnityEngine.Random.state = random;
+            Physics2D.SyncTransforms();
+        }
+    }
+
+    private static void RunDiagonalMovement(Action<bool, string> check)
+    {
+        Vector2 start = default, goal = default;
+        bool found = false;
+        for (int x = 0; x < DungeonLayoutFactory.Width - 1 && !found; x++)
+        for (int y = 0; y < DungeonLayoutFactory.Height - 1 && !found; y++)
+        {
+            if (!DungeonLayoutFactory.IsWalkableCell(x, y) || !DungeonLayoutFactory.IsWalkableCell(x + 1, y)
+                || !DungeonLayoutFactory.IsWalkableCell(x, y + 1) || !DungeonLayoutFactory.IsWalkableCell(x + 1, y + 1)) continue;
+            start = DungeonLayoutFactory.CellCenter(x, y) + Vector2.one * .12f;
+            goal = DungeonLayoutFactory.CellCenter(x + 1, y + 1) - Vector2.one * .12f;
+            found = true;
+        }
+        // 좁은 통로만으로 제작한 층은 대각선 이동을 검증할 방이 없을 수 있다.
+        if (!found) return;
+        var obj = new GameObject("Diagonal pursuit validation");
+        var blocker = new GameObject("Diagonal sweep blocker");
+        try
+        {
+            obj.transform.position = start;
+            obj.AddComponent<BoxCollider2D>().size = Vector2.one * .4f;
+            var actor = obj.AddComponent<EnemyAgent>();
+            actor.Initialize(DungeonRunController.Instance.Player, start, goal, new MonsterDefinition(), null);
+            Physics2D.SyncTransforms();
+            bool progressed = true;
+            for (int i = 0; i < 20; i++)
+            {
+                Vector2 target = goal + Vector2.right * (i % 2 == 0 ? .03f : -.03f);
+                Vector2 before = actor.transform.position;
+                Call(actor, "FollowPath", target, .04f, 2);
+                Vector2 delta = (Vector2)actor.transform.position - before;
+                progressed &= delta.x > 0f && delta.y > 0f
+                    && Vector2.Distance(actor.transform.position, target) < Vector2.Distance(before, target) - .039f;
+            }
+            check(progressed, "diagonal pursuit continuously approaches a moving target without returning to cell centers");
+            Call(actor, "FollowPath", goal, 10f, 2);
+            Vector2 movedGoal = goal + new Vector2(-.04f, .03f);
+            float beforeDistance = Vector2.Distance(actor.transform.position, movedGoal);
+            Call(actor, "FollowPath", movedGoal, .04f, 2);
+            check(Vector2.Distance(actor.transform.position, movedGoal) < beforeDistance - .039f,
+                "a completed path follows a moved endpoint inside the same cell without rewinding to its origin");
+            actor.transform.position = start;
+            blocker.transform.position = (start + goal) * .5f + Vector2.up * .25f;
+            blocker.AddComponent<BoxCollider2D>().size = Vector2.one * .1f;
+            Physics2D.SyncTransforms();
+            check(!(bool)Call(actor, "CanMoveDirectly", goal), "diagonal shortcuts respect body width even when the center line misses a wall");
+        }
+        finally
+        {
+            obj.SetActive(false); blocker.SetActive(false);
+            UnityEngine.Object.Destroy(obj); UnityEngine.Object.Destroy(blocker);
             Physics2D.SyncTransforms();
         }
     }
@@ -289,6 +345,17 @@ public static class DungeonPopulationChecks
             check(!secondData.IsValid(), "non-finite perception settings are rejected");
             secondData.noiseDetectionMultiplier = 1f;
             check(!secondData.IsValid(), "configured noise perception must expand beyond the base radius");
+            var beforeForget = actor.Capture();
+            beforeForget.attackTimer = .3f; beforeForget.investigationSeconds = 4f;
+            beforeForget.hasLastSeenPlayerPosition = true; actor.Restore(beforeForget);
+            check(actor.CanRevealHidingAt((Vector2)actor.transform.position + Vector2.right * actor.HidingRevealRange)
+                && !actor.CanRevealHidingAt((Vector2)actor.transform.position + Vector2.right * (actor.HidingRevealRange + .1f)),
+                "hiding reveal uses the individual monster radius including its boundary");
+            actor.ForgetHiddenPlayer();
+            var forgotten = actor.Capture();
+            check(!forgotten.hasLastSeenPlayerPosition && !forgotten.wasChasing && !forgotten.wasInvestigating
+                && forgotten.attackTimer == 0f && forgotten.investigationSeconds == 0f,
+                "successful hiding immediately clears attacks, pursuit memories and pending noise investigation");
             var saved = run.CaptureSave(); saved.enemies[0].noiseAlertSeconds = float.NaN;
             check(!saved.IsValid(), "saved non-finite alert timers are rejected");
             saved.enemies[0].noiseAlertSeconds = -1f;

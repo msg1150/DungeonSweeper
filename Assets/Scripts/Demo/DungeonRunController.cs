@@ -35,6 +35,10 @@ public class DungeonRunController : MonoBehaviour
     private bool isDead;
     private bool lootPlacementOpen;
     private bool actorsReleased;
+    private Vector2Int hidingCell;
+    private SpriteRenderer[] playerSprites;
+    public bool IsPlayerHidden { get; private set; }
+    public const float HidingInteractionRange = .9f;
     private Vector2Int lastDiscoveryCell = new(int.MinValue, int.MinValue);
 
     public GridInventory Inventory => inventory;
@@ -90,6 +94,7 @@ public class DungeonRunController : MonoBehaviour
         }
         else RestoreWorld(saved);
         CreateStairs();
+        CreateHidingMarkers();
         DiscoverAroundPlayer();
 
         ThreeDWorldView.Create(player, true);
@@ -157,6 +162,7 @@ public class DungeonRunController : MonoBehaviour
         if (playerHealth == null) playerHealth = player.gameObject.AddComponent<PlayerHealth>();
         playerHealth.Initialize();
         PlayerVisualAnimator.Ensure(player.gameObject);
+        playerSprites = player.GetComponentsInChildren<SpriteRenderer>(true);
         playerBody = player.GetComponent<Rigidbody2D>();
         DungeonCameraFollow.Ensure(player);
         DungeonVisionOverlayRenderer.Create(player);
@@ -208,8 +214,10 @@ public class DungeonRunController : MonoBehaviour
 
     private void TryInteract()
     {
+        if (IsPlayerHidden) { ExitHiding(); return; }
         int stair = NearbyStair();
         if (stair != 0) { if (!TryTravelFloor(stair, out string error)) Say(error); return; }
+        if (TryGetNearbyHidingSpot(out _)) { if (!TryHide(out string error)) Say(error); return; }
         CorpseRunData corpse = FindNearbyCorpse();
         if (corpse != null)
         {
@@ -223,7 +231,76 @@ public class DungeonRunController : MonoBehaviour
 
         if (HasEntrancePortal && Vector2.Distance(player.position, entrance) < GameFlowConfig.Active.exitRange) FinishRun("입구로 돌아와 탈출했습니다.");
         else if (HasSpecialPortal && Vector2.Distance(player.position, specialGate) < GameFlowConfig.Active.exitRange) FinishRun("특수 게이트를 찾아 탈출했습니다.");
-        else Say("시체 또는 탈출 지점 가까이에서 [E]를 누르세요.");
+        else Say("시체·은신처·탈출 지점 가까이에서 [E]를 누르세요.");
+    }
+
+    private bool TryGetNearbyHidingSpot(out Vector2Int cell)
+    {
+        cell = default;
+        var map = DungeonLayoutFactory.ActiveMap;
+        if (player == null || map?.hidingSpots == null) return false;
+        float closest = HidingInteractionRange * HidingInteractionRange;
+        bool found = false;
+        foreach (var candidate in map.hidingSpots)
+        {
+            float distance = ((Vector2)player.position - map.Center(candidate)).sqrMagnitude;
+            if (distance > closest) continue;
+            closest = distance; cell = candidate; found = true;
+        }
+        return found;
+    }
+
+    public bool TryHide(out string error)
+    {
+        error = null;
+        if (!IsRunActive || IsPlayerHidden || GameSession.IsLoading || GameShell.IsGameplayInputBlocked
+            || dismantleSession != null || lootPlacementOpen || !TryGetNearbyHidingSpot(out var cell))
+        { error = "작업을 끝내고 은신처 가까이에서 숨으세요."; return false; }
+        EnemyAgent witness = null;
+        foreach (var enemy in enemies)
+        {
+            if (enemy == null || !enemy.CanRevealHidingAt(player.position)) continue;
+            enemy.NoticeHidingAttempt(); witness ??= enemy;
+        }
+        // 숨는 순간 거리로 판정한다. 한 마리에게라도 들켰다면 플레이어는 계속 노출된다.
+        if (witness != null)
+        { error = $"{witness.DisplayName}에게 숨는 모습을 발각당했습니다! 더 거리를 벌리세요."; return false; }
+        hidingCell = cell;
+        SetPlayerHidden(true);
+        Say("은신했습니다. [E]를 누르면 나옵니다.");
+        GameSession.RequestAutosave();
+        return true;
+    }
+
+    public void ExitHiding()
+    {
+        if (!IsPlayerHidden) return;
+        SetPlayerHidden(false);
+        Say("은신처에서 나왔습니다.");
+        GameSession.RequestAutosave();
+    }
+
+    private void SetPlayerHidden(bool hidden)
+    {
+        IsPlayerHidden = hidden;
+        if (!hidden) hidingCell = default;
+        movement.SetMovementEnabled(!hidden);
+        if (playerSprites != null) foreach (var sprite in playerSprites) if (sprite != null) sprite.forceRenderingOff = hidden;
+        if (hidden) foreach (var enemy in enemies) if (enemy != null) enemy.ForgetHiddenPlayer();
+        player.GetComponent<SpriteDepthView>()?.Sync();
+    }
+
+    private void CreateHidingMarkers()
+    {
+        var map = DungeonLayoutFactory.ActiveMap;
+        if (map?.hidingSpots == null) return;
+        foreach (var cell in map.hidingSpots)
+        {
+            var marker = new GameObject("은신처"); marker.transform.position = map.Center(cell);
+            marker.transform.localScale = new Vector3(.85f, .85f, 1f);
+            var sprite = marker.AddComponent<SpriteRenderer>(); sprite.sprite = CasualArtLibrary.WhiteSprite;
+            sprite.color = new Color(.15f, .65f, .6f); sprite.sortingOrder = 2;
+        }
     }
 
     private CorpseRunData FindNearbyCorpse()
@@ -315,8 +392,10 @@ public class DungeonRunController : MonoBehaviour
     public string GetContextPrompt()
     {
         if (hasEscaped || dismantleSession != null) return null;
+        if (IsPlayerHidden) return "은신 중 · [E] 은신처에서 나오기";
         int stair = NearbyStair();
         if (stair != 0) return stair > 0 ? "[E] 아래층으로 내려가기" : "[E] 위층으로 올라가기";
+        if (TryGetNearbyHidingSpot(out _)) return "[E] 은신처에 숨기 · 가까운 몬스터에게는 발각됩니다";
         CorpseRunData corpse = FindNearbyCorpse();
         if (corpse != null) return $"[E] {corpse.Name} 해체";
         if (HasEntrancePortal && Vector2.Distance(player.position, entrance) < GameFlowConfig.Active.exitRange) return "[E] 입구로 탈출 (현재 전리품 확정)";
@@ -404,6 +483,7 @@ public class DungeonRunController : MonoBehaviour
             dungeonId = activeDungeonId, layoutIndex = DungeonLayoutFactory.LayoutIndex, health = playerHealth.Current,
             bagWidth = inventory.Columns, bagHeight = inventory.Rows,
             playerPosition = player.position, specialGate = specialGate,
+            playerHidden = IsPlayerHidden, hidingCell = hidingCell,
             activeCorpseIndex = activeCorpse == null ? -1 : corpses.IndexOf(activeCorpse),
             lootPlacementOpen = lootPlacementOpen, inventory = inventory.Capture(), totalValue = inventory.TotalValue,
             discoveredCells = new List<Vector2Int>(discoveredCells), motion = movement.Capture(),
@@ -480,6 +560,7 @@ public class DungeonRunController : MonoBehaviour
             movement.SetMovementEnabled(false);
         }
         if (data.lootPlacementOpen) OpenLootPlacement();
+        if (data.playerHidden) { hidingCell = data.hidingCell; SetPlayerHidden(true); }
     }
 
     private void CreatePortals(DungeonWorldFactory factory)
@@ -515,7 +596,7 @@ public class DungeonRunController : MonoBehaviour
     {
         error = null;
         if (!IsRunActive || GameSession.IsLoading || expedition == null || (direction != -1 && direction != 1)
-            || dismantleSession != null || lootPlacementOpen || NearbyStair() != direction)
+            || IsPlayerHidden || dismantleSession != null || lootPlacementOpen || NearbyStair() != direction)
         { error = "계단 가까이에서 작업을 끝낸 뒤 이동하세요."; return false; }
         int targetIndex = FloorIndex + direction;
         if (targetIndex < 0 || targetIndex >= FloorCount) { error = "이동할 층이 없습니다."; return false; }

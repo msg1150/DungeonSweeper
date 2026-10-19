@@ -23,6 +23,7 @@ MonoBehaviour:
     stairsDown: {x: 61, y: 50}
     hasStairsUp: 1
     hasStairsDown: 0
+    hidingSpots: []
   monsters:
   - prefab: {fileID: 51470085052934561, guid: 40cff418e9740b44a986da3b15d8db97, type: 3}
     count: 1

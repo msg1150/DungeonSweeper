@@ -16,6 +16,7 @@ public static class DungeonGenerationPreview
         draft.hideFlags = HideFlags.HideAndDontSave; draft.name = "자동 생성 미리보기";
         draft.dungeonId = "dungeon." + Guid.NewGuid().ToString("N"); draft.displayName = name;
         draft.generationVersion = DungeonMapGenerator.Version; draft.generationSeed = settings.seed;
+        draft.generationHidingSpotsPerFloor = settings.hidingSpotsPerFloor;
         draft.floors = new DungeonFloorDefinition[maps.Length];
         try
         {

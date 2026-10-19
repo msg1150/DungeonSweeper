@@ -7,11 +7,14 @@ public sealed class DungeonGenerationSettings
 {
     public int floorCount = 3, width = 32, height = 20, seed = 12345;
     public bool individualSizes;
+    [Range(0, 16)] public int hidingSpotsPerFloor = 2;
     public List<Vector2Int> floorSizes = new();
     public Vector2Int Size(int index) => individualSizes ? floorSizes[index] : new Vector2Int(width,height);
     public bool IsValid(out string error)
     {
         error = null;
+        if (hidingSpotsPerFloor < 0 || hidingSpotsPerFloor > 16)
+        { error = "자동 생성 은신처 수는 층마다 0~16개입니다."; return false; }
         if (floorCount < 1 || floorCount > DungeonExpeditionData.MaximumFloors)
         { error = "층 수는 1~16 사이로 입력하세요."; return false; }
         if (individualSizes && (floorSizes == null || floorSizes.Count != floorCount))
@@ -32,7 +35,7 @@ public sealed class DungeonGenerationSettings
 /// </summary>
 public static class DungeonMapGenerator
 {
-    public const int Version = 1;
+    public const int Version = 2;
     private static readonly Vector2Int[] directions = { Vector2Int.left, Vector2Int.right, Vector2Int.up, Vector2Int.down };
     public static DungeonFloorMap[] Generate(DungeonGenerationSettings settings)
     {
@@ -53,6 +56,7 @@ public static class DungeonMapGenerator
             int[] distances = Distances(map, map.entrance);
             map.stairsUp = PickMarker(map, distances, false, random);
             map.stairsDown = PickMarker(map, distances, true, random);
+            AddHidingSpots(map, settings.hidingSpotsPerFloor, random);
             AddWalls(map);
             if (!map.IsValid(out error)) throw new InvalidOperationException("생성 도면 검증 실패: " + error);
             result[i] = map;
@@ -137,6 +141,31 @@ public static class DungeonMapGenerator
             if (score == best) candidates.Add(cell);
         }
         return candidates[random.Next(candidates.Count)];
+    }
+    private static void AddHidingSpots(DungeonFloorMap map, int requested, System.Random random)
+    {
+        var candidates = new List<Vector2Int>();
+        for (int y = 0; y < map.height; y++) for (int x = 0; x < map.width; x++)
+        {
+            var cell = new Vector2Int(x, y);
+            if (map.Walkable(cell) && !map.Reserved(cell)) candidates.Add(cell);
+        }
+        // 추가 탈출 포탈에 필요한 한 칸은 남긴다. 작은 도면에는 가능한 수만 배치한다.
+        int count = Mathf.Min(requested, Mathf.Max(0, candidates.Count - 1));
+        for (int i = 0; i < count; i++)
+        {
+            int bestIndex = -1; float bestScore = float.NegativeInfinity;
+            for (int j = 0; j < candidates.Count; j++)
+            {
+                var cell = candidates[j];
+                float separation = Vector2Int.Distance(cell, map.entrance);
+                foreach (var existing in map.hidingSpots) separation = Mathf.Min(separation, Vector2Int.Distance(cell, existing));
+                int edges = 0; foreach (var delta in directions) if (!map.Walkable(cell + delta)) edges++;
+                float score = separation + edges * .75f + (float)random.NextDouble() * .3f;
+                if (score > bestScore) { bestScore = score; bestIndex = j; }
+            }
+            map.hidingSpots.Add(candidates[bestIndex]); candidates.RemoveAt(bestIndex);
+        }
     }
     private static void AddWalls(DungeonFloorMap map)
     {

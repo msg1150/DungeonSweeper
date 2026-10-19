@@ -74,11 +74,11 @@ public static class DungeonAuthoringService
             map.hasStairsUp = i > 0; map.hasStairsDown = i < dungeon.floors.Length - 1;
             var available = new List<Vector2Int>();
             for (int x = 0; x < map.width; x++) for (int y = 0; y < map.height; y++)
-                if (map.Walkable(new Vector2Int(x,y)) && new Vector2Int(x,y) != map.entrance) available.Add(new Vector2Int(x,y));
+                if (map.Walkable(new Vector2Int(x,y)) && new Vector2Int(x,y) != map.entrance && !map.HasHidingSpot(new Vector2Int(x,y))) available.Add(new Vector2Int(x,y));
             if (available.Count >= 2)
             {
-                if (!map.Walkable(map.stairsUp) || map.stairsUp == map.entrance) map.stairsUp = available[0];
-                if (!map.Walkable(map.stairsDown) || map.stairsDown == map.entrance || map.stairsDown == map.stairsUp)
+                if (!map.Walkable(map.stairsUp) || map.stairsUp == map.entrance || map.HasHidingSpot(map.stairsUp)) map.stairsUp = available[0];
+                if (!map.Walkable(map.stairsDown) || map.stairsDown == map.entrance || map.stairsDown == map.stairsUp || map.HasHidingSpot(map.stairsDown))
                     map.stairsDown = available.OrderByDescending(cell => (cell - map.entrance).sqrMagnitude).First(cell => cell != map.stairsUp);
             }
             EditorUtility.SetDirty(floor);

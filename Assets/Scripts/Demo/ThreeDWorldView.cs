@@ -240,6 +240,23 @@ public sealed class ThreeDWorldView : MonoBehaviour
             lamp.color = stair.direction > 0 ? new Color(.28f,.9f,.65f) : new Color(.45f,.65f,1);
         }
         Combine("Dungeon Stairs", steps, trim);
+        // 은신처는 바닥을 막지 않는 보관함 형태로 표시한다. 논리 좌표와 상호작용은 도면을 그대로 사용한다.
+        var hidingMap = DungeonLayoutFactory.ActiveMap;
+        if (hidingMap?.hidingSpots != null && hidingMap.hidingSpots.Count > 0)
+        {
+            var cabinets = new List<CombineInstance>(); var openings = new List<CombineInstance>(); var accents = new List<CombineInstance>();
+            foreach (var hidingCell in hidingMap.hidingSpots)
+            {
+                Vector2 point = hidingMap.Center(hidingCell);
+                AddBox(cabinets, cube, Map(point, .52f), new Vector3(.96f, 1.04f, .72f));
+                AddBox(openings, cube, Map(point + Vector2.down * .37f, .48f), new Vector3(.7f, .85f, .035f));
+                AddBox(accents, cube, Map(point, 1.08f), new Vector3(1.06f, .12f, .8f));
+                AddBox(accents, cube, Map(point + new Vector2(.29f, -.40f), .5f), new Vector3(.06f, .18f, .04f));
+            }
+            Combine("Hiding cabinets", cabinets, Surface("Hiding timber", new Color(.34f, .24f, .16f)));
+            Combine("Hiding cabinet doors", openings, Surface("Hiding dark doors", new Color(.06f, .13f, .13f)));
+            Combine("Hiding cabinet teal trim", accents, Surface("Hiding teal", new Color(.18f, .65f, .55f)));
+        }
         foreach (string name in new[] { "입구", "특수 탈출 게이트" })
         {
             var marker = GameObject.Find(name); if (marker == null) continue;

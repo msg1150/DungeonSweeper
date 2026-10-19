@@ -29,6 +29,26 @@ public static class DungeonGenerationChecks
         var mixed = new DungeonGenerationSettings { floorCount = 3,individualSizes = true,seed = -123,
             floorSizes = new List<Vector2Int> { new(24,16),new(16,12),new(32,20) } };
         var first = DungeonMapGenerator.Generate(mixed); var duplicate = DungeonMapGenerator.Generate(mixed);
+        check(first.All(map => map.hidingSpots.Count == 2 && map.hidingSpots.All(cell => map.Walkable(cell) && map.Reserved(cell)
+            && cell != map.entrance && (!map.hasStairsUp || cell != map.stairsUp) && (!map.hasStairsDown || cell != map.stairsDown))),
+            "generated hiding spots are reachable reserved floor cells distinct from entrance and stairs");
+        check(first.Select((map, index) => map.hidingSpots.SequenceEqual(duplicate[index].hidingSpots)).All(value => value),
+            "a generation seed reproduces hiding positions as well as geometry");
+        var detached = first[0].Copy(); detached.hidingSpots.Clear();
+        check(first[0].hidingSpots.Count == 2, "copied floor maps own their hiding spot list");
+        detached = first[0].Copy(); detached.hidingSpots.Add(detached.hidingSpots[0]);
+        check(!detached.IsValid(out _), "duplicate hiding positions are rejected");
+        detached = first[0].Copy(); detached.hidingSpots[0] = detached.entrance;
+        check(!detached.IsValid(out _), "hiding spots cannot overlap entrance markers");
+        var hiddenSave = new DungeonSaveData { health = 100, mapSnapshot = first[0].Copy(), hasMapSnapshot = true,
+            playerHidden = true, hidingCell = first[0].hidingSpots[0], playerPosition = first[0].Center(first[0].hidingSpots[0]) };
+        check(hiddenSave.IsValid(), "hidden player state validates at an authored hiding spot");
+        hiddenSave.playerPosition += Vector2.right * 3f;
+        check(!hiddenSave.IsValid(), "hidden player cannot be saved far from the hiding spot");
+        hiddenSave.playerHidden = false;
+        check(hiddenSave.IsValid(), "old saves without an active hidden state remain loadable");
+        var noHiding = DungeonMapGenerator.Generate(new DungeonGenerationSettings { hidingSpotsPerFloor = 0 });
+        check(noHiding.All(map => map.hidingSpots.Count == 0), "zero hiding budget generates no hiding spots");
         check(first.Select((map,index) => map.width == mixed.floorSizes[index].x && map.height == mixed.floorSizes[index].y).All(value => value),
             "each generated floor accepts its own grid dimensions");
         check(first.Select((map,index) => map.tiles.SequenceEqual(duplicate[index].tiles) && map.entrance == duplicate[index].entrance

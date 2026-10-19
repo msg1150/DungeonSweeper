@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fa7e574d3854475596b3c5379f66163d, type: 3}
   m_Name: ring-corridor
   m_EditorClassIdentifier: Assembly-CSharp::DungeonDefinition
+  generationHidingSpotsPerFloor: 0
   dungeonId: dungeon.ring-corridor
   displayName: "\uACE0\uB9AC\uD615 \uD68C\uB791"
   layoutIndex: 1
@@ -29,3 +30,8 @@ MonoBehaviour:
     count: 1
   - prefab: {fileID: 5555483854383871316, guid: 056208bae4f3c4e47b214abe3d25d0b4, type: 3}
     count: 1
+  floors:
+  - {fileID: 11400000, guid: e129c16f6b55320489fa7d2cd3328a93, type: 2}
+  extraExitFloor: -1
+  generationVersion: 0
+  generationSeed: 0

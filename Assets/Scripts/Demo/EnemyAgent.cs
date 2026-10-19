@@ -24,6 +24,8 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
     private bool hasLastSeenPlayerPosition;
     private readonly List<Vector2> path = new();
     private readonly List<RaycastHit2D> sightHits = new(16);
+    private readonly List<RaycastHit2D> movementHits = new(16);
+    private BoxCollider2D navigationCollider;
     private int pathIndex, pathMode = -1;
     private Vector2Int pathTargetCell;
     public string PrefabId { get; set; }
@@ -34,9 +36,33 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
     public float BaseDetectionRange => definition == null ? 0f : definition.hasMovementStats ? definition.detectionRange : DungeonTuning.Active.detectionRange;
     public float HearingRange => definition == null ? 0f : definition.hasMovementStats ? definition.hearingRange : DungeonTuning.Active.hearingRange;
     public float NoiseAlertRemaining => noiseAlertRemaining;
+    public float HidingRevealRange => definition?.HidingRevealRange ?? 0f;
+    private bool IsTargetHidden => DungeonRunController.Instance != null && DungeonRunController.Instance.Player == player
+        && DungeonRunController.Instance.IsPlayerHidden;
     // 판정과 디버그 표시는 같은 값을 사용한다. 소음 청취 반경과는 별개인, 벽에 차단되는 시야 거리다.
     public float CurrentDetectionRange => BaseDetectionRange * (definition != null && noiseAlertRemaining > 0f ? definition.NoiseDetectionMultiplier : 1f);
     private float TravelDistance => definition.hasMovementStats ? definition.patrolTravelDistance : DungeonTuning.Active.patrolTravelDistance;
+
+    public bool CanRevealHidingAt(Vector2 position) => definition != null && isActiveAndEnabled
+        && ((Vector2)transform.position - position).sqrMagnitude <= HidingRevealRange * HidingRevealRange;
+
+    public void NoticeHidingAttempt()
+    {
+        if (player == null || definition == null) return;
+        lastSeenPlayerPosition = player.position; hasLastSeenPlayerPosition = true; pathMode = -1;
+    }
+
+    /// <summary>은신 성공 시 공격·목격 기록·기존 소음 조사를 즉시 끊는다. 경계 반경의 남은 시간은 유지한다.</summary>
+    public void ForgetHiddenPlayer()
+    {
+        if (definition == null) return;
+        hasLastSeenPlayerPosition = wasChasing = wasInvestigating = damageApplied = false;
+        lastSeenPlayerPosition = investigationTarget = Vector2.zero;
+        investigationRemaining = attackTimer = 0f;
+        path.Clear(); pathIndex = 0; pathMode = -1;
+        SelectPatrolDestination();
+        visual?.Tick(false, 0f, false, Vector2.down);
+    }
 
     public void HearNoise(Vector2 noisePosition)
     {
@@ -51,6 +77,7 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
         playerHealth = target.GetComponent<PlayerHealth>();
         definition = data;
         visual = animator;
+        navigationCollider = GetComponent<BoxCollider2D>();
         roamTarget = b;
         previousPatrolOrigin = a;
         hasPreviousPatrolOrigin = true;
@@ -61,11 +88,11 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
     /// <summary>이전 런의 공격·조사·경로·플레이어 참조를 다음 대여에 넘기지 않는다.</summary>
     public void ResetForPool()
     {
-        player = null; playerHealth = null; definition = null; visual = null; PrefabId = null;
+        player = null; playerHealth = null; definition = null; visual = null; navigationCollider = null; PrefabId = null;
         roamTarget = investigationTarget = previousPatrolOrigin = lastSeenPlayerPosition = Vector2.zero;
         attackCooldown = attackTimer = patrolPauseRemaining = investigationRemaining = noiseAlertRemaining = 0f;
         damageApplied = hasPreviousPatrolOrigin = wasChasing = wasInvestigating = hasLastSeenPlayerPosition = false;
-        path.Clear(); sightHits.Clear(); pathIndex = 0; pathMode = -1; pathTargetCell = default;
+        path.Clear(); sightHits.Clear(); movementHits.Clear(); pathIndex = 0; pathMode = -1; pathTargetCell = default;
     }
 
     /// <summary>해체 실패 같은 소리를 들으면 마지막 소리 위치를 조사한다.</summary>
@@ -92,7 +119,7 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
         // 이동·공격 중에도 경계 시간은 흐른다. 일시정지와 비활성 층에서는 Tick 자체가 멈춘다.
         noiseAlertRemaining = Mathf.Max(0f, noiseAlertRemaining - elapsed);
         float distance = Vector2.Distance(transform.position, player.position);
-        bool isChasing = distance < CurrentDetectionRange && HasClearSight(player.position);
+        bool isChasing = !IsTargetHidden && distance < CurrentDetectionRange && HasClearSight(player.position);
         if (isChasing)
         {
             // 공격 준비 중에도 실제로 보인 위치만 갱신한다. 시야를 잃은 뒤의 위치는 따라 읽지 않는다.
@@ -107,7 +134,7 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
             if (!damageApplied && progress >= .5f)
             {
                 damageApplied = true;
-                if (distance <= definition.attackRange + .25f && (isChasing || HasClearSight(player.position)))
+                if (!IsTargetHidden && distance <= definition.attackRange + .25f && (isChasing || HasClearSight(player.position)))
                     playerHealth?.TakeDamage(definition.attackDamage);
             }
             return;
@@ -201,15 +228,35 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
 
     private bool FollowPath(Vector2 target, float distance, int mode)
     {
+        // 보이는 방 안에서는 칸 중심을 순서대로 밟을 필요가 없다. 몸체가 통과할 수 있으면
+        // 현재 좌표에서 목표로 바로 이동해 대각선 추격과 같은 칸 안의 미세한 목표 이동을 처리한다.
+        if (CanMoveDirectly(target))
+        {
+            transform.position = Vector2.MoveTowards(transform.position, target, distance);
+            path.Clear(); pathIndex = 0; pathMode = -1;
+            return true;
+        }
         Vector2Int cell = DungeonLayoutFactory.WorldToCell(target);
-        if (pathMode != mode || pathTargetCell != cell || pathIndex >= path.Count)
+        if (pathMode != mode || pathTargetCell != cell || path.Count == 0)
         {
             if (!DungeonLayoutFactory.TryBuildPath(transform.position, target, path)) return false;
             pathTargetCell = cell; pathMode = mode; pathIndex = 0;
         }
-        else if (DungeonLayoutFactory.IsWalkablePosition(target)) path[path.Count - 1] = target;
+        else if (DungeonLayoutFactory.IsWalkablePosition(target))
+        {
+            path[path.Count - 1] = target;
+            // 끝점이 같은 칸에서 움직여도 출발 칸부터 재탐색하지 않는다.
+            if (pathIndex >= path.Count) pathIndex = path.Count - 1;
+        }
         while (distance > 0f && pathIndex < path.Count)
         {
+            // 몸체가 벽에 걸리지 않는 구간만 중간 칸을 생략한다. 한 번의 검사량은 제한한다.
+            int lookAhead = Mathf.Min(path.Count - 1, pathIndex + 8);
+            for (int i = pathIndex + 1; i <= lookAhead; i++)
+            {
+                if (!CanMoveDirectly(path[i])) break;
+                pathIndex = i;
+            }
             Vector2 before = transform.position;
             Vector2 next = Vector2.MoveTowards(before, path[pathIndex], distance);
             distance -= Vector2.Distance(before, next);
@@ -219,6 +266,36 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
         }
         // 도면 밖 좌표는 가장 가까운 바닥으로 보정된다. 그곳에서 도달 불가능한 목표를 계속 재시도하지 않는다.
         return pathIndex < path.Count || Vector2.Distance(transform.position, target) < .18f;
+    }
+
+    private bool CanMoveDirectly(Vector2 target)
+    {
+        Vector2 origin = transform.position;
+        if (!DungeonLayoutFactory.IsWalkablePosition(origin) || !DungeonLayoutFactory.IsWalkablePosition(target)) return false;
+        Vector2 offset = target - origin;
+        float length = offset.magnitude;
+        if (length < .001f) return true;
+        Vector2 size = Vector2.one * .1f;
+        float angle = 0f;
+        if (navigationCollider != null)
+        {
+            origin = navigationCollider.transform.TransformPoint(navigationCollider.offset);
+            Vector3 scale = navigationCollider.transform.lossyScale;
+            size = new Vector2(Mathf.Abs(navigationCollider.size.x * scale.x), Mathf.Abs(navigationCollider.size.y * scale.y));
+            angle = navigationCollider.transform.eulerAngles.z;
+        }
+        var filter = new ContactFilter2D { useTriggers = false };
+        filter.SetLayerMask(Physics2D.DefaultRaycastLayers);
+        movementHits.Clear();
+        // 시야용 선 하나 대신 실제 몸체 크기를 쓸어 벽·모서리에 몸이 파고드는 지름길은 거부한다.
+        Physics2D.BoxCast(origin, size, angle, offset / length, filter, movementHits, length);
+        foreach (var hit in movementHits)
+        {
+            if (hit.collider == null || hit.collider.GetComponentInParent<EnemyAgent>() != null
+                || hit.collider.GetComponentInParent<PlayerMovement>() != null) continue;
+            return false;
+        }
+        return true;
     }
 
     public EnemySaveData Capture() => new()

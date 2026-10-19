@@ -14,13 +14,17 @@ public sealed class DungeonFloorMap
     public int[] tiles = new int[240];
     public Vector2Int entrance = new(2, 1), stairsUp = new(2, 2), stairsDown = new(17, 9);
     public bool hasStairsUp, hasStairsDown;
+    public const int MaximumHidingSpots = 64;
+    public List<Vector2Int> hidingSpots = new();
     public DungeonTile Tile(int x, int y) => x < 0 || y < 0 || x >= width || y >= height || tiles == null || tiles.Length != width * height
         ? DungeonTile.Empty : (DungeonTile)tiles[y * width + x];
     public bool Walkable(Vector2Int cell) => Tile(cell.x, cell.y) == DungeonTile.Floor;
     public Vector2 Center(Vector2Int cell) => new((cell.x - (width - 1) * .5f) * 1.45f, (cell.y - (height - 1) * .5f) * 1.45f);
-    public bool Reserved(Vector2Int cell) => cell == entrance || (hasStairsUp && cell == stairsUp) || (hasStairsDown && cell == stairsDown);
+    public bool HasHidingSpot(Vector2Int cell) => hidingSpots != null && hidingSpots.Contains(cell);
+    public bool Reserved(Vector2Int cell) => cell == entrance || (hasStairsUp && cell == stairsUp) || (hasStairsDown && cell == stairsDown) || HasHidingSpot(cell);
     public DungeonFloorMap Copy() => new() { width = width, height = height, tiles = tiles == null ? null : (int[])tiles.Clone(),
-        entrance = entrance, stairsUp = stairsUp, stairsDown = stairsDown, hasStairsUp = hasStairsUp, hasStairsDown = hasStairsDown };
+        entrance = entrance, stairsUp = stairsUp, stairsDown = stairsDown, hasStairsUp = hasStairsUp, hasStairsDown = hasStairsDown,
+        hidingSpots = hidingSpots == null ? new List<Vector2Int>() : new List<Vector2Int>(hidingSpots) };
 
     public bool IsValid(out string error)
     {
@@ -34,6 +38,14 @@ public sealed class DungeonFloorMap
         if ((hasStairsUp && stairsUp == entrance) || (hasStairsDown && stairsDown == entrance)
             || (hasStairsUp && hasStairsDown && stairsUp == stairsDown))
         { error = "입구와 위/아래 계단의 위치는 서로 달라야 합니다."; return false; }
+        if (hidingSpots != null)
+        {
+            if (hidingSpots.Count > MaximumHidingSpots) { error = "은신처는 층마다 최대 64개입니다."; return false; }
+            var unique = new HashSet<Vector2Int>();
+            foreach (var cell in hidingSpots)
+                if (!Walkable(cell) || cell == entrance || (hasStairsUp && cell == stairsUp) || (hasStairsDown && cell == stairsDown) || !unique.Add(cell))
+                { error = "은신처는 입구·계단과 겹치지 않는 바닥 위에 하나씩 배치하세요."; return false; }
+        }
         var visited = new HashSet<Vector2Int> { entrance }; var queue = new Queue<Vector2Int>(); queue.Enqueue(entrance);
         while (queue.Count > 0)
         {
@@ -47,7 +59,7 @@ public sealed class DungeonFloorMap
     public int PopulationCapacity
     {
         get { int count = 0; if (tiles != null) foreach (int tile in tiles) if (tile == 1) count++;
-            return Mathf.Max(0, count - 2 - (hasStairsUp ? 1 : 0) - (hasStairsDown ? 1 : 0)); }
+            return Mathf.Max(0, count - 2 - (hasStairsUp ? 1 : 0) - (hasStairsDown ? 1 : 0) - (hidingSpots?.Count ?? 0)); }
     }
 }
 

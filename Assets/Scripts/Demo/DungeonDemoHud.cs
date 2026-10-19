@@ -159,6 +159,7 @@ public class DungeonDemoHud : MonoBehaviour
             {
                 if (map.hasStairsUp && map.stairsUp == location) GUI.color = new Color(.4f, .65f, 1f);
                 if (map.hasStairsDown && map.stairsDown == location) GUI.color = new Color(1f, .73f, .3f);
+                if (map.HasHidingSpot(location)) GUI.color = new Color(.15f, .85f, .75f);
             }
             GUI.DrawTexture(tile, Texture2D.whiteTexture);
         }

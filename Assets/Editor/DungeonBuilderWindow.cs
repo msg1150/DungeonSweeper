@@ -7,7 +7,7 @@ using UnityEngine;
 /// <summary>타일 도면을 편집하는 제작 창. 몬스터·시체의 좌표는 그리지 않고 층별 스폰 규칙만 편집한다.</summary>
 public sealed class DungeonBuilderWindow : EditorWindow
 {
-    private enum Brush { Floor, Wall, Empty, Entrance, Up, Down }
+    private enum Brush { Floor, Wall, Empty, Entrance, Up, Down, Hiding, RemoveHiding }
     [SerializeField] private DungeonDefinition dungeon;
     [SerializeField] private int floorIndex;
     [SerializeField] private float cellSize = 24;
@@ -124,7 +124,7 @@ public sealed class DungeonBuilderWindow : EditorWindow
         desiredHeight = EditorGUILayout.IntField("세로 칸 수", desiredHeight);
         if (GUILayout.Button("크기 변경 (기존 칸 유지)")) Resize();
         cellSize = EditorGUILayout.Slider("확대", cellSize, 12, 48);
-        brush = (Brush)GUILayout.SelectionGrid((int)brush, new[] { "바닥", "벽", "빈 공간", "입구 기준", "위층 계단", "아래층 계단" }, 2);
+        brush = (Brush)GUILayout.SelectionGrid((int)brush, new[] { "바닥", "벽", "빈 공간", "입구 기준", "위층 계단", "아래층 계단", "은신처", "은신처 지우기" }, 2);
         EditorGUILayout.HelpBox("왼쪽 드래그: 선택 도구\n오른쪽 드래그: 빈 공간\nCtrl+Z: 실행 취소\n첫 층의 입구 기준이 귀환 포탈입니다. 다른 층에서는 스폰 거리의 기준으로만 사용합니다.", MessageType.None);
         using (new EditorGUILayout.HorizontalScope())
         {
@@ -135,7 +135,7 @@ public sealed class DungeonBuilderWindow : EditorWindow
         EditorGUILayout.PropertyField(floorSettings.FindProperty("monsters"), new GUIContent("몬스터 · 프리팹 / 수량"), true);
         EditorGUILayout.PropertyField(floorSettings.FindProperty("corpses"), new GUIContent("시체 · 프리팹 / 수량"), true);
         floorSettings.ApplyModifiedProperties();
-        EditorGUILayout.HelpBox("위치는 알고리즘이 결정합니다. 계단·입구 칸에는 스폰하지 않습니다. 층 제외는 참조만 제거하며 에셋 파일을 지우지 않습니다.", MessageType.None);
+        EditorGUILayout.HelpBox("위치는 알고리즘이 결정합니다. 계단·입구·은신처 칸에는 스폰하지 않습니다. 은신처는 바닥에 배치하고 E로 사용합니다. 층 제외는 참조만 제거하며 에셋 파일을 지우지 않습니다.", MessageType.None);
         EditorGUILayout.EndScrollView();
     }
     private void DrawGrid()
@@ -143,7 +143,7 @@ public sealed class DungeonBuilderWindow : EditorWindow
         if (Floor == null || Floor.map?.tiles == null) return;
         var map = Floor.map;
         using var panel = new EditorGUILayout.VerticalScope();
-        EditorGUILayout.LabelField($"{map.width} × {map.height}  |  파랑: 입구 / 보라: 위층 / 초록: 아래층", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField($"{map.width} × {map.height}  |  파랑: 입구 / 보라: 위층 / 초록: 아래층 / 청록 H: 은신처 {map.hidingSpots?.Count ?? 0}개", EditorStyles.boldLabel);
         gridScroll = EditorGUILayout.BeginScrollView(gridScroll);
         Rect area = GUILayoutUtility.GetRect(map.width * cellSize + 16, map.height * cellSize + 16, GUILayout.ExpandWidth(false), GUILayout.ExpandHeight(false));
         Vector2 origin = area.position + new Vector2(8,8);
@@ -156,6 +156,7 @@ public sealed class DungeonBuilderWindow : EditorWindow
             if (cell == map.entrance) { color = new Color(.25f,.55f,.95f); marker = "E"; }
             if (map.hasStairsUp && cell == map.stairsUp) { color = new Color(.65f,.4f,.95f); marker = "↑"; }
             if (map.hasStairsDown && cell == map.stairsDown) { color = new Color(.2f,.75f,.45f); marker = "↓"; }
+            if (map.HasHidingSpot(cell)) { color = new Color(.15f,.7f,.7f); marker = "H"; }
             EditorGUI.DrawRect(rect, color); if (marker != null) GUI.Label(rect, marker, EditorStyles.whiteBoldLabel);
         }
         Event current = Event.current;
@@ -180,10 +181,24 @@ public sealed class DungeonBuilderWindow : EditorWindow
     private void Paint(Vector2Int cell, Brush selected)
     {
         var map = Floor.map;
-        if ((int)selected <= (int)Brush.Empty) { map.tiles[cell.y * map.width + cell.x] = selected == Brush.Floor ? 1 : selected == Brush.Wall ? 2 : 0; return; }
+        if (selected == Brush.RemoveHiding) { map.hidingSpots?.Remove(cell); return; }
+        if ((int)selected <= (int)Brush.Empty)
+        {
+            map.tiles[cell.y * map.width + cell.x] = selected == Brush.Floor ? 1 : selected == Brush.Wall ? 2 : 0;
+            if (selected != Brush.Floor) map.hidingSpots?.Remove(cell);
+            return;
+        }
+        if (selected == Brush.Hiding)
+        {
+            if (map.Reserved(cell)) { status = "입구·계단·기존 은신처와 겹칠 수 없습니다."; return; }
+            map.hidingSpots ??= new System.Collections.Generic.List<Vector2Int>();
+            if (map.hidingSpots.Count >= DungeonFloorMap.MaximumHidingSpots) { status = "은신처는 층마다 최대 64개입니다."; return; }
+            map.tiles[cell.y * map.width + cell.x] = 1; map.hidingSpots.Add(cell); return;
+        }
         if (selected == Brush.Up && floorIndex == 0) { status = "첫 층에는 위층 계단이 없습니다."; return; }
         if (selected == Brush.Down && floorIndex == dungeon.floors.Length - 1) { status = "먼저 다음 층을 추가하세요."; return; }
         map.tiles[cell.y * map.width + cell.x] = 1;
+        map.hidingSpots?.Remove(cell);
         if (selected == Brush.Entrance) map.entrance = cell;
         else if (selected == Brush.Up) map.stairsUp = cell;
         else map.stairsDown = cell;
@@ -195,13 +210,16 @@ public sealed class DungeonBuilderWindow : EditorWindow
         int width = Mathf.Clamp(desiredWidth, 4, DungeonFloorMap.MaximumSize), height = Mathf.Clamp(desiredHeight, 4, DungeonFloorMap.MaximumSize);
         var map = Floor.map; Undo.RecordObject(Floor, "Resize dungeon floor"); var tiles = new int[width * height];
         for (int y = 0; y < Mathf.Min(height,map.height); y++) for (int x = 0; x < Mathf.Min(width,map.width); x++) tiles[y * width + x] = map.tiles[y * map.width + x];
-        map.width = width; map.height = height; map.tiles = tiles; EditorUtility.SetDirty(Floor); SelectFloor();
+        map.width = width; map.height = height; map.tiles = tiles;
+        map.hidingSpots?.RemoveAll(cell => !map.Walkable(cell));
+        EditorUtility.SetDirty(Floor); SelectFloor();
     }
     private void Fill(bool borderOnly)
     {
         var map = Floor.map; Undo.RecordObject(Floor, "Fill dungeon floor");
         for (int x = 0; x < map.width; x++) for (int y = 0; y < map.height; y++)
             if (!borderOnly || x == 0 || y == 0 || x == map.width - 1 || y == map.height - 1) map.tiles[y * map.width + x] = borderOnly ? 2 : 1;
+        map.hidingSpots?.RemoveAll(cell => !map.Walkable(cell));
         EditorUtility.SetDirty(Floor);
     }
     private void CreateDungeon()
@@ -221,6 +239,8 @@ public sealed class DungeonBuilderWindow : EditorWindow
         generation.floorCount = EditorGUILayout.IntSlider("층 수",generation.floorCount,1,DungeonExpeditionData.MaximumFloors);
         generation.width = EditorGUILayout.IntSlider("기본 가로 칸",generation.width,4,DungeonFloorMap.MaximumSize);
         generation.height = EditorGUILayout.IntSlider("기본 세로 칸",generation.height,4,DungeonFloorMap.MaximumSize);
+        generation.hidingSpotsPerFloor = EditorGUILayout.IntSlider("층별 은신처 수",generation.hidingSpotsPerFloor,0,16);
+        EditorGUILayout.LabelField("작은 도면에는 포탈 공간을 남기고 가능한 수만 배치합니다.", EditorStyles.miniLabel);
         generation.individualSizes = EditorGUILayout.Toggle("층마다 크기 지정",generation.individualSizes);
         generation.floorSizes ??= new System.Collections.Generic.List<Vector2Int>();
         while (generation.floorSizes.Count < generation.floorCount) generation.floorSizes.Add(new Vector2Int(generation.width,generation.height));
@@ -274,7 +294,8 @@ public sealed class DungeonBuilderWindow : EditorWindow
     }
     private bool PreviewMatchesInput()
     {
-        if (preview == null || !generation.IsValid(out _) || preview.floors.Length != generation.floorCount || preview.generationSeed != generation.seed) return false;
+        if (preview == null || !generation.IsValid(out _) || preview.floors.Length != generation.floorCount || preview.generationSeed != generation.seed
+            || preview.generationHidingSpotsPerFloor != generation.hidingSpotsPerFloor) return false;
         for (int i = 0; i < preview.floors.Length; i++)
             if (generation.Size(i) != new Vector2Int(preview.floors[i].map.width,preview.floors[i].map.height)) return false;
         return true;

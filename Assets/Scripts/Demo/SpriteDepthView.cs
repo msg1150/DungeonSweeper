@@ -74,6 +74,10 @@ public sealed class SpriteDepthView : MonoBehaviour
     {
         var world = ThreeDWorldView.Current;
         if (display == null || world == null || world.WorldCamera == null) return;
+        var run = DungeonRunController.Instance;
+        bool hidden = run != null && run.Player == transform && run.IsPlayerHidden;
+        display.SetActive(!hidden);
+        if (hidden) return;
         if (boundWorld != world) BindWorld(); // 재입장 후 새 월드 자원을 연결하며 표시 객체는 재사용한다.
         var camera = world.WorldCamera;
         // 카메라의 기울기까지 따라 눕히면 그림의 상체가 지면 깊이 방향으로 뻗어
