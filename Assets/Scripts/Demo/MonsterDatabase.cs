@@ -38,7 +38,7 @@ public sealed class MonsterDefinition
     public string id = "monster";
     public string displayName = "몬스터";
     public string spriteSheetResource = "Sprites/Monsters/goblin-sheet";
-    public MonsterAttackStyle attackStyle;
+    [HideInInspector] public MonsterAttackStyle attackStyle; // 기본 시체 생성·이전 저장의 메타데이터. 실제 공격 그림은 프리팹 시트/모델이 정한다.
     [Min(1)] public int attackDamage = 15;
     [Min(.1f)] public float attackRange = .9f;
     [Min(.1f)] public float attackCooldown = 1.4f;
@@ -101,7 +101,6 @@ public sealed class MonsterDefinition
     }
 }
 
-[CreateAssetMenu(fileName = "MonsterDatabase", menuName = "Dungeon Sweeper/Monster Database")]
 public sealed class MonsterDatabase : ScriptableObject
 {
     private static MonsterDatabase active;

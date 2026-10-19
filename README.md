@@ -128,13 +128,13 @@ Unity 메뉴 **Dungeon Sweeper → Dungeon Builder**에서 제작 창을 엽니�
 | 에셋 | 수정할 내용 |
 | --- | --- |
 | [GameFlowConfig](Assets/Resources/GameFlowConfig.asset) | 씬 이름, 수동 저장 슬롯 수, 상호작용 거리 |
-| [DungeonTuning](Assets/Resources/DungeonTuning.asset) | 플레이어 이동·대시·체력·시야, 전리품 가치 배율, 기존 저장용 몬스터 이동 기본값, 풀 보관 한도 |
+| [DungeonTuning](Assets/Resources/DungeonTuning.asset) | 플레이어 이동·대시·체력·시야, 전리품 가치 배율, 풀 보관 한도 |
 | [DungeonCatalog](Assets/Resources/DungeonCatalog.asset) | 입장 가능한 던전 설정과 전체 몬스터·시체 프리팹 등록 목록 |
-| [Dungeons](Assets/Resources/Dungeons) | 던전별 이름·레이아웃·몬스터 배열·시체 배열과 생성 수 |
+| [Dungeons](Assets/Resources/Dungeons) | 던전별 이름·난이도·선택창 이미지·설명과 층별 스폰 수 요약 |
 | DungeonFloorDefinition | 층별 바닥·벽 도면, 입구·계단, 몬스터·시체 프리팹과 생성 수 |
 | [몬스터 프리팹](Assets/Prefabs/Monsters) | 공통 이동·순찰·감지·청각·공격 능력치와 외형 |
 | [시체 프리팹](Assets/Prefabs/Corpses) | 외형·해체 난이도·드롭 종류·확률·가격·형태 |
-| [MonsterDatabase](Assets/Resources/MonsterDatabase.asset) | 기존 저장 호환과 기본 프리팹 생성용 데이터 |
+| [MonsterDatabase](Assets/Resources/MonsterDatabase.asset) | 기존 저장 호환·기본 생성용 내부 데이터 (현재 수치는 프리팹에서 편집) |
 | [TownEconomyConfig](Assets/Resources/TownEconomyConfig.asset) | 가방 확장 단계·크기·골드 가격·재료 종류와 수량 |
 | [PlayerVisualProfile](Assets/Resources/PlayerVisualProfile.asset) | 플레이어 스프라이트와 애니메이션 |
 | [ThreeDPresentation](Assets/Resources/ThreeDPresentation.asset) | 2.5D 표시, 카메라 각도·화면 범위, 보관 중인 3D 모델 선택 |
@@ -142,7 +142,7 @@ Unity 메뉴 **Dungeon Sweeper → Dungeon Builder**에서 제작 창을 엽니�
 
 ### 던전별 스폰 설정
 
-제작 창에서 각 층의 **몬스터 / 시체** 목록에 프리팹과 수량을 지정합니다. **Floors가 있는 던전은 층별 목록을 사용하며, 던전 루트에 남아 있는 Monsters / Corpses 배열은 사용하지 않습니다.** Floors가 비어 있는 이전 단층 던전만 루트 배열을 사용합니다. 기존 세 종류의 코드 기반 도면은 제작 창의 **기존 맵을 도면으로 변환**으로 가져올 수 있습니다.
+제작 창에서 각 층의 **몬스터 / 시체** 목록에 프리팹과 수량을 지정합니다. 던전 Inspector의 **N층 생성 수 설정 열기**로 해당 층 에셋을 선택해 수정할 수도 있습니다. **Count는 해당 층에만 적용됩니다.** 현재 던전 Inspector는 층별 수량 요약과 설정 이동 버튼을 표시하며, 사용하지 않는 루트 Monsters / Corpses와 옛 Layout 선택은 노출하지 않습니다. 구 단층 에셋의 내부 배열은 호환·변환용으로만 남아 있습니다. 기존 세 종류의 코드 기반 도면은 제작 창의 **기존 맵을 도면으로 변환**으로 가져올 수 있습니다.
 
 기본 콘텐츠는 고블린·슬라임·오크 몬스터와 시체를 제공하며, 실제 수량은 선택한 던전·층의 설정에 따릅니다. 몬스터와 시체 수는 독립적이고, 같은 프리팹을 여러 행에 넣으면 수를 합산합니다.
 
@@ -150,7 +150,11 @@ Unity 메뉴 **Dungeon Sweeper → Dungeon Builder**에서 제작 창을 엽니�
 
 몬스터 능력치는 프리팹의 **Monster Prefab → Stats**에서 변경합니다. 같은 프리팹을 사용하는 모든 던전의 다음 입장에 적용됩니다. 시체의 **Corpse Prefab**에서 해체 설정과 **Loot** 목록을 변경하며, 몬스터 수와 시체 수를 서로 맞출 필요는 없습니다. 기존 3×2 몬스터 시트와 시체 시트를 계속 지원하며, 시트 사용을 끄고 SpriteRenderer에 별도 스프라이트를 지정할 수도 있습니다.
 
-새 종류는 기존 프리팹을 복제해 `Assets/Prefabs/Monsters` 또는 `Assets/Prefabs/Corpses`에 보관하고 고유한 **Prefab Id**를 부여합니다. `DungeonCatalog`의 **Monster Prefabs / Corpse Prefabs**에 먼저 등록한 뒤 던전의 스폰 배열에 연결하세요. 프리팹은 카탈로그의 직접 참조를 통해 빌드에 포함되므로 Resources 폴더에 있을 필요가 없습니다. 새 던전 설정은 **Create → Dungeon Sweeper → Dungeon**으로 만들고 고유 **Dungeon Id**와 레이아웃을 정한 뒤 `DungeonCatalog`의 **Dungeons**에 등록합니다. 현재 마을 게이트는 등록된 던전 중 하나를 무작위로 선택합니다. 특정 던전 테스트는 Dungeon 씬의 `DungeonRunController.dungeonDefinition`에 등록된 에셋을 지정한 뒤 해당 씬에서 직접 Play하거나 `GameSession.EnterDungeon(out error, definition)`을 사용합니다.
+새 종류는 기존 프리팹을 복제해 `Assets/Prefabs/Monsters` 또는 `Assets/Prefabs/Corpses`에 보관하고 고유한 **Prefab Id**를 부여합니다. `DungeonCatalog`의 **Monster Prefabs / Corpse Prefabs**에 먼저 등록한 뒤 던전의 스폰 배열에 연결하세요. 프리팹은 카탈로그의 직접 참조를 통해 빌드에 포함되므로 Resources 폴더에 있을 필요가 없습니다. 새 던전은 **Dungeon Sweeper → Dungeon Builder → 새 던전 / 자동 생성**으로 제작합니다. 도구가 고유 ID와 층 연결을 구성하고 **저장 + 게임에 등록**으로 카탈로그에 연결합니다. 마을 게이트에서 **E**를 누르면 등록된 던전의 선택창이 열립니다. 던전 카드 아래의 난이도를 확인하고 카드를 선택한 뒤 **선택 던전 입장**을 누르면 해당 던전으로 들어갑니다. **닫기 / Esc**로 마을에 돌아갈 수 있습니다. 특정 던전 테스트는 Dungeon 씬의 `DungeonRunController.dungeonDefinition`에 등록된 에셋을 지정한 뒤 해당 씬에서 직접 Play하거나 `GameSession.EnterDungeon(out error, definition)`을 사용합니다.
+
+던전 제작 툴의 **난이도**는 **쉬움 / 보통 / 어려움 / 매우 어려움** 중 선택합니다. 수동 편집과 자동 생성 후보 모두 지원하며, 표시용 난이도이므로 실제 위험도는 몬스터 프리팹 능력치와 층별 스폰 수로 조절합니다. 기존 던전의 초기 표시 난이도는 보통입니다.
+
+**선택창 이미지 (선택)**에 `Texture2D` 이미지를 연결하면 카드에 표시됩니다. 이미지가 없으면 기본 카드로 표시하며, **선택창 설명 (선택)**은 던전을 선택했을 때 하단에 표시됩니다. 난이도·이미지·설명은 도면을 다시 생성하지 않고 변경할 수 있습니다. 수정 후 **저장 + 게임에 등록**, 자동 생성 후보는 **이 후보 채택 · 저장 + 게임 등록**을 사용하세요. 선택창을 열어 둔 동안 수정했다면 닫았다가 다시 열어 확인합니다. 설정 오류가 있는 던전은 선택창에서 입장이 차단되며 하단에 이유가 표시됩니다.
 
 불러오기는 저장 당시의 레이아웃·프리팹 ID·개체 수·능력치·시체 난이도·해체 진행·확정 전리품을 복원합니다. 변경된 배열로 다시 스폰하거나 전리품을 다시 뽑지 않습니다. 스폰 배열에서 제거한 종류도 프리팹 에셋과 `DungeonCatalog`의 등록 항목을 유지하면 기존 저장을 복원할 수 있습니다. **배포 후 Dungeon Id / Prefab Id를 바꾸거나 사용된 던전·프리팹 에셋 및 카탈로그 등록을 삭제하면 해당 저장을 불러올 수 없으므로 유지해야 합니다.** 폴더를 옮길 때는 `.meta`도 함께 이동해 참조를 보존하세요. ID가 없는 이전 저장은 기존 생성 방식으로 호환합니다.
 
@@ -192,6 +196,9 @@ Unity 메뉴의 **Dungeon Sweeper → Build Windows Release**를 실행합니다
 PowerShell에서 다음 명령을 실행할 수 있습니다.
 
 ```powershell
+# 플레이 모드 없이 컴파일·Inspector 중복·씬 참조·제작 데이터 검사
+./Tools/Validate-GameFlow.ps1 -EditorOnly
+
 # Unity에서 전체 게임 흐름과 저장/로직 검사
 ./Tools/Validate-GameFlow.ps1
 
@@ -206,7 +213,9 @@ Unity가 기본 설치 경로에 없으면 `-UnityEditorPath "C:/path/to/Unity.e
 
 검사는 `.utmp/UnityValidation`에 만든 복사본에서 실행하고, 저장과 옵션을 테스트용으로 분리합니다. 테스트 드라이버는 `Tests`에 두고 복사본에만 주입하여 실제 배포 코드에 포함하지 않습니다. 로그·결과·촬영 화면도 이 폴더에서 확인할 수 있습니다.
 
-**최근 실행 결과 · 2026-10-18**
+2026-10-19에는 `-EditorOnly`로 편집기 검사만 실행했습니다. 미사용 코드·설정 정리는 [정리 기록](Docs/SOURCE_CLEANUP_2026-10-19.md)을 참고하세요.
+
+**플레이 실행 검사 기록 · 2026-10-18**
 
 | 검증 | 통과 |
 | --- | ---: |
@@ -220,7 +229,6 @@ Unity가 기본 설치 경로에 없으면 `-UnityEditorPath "C:/path/to/Unity.e
 | --- | --- |
 | `Assets/Scripts/Demo` | 마을·던전 플레이, 메뉴, 저장, 옵션, 화면·음향 |
 | `Assets/Scripts/Player` | 플레이어 이동과 대시 |
-| `Assets/Scripts/Dismantling`, `Interaction` | 해체와 상호작용 |
 | `Assets/Resources` | 설정 에셋, 셰이더, 스프라이트 |
 | `Assets/Prefabs` | 몬스터·시체 프리팹과 미리보기 에셋 |
 | `Assets/Scenes` | 시작·플레이·개발 테스트 씬 |

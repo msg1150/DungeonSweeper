@@ -2,6 +2,14 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
+public enum DungeonDifficulty
+{
+    [InspectorName("쉬움")] Easy,
+    [InspectorName("보통")] Normal,
+    [InspectorName("어려움")] Hard,
+    [InspectorName("매우 어려움")] VeryHard
+}
+
 [Serializable]
 public sealed class MonsterSpawnEntry
 {
@@ -15,15 +23,26 @@ public sealed class CorpseSpawnEntry
     [Min(0)] public int count = 1;
 }
 
-[CreateAssetMenu(fileName = "Dungeon", menuName = "Dungeon Sweeper/Dungeon")]
 public sealed class DungeonDefinition : ScriptableObject
 {
     [HideInInspector] public int generationHidingSpotsPerFloor;
     public string dungeonId = "dungeon.custom", displayName = "던전";
-    [Range(0, 2)] public int layoutIndex;
-    [Header("Monsters · 프리팹과 생성 수")]
+    [Header("Dungeon selection · 입장 선택창")]
+    [Tooltip("선택창에 표시할 난이도입니다. 몬스터 능력치와 스폰 수는 별도로 설정합니다.")]
+    public DungeonDifficulty difficulty = DungeonDifficulty.Normal;
+    [Tooltip("선택창 카드에 표시할 이미지입니다. 비워 두어도 입장할 수 있습니다.")]
+    public Texture2D selectionImage;
+    [TextArea(2, 4)] public string selectionDescription = "";
+    public string DifficultyLabel => difficulty switch
+    {
+        DungeonDifficulty.Easy => "쉬움", DungeonDifficulty.Normal => "보통",
+        DungeonDifficulty.Hard => "어려움", DungeonDifficulty.VeryHard => "매우 어려움", _ => "미설정"
+    };
+    // 구 단층 에셋의 실행·도면 변환에만 필요하다. 현재 제작은 floors에서만 설정한다.
+    [HideInInspector, Range(0, 2)] public int layoutIndex;
+    [HideInInspector]
     public MonsterSpawnEntry[] monsters = Array.Empty<MonsterSpawnEntry>();
-    [Header("Corpses · 프리팹과 생성 수")]
+    [HideInInspector]
     public CorpseSpawnEntry[] corpses = Array.Empty<CorpseSpawnEntry>();
     [Header("Authoring tool · 층별 도면과 스폰 설정 (비어 있으면 이전 단층 맵)")]
     public DungeonFloorDefinition[] floors = Array.Empty<DungeonFloorDefinition>();
@@ -55,6 +74,8 @@ public sealed class DungeonDefinition : ScriptableObject
     public bool IsValid(out string error)
     {
         error = null;
+        if (!Enum.IsDefined(typeof(DungeonDifficulty), difficulty))
+        { error = "던전 난이도 설정이 올바르지 않습니다."; return false; }
         if (floors != null && floors.Length > 0)
         {
             if (!LootKinds.ValidId(dungeonId) || string.IsNullOrWhiteSpace(displayName) || floors.Length > DungeonExpeditionData.MaximumFloors

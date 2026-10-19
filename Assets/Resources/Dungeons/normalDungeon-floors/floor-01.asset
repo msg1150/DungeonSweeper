@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e98107e9f7fa4570863ff83a3fa66af1, type: 3}
   m_Name: floor-01
   m_EditorClassIdentifier: Assembly-CSharp::DungeonFloorDefinition
-  floorId: floor.04776d12f7014d52b375ba4a3c9f9b84
+  floorId: floor.62e00be9417b4189ae9d9f6d1b3359cb
   displayName: "1\uCE35"
   map:
     width: 32
@@ -27,17 +27,14 @@ MonoBehaviour:
     - {x: 29, y: 29}
     - {x: 3, y: 29}
     - {x: 28, y: 2}
+    - {x: 15, y: 14}
   monsters:
   - prefab: {fileID: 51470085052934561, guid: 40cff418e9740b44a986da3b15d8db97, type: 3}
-    count: 1
-  - prefab: {fileID: 5377609509600981122, guid: 88ea69e2ceec1814fb527b4f7842956f, type: 3}
-    count: 1
+    count: 2
   - prefab: {fileID: 1790920542060373180, guid: 66a99c8a4fccf244f9499b1b8875905e, type: 3}
     count: 1
   corpses:
   - prefab: {fileID: 1689500788646296613, guid: 10b87e3f2a1416c4d8572220c32624a1, type: 3}
-    count: 1
-  - prefab: {fileID: 7823492119419530324, guid: 1680d2777235b1948bd9bbc113d11795, type: 3}
-    count: 1
+    count: 2
   - prefab: {fileID: 5555483854383871316, guid: 056208bae4f3c4e47b214abe3d25d0b4, type: 3}
-    count: 1
+    count: 2

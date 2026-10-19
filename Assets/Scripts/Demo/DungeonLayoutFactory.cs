@@ -80,11 +80,6 @@ public static class DungeonLayoutFactory
         }
     }
 
-    public static Vector2 RandomGateSpawn()
-    {
-        return RandomFloorPosition(16f);
-    }
-
     public static Vector2 RandomFloorPosition(float minimumDistance)
     {
         EnsureSpawnPoints();

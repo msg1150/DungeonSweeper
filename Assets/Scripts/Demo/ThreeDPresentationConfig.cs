@@ -21,5 +21,5 @@ public sealed class ThreeDPresentationConfig : ScriptableObject
     public static bool Enabled => Active != null && Active.use3D && (Active.useSpriteActors || (Active.cat != null && Active.town != null));
     public static bool SpritesEnabled => Enabled && Active.useSpriteActors;
     public GameObject Model(string species) => species == "goblin" ? goblin : species == "slime" ? slime : species == "orc" ? orc : cat;
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)] private static void Reset() => active = null;
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)] private static void ResetRuntimeState() => active = null;
 }

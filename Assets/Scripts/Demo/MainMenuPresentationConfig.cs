@@ -32,5 +32,5 @@ public sealed class MainMenuPresentationConfig : ScriptableObject
         }
     }
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-    private static void Reset() => active = null;
+    private static void ResetRuntimeState() => active = null;
 }

@@ -82,7 +82,6 @@ public class DungeonRunController : MonoBehaviour
         Vector2Int bagSize = saved == null ? TownProgress.BagSize : new(saved.ResolvedWidth, saved.ResolvedHeight);
         inventory = new GridInventory(bagSize.x, bagSize.y);
         if (!FindExistingPlayer()) return;
-        ClearLegacyDungeonGeometry();
         DungeonLayoutFactory.CreateLayout(saved?.ResolvedMap ?? expedition?.Current.map, saved?.layoutIndex ?? dungeonDefinition.layoutIndex);
         entrance = DungeonLayoutFactory.Entrance;
         player.position = entrance;
@@ -167,35 +166,13 @@ public class DungeonRunController : MonoBehaviour
         DungeonCameraFollow.Ensure(player);
         DungeonVisionOverlayRenderer.Create(player);
 
-        PlayerInteractor oldInteractor = player.GetComponent<PlayerInteractor>();
-        if (oldInteractor != null) oldInteractor.enabled = false;
-        DismantleController oldDismantle = FindAnyObjectByType<DismantleController>();
-        if (oldDismantle != null) oldDismantle.enabled = false;
         return true;
-    }
-
-    // Dungeon_Test에 남아 있던 테스트용 벽/배경은 새 런타임 레이아웃과 겹치므로 사용하지 않는다.
-    private void ClearLegacyDungeonGeometry()
-    {
-        foreach (BoxCollider2D collider in FindObjectsByType<BoxCollider2D>())
-        {
-            if (collider.GetComponentInParent<PlayerMovement>() == null)
-                collider.enabled = false;
-        }
-
-        foreach (SpriteRenderer renderer in FindObjectsByType<SpriteRenderer>())
-        {
-            if (renderer.GetComponentInParent<PlayerMovement>() == null)
-                renderer.enabled = false;
-        }
     }
 
     private void BuildDemoWorld()
     {
         DungeonWorldFactory factory = new DungeonWorldFactory();
 
-        CorpseInteractable existing = FindAnyObjectByType<CorpseInteractable>();
-        if (existing != null) existing.gameObject.SetActive(false);
         List<MonsterPrefab> monsters = new(); List<CorpsePrefab> corpsePrefabs = new();
         if (expedition == null) { monsters = dungeonDefinition.ExpandMonsters(); corpsePrefabs = dungeonDefinition.ExpandCorpses(); }
         else

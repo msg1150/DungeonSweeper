@@ -63,7 +63,6 @@ public sealed class DungeonFloorMap
     }
 }
 
-[CreateAssetMenu(menuName = "Dungeon Sweeper/Dungeon Floor")]
 public sealed class DungeonFloorDefinition : ScriptableObject
 {
     public string floorId = "floor.custom", displayName = "새 층";

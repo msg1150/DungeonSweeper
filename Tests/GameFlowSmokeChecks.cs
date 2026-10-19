@@ -39,6 +39,8 @@ public static class GameFlowSmokeChecks
         DungeonGenerationEditorChecks.Run(Check);
         DungeonDeletionEditorChecks.Run(Check);
         OptimizationEditorChecks.Run(Check);
+        DungeonSelectionEditorChecks.Run(Check);
+        SourceCleanupEditorChecks.Run(Check);
         SessionState.SetFloat("DungeonValidation.Deadline", (float)EditorApplication.timeSinceStartup + 240f);
         Application.runInBackground = true;
         EditorSceneManager.OpenScene("Assets/Scenes/MainMenu.unity");

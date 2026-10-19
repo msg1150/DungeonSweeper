@@ -1,8 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.SceneManagement;
 
-/// <summary>마을에서 던전 입구로 진입하는 최소 허브 흐름.</summary>
+/// <summary>마을 시설과 던전 선택창으로 진입하는 허브 흐름.</summary>
 public class TownHubController : MonoBehaviour
 {
     private Transform player;
@@ -11,8 +10,6 @@ public class TownHubController : MonoBehaviour
     private Transform supplyShop;
     private Transform warehouse;
     private TownCommercePanel commerce;
-    private string toast;
-    private float toastTimer;
     private int viewportWidth, viewportHeight;
 
     private void Awake()
@@ -36,13 +33,12 @@ public class TownHubController : MonoBehaviour
 
     private void Update()
     {
-        if (toastTimer > 0f) toastTimer -= Time.unscaledDeltaTime;
         if (GameShell.IsGameplayInputBlocked || player == null || Keyboard.current == null || !Keyboard.current.eKey.wasPressedThisFrame) return;
         GameFlowConfig flow = GameFlowConfig.Active;
         if (IsNear(warehouse, flow.townShopRange)) { commerce.Open(TownFacility.Warehouse); return; }
         if (IsNear(dungeonEntrance, flow.townGateRange))
         {
-            if (!GameSession.EnterDungeon(out string error)) Say(error);
+            commerce.Open(TownFacility.Dungeons);
             return;
         }
         if (IsNear(guild, flow.townGuildRange))
@@ -74,22 +70,13 @@ public class TownHubController : MonoBehaviour
         DrawFacilityLabel(supplyShop, "거래소", flow.townShopRange);
         DrawFacilityLabel(guild, "길드", flow.townGuildRange);
         DrawFacilityLabel(dungeonEntrance, "던전", flow.townGateRange);
-        if (toastTimer > 0f && !string.IsNullOrEmpty(toast))
-        {
-            Rect toastRect = new Rect(GameGuiScope.Width * .5f - 340f, GameGuiScope.Height * .72f, 680f, 68f);
-            DrawPanel(toastRect);
-            GUI.skin.label.alignment = TextAnchor.MiddleCenter;
-            GUI.skin.label.fontSize = 23;
-            GUI.color = Color.white;
-            GUI.Label(toastRect, toast);
-        }
         if (player == null) return;
         GUI.skin.label.alignment = TextAnchor.MiddleCenter;
         GUI.skin.label.fontSize = 18;
         GUI.color = Color.white;
         string prompt = null;
         if (IsNear(warehouse, flow.townShopRange)) prompt = "[E] 창고 · 가방 확장";
-        else if (IsNear(dungeonEntrance, flow.townGateRange)) prompt = "[E] 던전으로 출발하기";
+        else if (IsNear(dungeonEntrance, flow.townGateRange)) prompt = "[E] 던전 선택 · 출발하기";
         else if (IsNear(guild, flow.townGuildRange)) prompt = "[E] 회수 의뢰 수락 · 제출";
         else if (IsNear(supplyShop, flow.townShopRange)) prompt = "[E] 거래소 · 전리품 판매 · 보급 도구 구매";
         if (prompt != null)
@@ -123,12 +110,6 @@ public class TownHubController : MonoBehaviour
         if (viewportWidth == Screen.width && viewportHeight == Screen.height) return;
         viewportWidth = Screen.width; viewportHeight = Screen.height;
         TownCasualVisuals.RefreshBackground();
-    }
-
-    private void Say(string message)
-    {
-        toast = message;
-        toastTimer = 4.5f;
     }
 
     private static void DrawPanel(Rect rect, Color? color = null)

@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fa7e574d3854475596b3c5379f66163d, type: 3}
+  m_Name: easyDungeon
+  m_EditorClassIdentifier: Assembly-CSharp::DungeonDefinition
+  generationHidingSpotsPerFloor: 5
+  dungeonId: dungeon.66a6653558224c9ca0c612813e2d2e1d
+  displayName: EasyDungeon
+  difficulty: 0
+  selectionImage: {fileID: 0}
+  selectionDescription: 
+  layoutIndex: 0
+  monsters:
+  - prefab: {fileID: 5377609509600981122, guid: 88ea69e2ceec1814fb527b4f7842956f, type: 3}
+    count: 1
+  corpses:
+  - prefab: {fileID: 7823492119419530324, guid: 1680d2777235b1948bd9bbc113d11795, type: 3}
+    count: 4
+  floors:
+  - {fileID: 11400000, guid: 773111a3221396941b45fe30eb37d723, type: 2}
+  - {fileID: 11400000, guid: 11293836224733d4aad2d8cc528f9caa, type: 2}
+  extraExitFloor: -1
+  generationVersion: 2
+  generationSeed: 12345

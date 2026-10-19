@@ -87,6 +87,7 @@ public static class DungeonContentAuthoring
                 dungeon.monsters = monsters.ConvertAll(prefab => new MonsterSpawnEntry { prefab = prefab, count = 1 }).ToArray();
                 dungeon.corpses = corpses.ConvertAll(prefab => new CorpseSpawnEntry { prefab = prefab, count = 1 }).ToArray();
                 AssetDatabase.CreateAsset(dungeon, path);
+                DungeonAuthoringService.ConvertLegacy(dungeon);
             }
             dungeons[i] = dungeon;
         }
@@ -126,23 +127,4 @@ public sealed class DungeonCatalogEditor : Editor
     }
 }
 
-[CustomEditor(typeof(DungeonDefinition))]
-public sealed class DungeonDefinitionEditor : Editor
-{
-    public override void OnInspectorGUI()
-    {
-        serializedObject.Update();
-        EditorGUILayout.HelpBox("배열의 각 행에 프리팹과 Count를 넣으세요. 몬스터와 시체 수는 독립적이며 0개도 가능합니다. 같은 프리팹을 쓰는 던전은 능력치를 공유합니다.", MessageType.Info);
-        EditorGUILayout.PropertyField(serializedObject.FindProperty("dungeonId"));
-        EditorGUILayout.PropertyField(serializedObject.FindProperty("displayName"));
-        var layout = serializedObject.FindProperty("layoutIndex");
-        layout.intValue = EditorGUILayout.Popup("Layout", layout.intValue, new[] { "갈림길 저장고", "고리형 회랑", "계단식 묘실" });
-        EditorGUILayout.PropertyField(serializedObject.FindProperty("monsters"), true);
-        EditorGUILayout.PropertyField(serializedObject.FindProperty("corpses"), true);
-        serializedObject.ApplyModifiedProperties();
-        var dungeon = (DungeonDefinition)target;
-        if (!dungeon.IsValid(out string error)) EditorGUILayout.HelpBox(error, MessageType.Error);
-        else EditorGUILayout.LabelField("배치 가능한 최대 개체 수", DungeonLayoutFactory.PopulationCapacity(dungeon.layoutIndex).ToString());
-    }
-}
 #endif

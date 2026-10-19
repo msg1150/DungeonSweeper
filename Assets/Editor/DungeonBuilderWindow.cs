@@ -21,6 +21,9 @@ public sealed class DungeonBuilderWindow : EditorWindow
     private string status;
     [SerializeField] private DungeonGenerationSettings generation = new();
     [SerializeField] private string generatedName = "자동 생성 던전";
+    [SerializeField] private DungeonDifficulty generatedDifficulty = DungeonDifficulty.Normal;
+    [SerializeField] private Texture2D generatedSelectionImage;
+    [SerializeField] private string generatedDescription = "";
     private bool automatic, showPreviewSpawns;
     private DungeonDefinition preview;
     private DungeonDefinition Displayed => automatic ? preview : dungeon;
@@ -145,6 +148,10 @@ public sealed class DungeonBuilderWindow : EditorWindow
         if (dungeon.generationVersion > 0) EditorGUILayout.LabelField($"자동 생성 시드: {dungeon.generationSeed} · 생성기 v{dungeon.generationVersion}",EditorStyles.miniLabel);
         using var settings = new SerializedObject(dungeon); settings.Update();
         EditorGUILayout.PropertyField(settings.FindProperty("displayName"), new GUIContent("표시 이름"));
+        EditorGUILayout.PropertyField(settings.FindProperty("difficulty"), new GUIContent("난이도"));
+        EditorGUILayout.PropertyField(settings.FindProperty("selectionImage"), new GUIContent("선택창 이미지 (선택)"));
+        EditorGUILayout.PropertyField(settings.FindProperty("selectionDescription"), new GUIContent("선택창 설명 (선택)"));
+        EditorGUILayout.HelpBox("난이도는 선택창 표시용입니다. 실제 위험도는 층별 스폰과 몬스터 능력치로 조절하세요.", MessageType.None);
         using (new EditorGUI.DisabledScope(true)) EditorGUILayout.PropertyField(settings.FindProperty("dungeonId"), new GUIContent("저장 식별 ID"));
         EditorGUILayout.PropertyField(settings.FindProperty("extraExitFloor"), new GUIContent("추가 포탈 층 (-1 무작위)"));
         EditorGUILayout.LabelField("층 번호 설정은 0부터 시작합니다.", EditorStyles.miniLabel);
@@ -323,6 +330,9 @@ public sealed class DungeonBuilderWindow : EditorWindow
         sidebarScroll = EditorGUILayout.BeginScrollView(sidebarScroll);
         EditorGUILayout.LabelField("자동 생성 조건",EditorStyles.boldLabel);
         generatedName = EditorGUILayout.TextField("던전 이름",generatedName);
+        generatedDifficulty = (DungeonDifficulty)EditorGUILayout.EnumPopup("난이도", generatedDifficulty);
+        generatedSelectionImage = (Texture2D)EditorGUILayout.ObjectField("선택창 이미지 (선택)", generatedSelectionImage, typeof(Texture2D), false);
+        generatedDescription = EditorGUILayout.TextField("선택창 설명 (선택)", generatedDescription);
         generation.floorCount = EditorGUILayout.IntSlider("층 수",generation.floorCount,1,DungeonExpeditionData.MaximumFloors);
         generation.width = EditorGUILayout.IntSlider("기본 가로 칸",generation.width,4,DungeonFloorMap.MaximumSize);
         generation.height = EditorGUILayout.IntSlider("기본 세로 칸",generation.height,4,DungeonFloorMap.MaximumSize);
@@ -352,7 +362,7 @@ public sealed class DungeonBuilderWindow : EditorWindow
         if (preview != null)
         {
             EditorGUILayout.Space(); EditorGUILayout.LabelField($"등록 전 후보 · 시드 {preview.generationSeed}",EditorStyles.boldLabel);
-            preview.displayName = generatedName;
+            ApplyGeneratedPresentation(preview);
             int next = EditorGUILayout.Popup("미리볼 층",Mathf.Clamp(floorIndex,0,preview.floors.Length-1),
                 preview.floors.Select((floor,index) => $"{index+1}층 · {floor.map.width} × {floor.map.height}").ToArray());
             if (next != floorIndex) { floorIndex = next; gridScroll = Vector2.zero; }
@@ -393,11 +403,18 @@ public sealed class DungeonBuilderWindow : EditorWindow
         try
         {
             var candidate = DungeonGenerationPreview.Create(generation,generatedName);
+            ApplyGeneratedPresentation(candidate);
             DungeonGenerationPreview.Discard(preview); preview = candidate;
             floorIndex = 0; gridScroll = Vector2.zero;
             status = "후보를 생성했습니다. 각 층을 확인하고 채택하거나 다시 생성하세요.";
         }
         catch (Exception error) { status = error.Message; }
+    }
+    private void ApplyGeneratedPresentation(DungeonDefinition candidate)
+    {
+        // 이미지와 난이도 변경은 도면 재생성을 요구하지 않는다. 채택할 후보에 함께 저장한다.
+        candidate.displayName = generatedName; candidate.difficulty = generatedDifficulty;
+        candidate.selectionImage = generatedSelectionImage; candidate.selectionDescription = generatedDescription;
     }
     private void AdoptPreview()
     {
@@ -417,8 +434,38 @@ public sealed class DungeonDefinitionInspector : Editor
 {
     public override void OnInspectorGUI()
     {
-        if (GUILayout.Button("던전 제작 툴에서 열기")) DungeonBuilderWindow.Open((DungeonDefinition)target);
-        DrawDefaultInspector();
+        var dungeon = (DungeonDefinition)target;
+        if (GUILayout.Button("던전 제작 툴에서 열기")) DungeonBuilderWindow.Open(dungeon);
+        serializedObject.Update();
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("displayName"), new GUIContent("던전 이름"));
+        using (new EditorGUI.DisabledScope(true))
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("dungeonId"), new GUIContent("저장 식별 ID"));
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("difficulty"), new GUIContent("난이도"));
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("selectionImage"), new GUIContent("선택창 이미지 (선택)"));
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("selectionDescription"), new GUIContent("선택창 설명 (선택)"));
+        if (dungeon.floors != null && dungeon.floors.Length > 0)
+        {
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("extraExitFloor"), new GUIContent("추가 포탈 층 (-1 무작위)"));
+            EditorGUILayout.HelpBox("생성 수는 각 층에서 따로 설정합니다. 아래 수량은 해당 층에만 적용됩니다. 층 추가·제외와 도면 편집은 제작 툴을 사용하세요.", MessageType.Info);
+            for (int i = 0; i < dungeon.floors.Length; i++)
+            {
+                var floor = dungeon.floors[i];
+                EditorGUILayout.LabelField($"{i + 1}층 · {(floor != null ? floor.displayName : "누락")}", PopulationLabel(floor));
+                if (floor != null && GUILayout.Button($"{i + 1}층 생성 수 설정 열기")) Selection.activeObject = floor;
+            }
+        }
+        else EditorGUILayout.HelpBox("이전 단층 데이터입니다. 제작 툴에서 도면으로 변환한 뒤 층별 생성 수를 설정하세요.", MessageType.Info);
+        serializedObject.ApplyModifiedProperties();
+        if (!dungeon.IsValid(out string error)) EditorGUILayout.HelpBox(error ?? "던전 도면을 확인하세요.", MessageType.Error);
+    }
+
+    internal static string PopulationLabel(DungeonFloorDefinition floor)
+    {
+        if (floor == null) return "층 에셋 없음";
+        long monsters = 0, corpses = 0;
+        if (floor.monsters != null) foreach (var row in floor.monsters) if (row != null) monsters += row.count;
+        if (floor.corpses != null) foreach (var row in floor.corpses) if (row != null) corpses += row.count;
+        return $"몬스터 {monsters}마리 · 시체 {corpses}개";
     }
 }
 
@@ -428,12 +475,14 @@ public sealed class DungeonFloorInspector : Editor
     public override void OnInspectorGUI()
     {
         var floor = (DungeonFloorDefinition)target;
-        EditorGUILayout.HelpBox($"{floor.map.width} × {floor.map.height} 도면 · Dungeon Sweeper > Dungeon Builder에서 편집하세요.", MessageType.Info);
+        EditorGUILayout.HelpBox("이 화면의 Count는 이 층에서 생성할 수량입니다. 던전 전체 합계나 다른 층의 수량에는 적용되지 않습니다.", MessageType.Info);
+        if (floor.map != null) EditorGUILayout.LabelField($"{floor.map.width} × {floor.map.height} 도면", DungeonDefinitionInspector.PopulationLabel(floor));
         serializedObject.Update();
-        EditorGUILayout.PropertyField(serializedObject.FindProperty("displayName"));
-        EditorGUILayout.PropertyField(serializedObject.FindProperty("monsters"), true);
-        EditorGUILayout.PropertyField(serializedObject.FindProperty("corpses"), true);
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("displayName"), new GUIContent("층 이름"));
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("monsters"), new GUIContent("이 층의 몬스터 · 프리팹 / 수량"), true);
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("corpses"), new GUIContent("이 층의 시체 · 프리팹 / 수량"), true);
         serializedObject.ApplyModifiedProperties();
+        if (floor.map == null) EditorGUILayout.HelpBox("층 도면이 없습니다. 던전 제작 툴에서 복구하세요.", MessageType.Error);
     }
 }
 #endif

@@ -4,9 +4,9 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 
-public enum TownFacility { Warehouse, Market, Upgrades, Guild }
+public enum TownFacility { Warehouse, Market, Upgrades, Guild, Dungeons }
 
-/// <summary>Town facilities use the same saved warehouse, with no temporary trading inventory.</summary>
+/// <summary>마을 시설과 던전 선택창의 일시정지·입력 차단·닫기를 공유한다.</summary>
 public sealed class TownCommercePanel : MonoBehaviour
 {
     private static TownCommercePanel instance;
@@ -22,13 +22,23 @@ public sealed class TownCommercePanel : MonoBehaviour
     private uint groupRevision, stackRevision;
     private string cachedFilter, cachedStackKind;
     private int cachedSort;
+    private readonly List<DungeonChoice> dungeonChoices = new();
+    private int selectedDungeon = -1;
+    private GUIStyle dungeonDescriptionStyle;
+    private sealed class DungeonChoice
+    {
+        public DungeonDefinition Definition;
+        public string Error;
+    }
     public static bool IsOpen => instance != null && instance.open;
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)] private static void Reset() => instance = null;
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)] private static void ResetRuntimeState() => instance = null;
     private void Awake() => instance = this;
 
     public void Open(TownFacility target)
     {
         if (GameSession.IsLoading || GameShell.IsMenuOpen) return;
+        dungeonChoices.Clear(); selectedDungeon = -1;
+        if (target == TownFacility.Dungeons) RefreshDungeons();
         if (!open) previousScale = Time.timeScale;
         facility = target; open = true; Time.timeScale = 0f;
         listScroll = detailScroll = Vector2.zero; notice = null;
@@ -36,7 +46,7 @@ public sealed class TownCommercePanel : MonoBehaviour
     public void Close()
     {
         if (!open) return;
-        open = false;
+        open = false; dungeonChoices.Clear(); selectedDungeon = -1;
         if (!GameSession.IsLoading && gameObject.scene == SceneManager.GetActiveScene()) Time.timeScale = previousScale;
         GameShell.ConsumeGameplayEscape();
     }
@@ -59,9 +69,14 @@ public sealed class TownCommercePanel : MonoBehaviour
         GUI.skin.button.fontSize = 16;
         Panel(new Rect(0, 0, 1280, 720), GameUiTheme.Scrim);
         Panel(new Rect(150, 64, 980, 592), GameUiTheme.Paper);
-        string title = facility switch { TownFacility.Market => "거래소 · 보급 상점", TownFacility.Guild => "회수 길드", TownFacility.Upgrades => "가방 확장", _ => "마을 창고" };
+        string title = facility switch { TownFacility.Dungeons => "던전 선택", TownFacility.Market => "거래소 · 보급 상점", TownFacility.Guild => "회수 길드", TownFacility.Upgrades => "가방 확장", _ => "마을 창고" };
         Text(new Rect(176, 80, 800, 38), title, 27);
         if (GUI.Button(new Rect(1002, 82, 102, 34), "닫기 [Esc]")) { Close(); return; }
+        if (facility == TownFacility.Dungeons)
+        {
+            DrawDungeonSelection();
+            return;
+        }
         Vector2Int size = TownProgress.BagSize;
         Text(new Rect(176, 124, 900, 28), $"보유 {TownProgress.Gold}G    |    창고 {TownProgress.WarehouseCount}개 · 용량 제한 없음    |    가방 {size.x} × {size.y}", 16);
         if (facility == TownFacility.Warehouse || facility == TownFacility.Upgrades)
@@ -73,6 +88,86 @@ public sealed class TownCommercePanel : MonoBehaviour
         else if (facility == TownFacility.Guild) DrawGuild();
         else DrawWarehouse(facility == TownFacility.Market);
         if (!string.IsNullOrEmpty(notice)) Text(new Rect(176, 604, 924, 40), notice, 15);
+    }
+
+    private void RefreshDungeons()
+    {
+        var catalog = DungeonCatalog.Active;
+        if (catalog?.dungeons == null) return;
+        var seen = new HashSet<DungeonDefinition>();
+        foreach (var dungeon in catalog.dungeons)
+        {
+            if (dungeon == null || !seen.Add(dungeon)) continue;
+            // 도면 연결 검증은 창을 열 때 한 번 수행한다. OnGUI마다 BFS를 반복하지 않는다.
+            bool valid = catalog.ValidateEntry(dungeon, out string error);
+            dungeonChoices.Add(new DungeonChoice { Definition = dungeon, Error = valid ? null : error ?? "던전 설정을 확인하세요." });
+        }
+    }
+
+    private void DrawDungeonSelection()
+    {
+        Text(new Rect(176, 121, 924, 26), "탐험할 던전을 고른 뒤 입장하세요.", 16);
+        if (dungeonChoices.Count == 0)
+        {
+            Text(new Rect(176, 188, 924, 60), "현재 입장할 수 있는 던전이 없습니다.", 21);
+            return;
+        }
+        const int columns = 3;
+        const float strideX = 304f, strideY = 200f, cardWidth = 292f, cardHeight = 188f;
+        int rows = (dungeonChoices.Count + columns - 1) / columns;
+        Rect viewport = new Rect(176, 155, 928, 378);
+        listScroll = GUI.BeginScrollView(viewport, listScroll, new Rect(0, 0, 908, rows * strideY));
+        try
+        {
+            for (int i = 0; i < dungeonChoices.Count; i++)
+            {
+                float y = (i / columns) * strideY;
+                // 모든 카드는 고정 크기이며 화면 밖 카드는 그리지 않는다.
+                if (y + cardHeight < listScroll.y || y > listScroll.y + viewport.height) continue;
+                var choice = dungeonChoices[i]; var dungeon = choice.Definition;
+                if (dungeon == null) continue;
+                Rect card = new Rect((i % columns) * strideX, y, cardWidth, cardHeight);
+                if (GUI.Button(card, GUIContent.none, GUIStyle.none)) { selectedDungeon = i; notice = null; }
+                Panel(card, selectedDungeon == i ? GameUiTheme.Mint : GameUiTheme.EmptyCell);
+                Rect image = new Rect(card.x + 8, card.y + 8, card.width - 16, 108);
+                Panel(image, GameUiTheme.Paper);
+                if (dungeon.selectionImage != null)
+                    GUI.DrawTexture(image, dungeon.selectionImage, ScaleMode.ScaleToFit, true);
+                else CenteredText(image, "탐험 지역", 20);
+                CenteredText(new Rect(card.x + 8, card.y + 120, card.width - 16, 28), dungeon.displayName, 20);
+                CenteredText(new Rect(card.x + 8, card.y + 151, card.width - 16, 28),
+                    $"난이도 · {dungeon.DifficultyLabel}" + (choice.Error != null ? "  ·  입장 불가" : ""), 16);
+            }
+        }
+        finally { GUI.EndScrollView(); }
+
+        var selected = selectedDungeon >= 0 && selectedDungeon < dungeonChoices.Count ? dungeonChoices[selectedDungeon] : null;
+        var definition = selected?.Definition;
+        if (definition != null)
+        {
+            int floors = definition.floors != null && definition.floors.Length > 0 ? definition.floors.Length : 1;
+            Text(new Rect(176, 544, 720, 28), $"{definition.displayName} · {floors}층 · 난이도 {definition.DifficultyLabel}", 17);
+            dungeonDescriptionStyle ??= new GUIStyle(GUI.skin.label) { wordWrap = true, fontSize = 14, alignment = TextAnchor.UpperLeft };
+            GUI.Label(new Rect(176, 575, 720, 60), notice ?? selected.Error ?? definition.selectionDescription, dungeonDescriptionStyle);
+        }
+        else Text(new Rect(176, 548, 720, 38), "던전을 선택하세요.", 18);
+        bool enabled = GUI.enabled;
+        GUI.enabled = enabled && definition != null && selected.Error == null;
+        bool enter = GUI.Button(new Rect(930, 550, 174, 42), "선택 던전 입장");
+        GUI.enabled = enabled;
+        // 스크롤 영역을 닫은 뒤 씬을 바꾼다. 입장 시 최신 카탈로그·도면을 다시 검증한다.
+        if (enter)
+        {
+            if (GameSession.EnterDungeon(out string error, definition)) Close();
+            else notice = error ?? "던전 입장에 실패했습니다. 던전 설정을 확인하세요.";
+        }
+    }
+
+    private static void CenteredText(Rect rect, string value, int size)
+    {
+        GUI.skin.label.fontSize = size;
+        GUI.skin.label.alignment = TextAnchor.MiddleCenter;
+        GUI.Label(rect, value);
     }
 
     private void DrawWarehouse(bool selling)

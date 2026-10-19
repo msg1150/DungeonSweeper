@@ -42,6 +42,5 @@ public sealed class GameAudio : MonoBehaviour
         if (clip != null) music.Play();
     }
     public void PlayButton() { if (MainMenuPresentationConfig.Active.buttonSound != null) effects.PlayOneShot(MainMenuPresentationConfig.Active.buttonSound); }
-    public void PlayEffect(AudioClip clip) { if (clip != null) effects.PlayOneShot(clip); }
     private void OnDestroy() => GameSettings.Changed -= ApplyVolumes;
 }

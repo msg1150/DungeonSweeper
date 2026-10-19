@@ -63,5 +63,5 @@ public sealed class TownEconomyConfig : ScriptableObject
     }
     public Vector2Int BagSize(int level) => level <= 0 ? new(GridInventory.Width, GridInventory.Height)
         : new(bagUpgrades[level - 1].width, bagUpgrades[level - 1].height);
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)] private static void Reset() => active = null;
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)] private static void ResetRuntimeState() => active = null;
 }

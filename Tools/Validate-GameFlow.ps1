@@ -1,4 +1,4 @@
-param([string]$UnityEditorPath, [switch]$CheckPlayerProtection, [switch]$CaptureScreens)
+param([string]$UnityEditorPath, [switch]$CheckPlayerProtection, [switch]$CaptureScreens, [switch]$EditorOnly)
 
 $ErrorActionPreference = 'Stop'
 $taskProjectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
@@ -20,10 +20,10 @@ foreach ($taskFolder in @('Scripts', 'Resources', 'Prefabs', 'Scenes', 'Settings
     $taskFolderMeta = Join-Path $taskProjectRoot "Assets/$taskFolder.meta"
     if (Test-Path -LiteralPath $taskFolderMeta) { Copy-Item -LiteralPath $taskFolderMeta -Destination "$taskValidationRoot/Assets" -Force }
 }
-# Directory copies do not remove old files. Drop only the retired empty source placeholders
+# Directory copies do not remove old files. Drop only the retired sources
 # from this isolated fixture so compilation also verifies their removal from the real project.
-foreach ($taskRetiredSource in @('DungeonDemoBootstrap.cs', 'DungeonTestVerticalSlice.cs', 'DungeonVisionFog.cs')) {
-    $taskRetiredPath = Join-Path $taskValidationRoot "Assets/Scripts/Demo/$taskRetiredSource"
+foreach ($taskRetiredSource in @('Demo/DungeonDemoBootstrap.cs', 'Demo/DungeonTestVerticalSlice.cs', 'Demo/DungeonVisionFog.cs', 'Demo/DungeonTestBootstrap.cs', 'Interaction/PlayerInteractor.cs', 'Interaction/IInteractable.cs', 'Dismantling/DismantleController.cs', 'Dismantling/CorpseInteractable.cs')) {
+    $taskRetiredPath = Join-Path $taskValidationRoot "Assets/Scripts/$taskRetiredSource"
     foreach ($taskRetiredFile in @($taskRetiredPath, ($taskRetiredPath + '.meta'))) {
         if (Test-Path -LiteralPath $taskRetiredFile) { Remove-Item -LiteralPath $taskRetiredFile -Force }
     }
@@ -45,6 +45,8 @@ Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/DungeonGenerationCheck
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/DungeonGenerationEditorChecks.cs') -Destination "$taskValidationRoot/Assets/Editor/DungeonGenerationEditorChecks.cs" -Force
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/DungeonDeletionEditorChecks.cs') -Destination "$taskValidationRoot/Assets/Editor/DungeonDeletionEditorChecks.cs" -Force
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/OptimizationEditorChecks.cs') -Destination "$taskValidationRoot/Assets/Editor/OptimizationEditorChecks.cs" -Force
+Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/DungeonSelectionEditorChecks.cs') -Destination "$taskValidationRoot/Assets/Editor/DungeonSelectionEditorChecks.cs" -Force
+Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/SourceCleanupEditorChecks.cs') -Destination "$taskValidationRoot/Assets/Editor/SourceCleanupEditorChecks.cs" -Force
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/PlayerProtectionValidationBuild.cs') -Destination "$taskValidationRoot/Assets/Editor/PlayerProtectionValidationBuild.cs" -Force
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/PlayerProtectionValidationDriver.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/PlayerProtectionValidationDriver.cs" -Force
 
@@ -61,15 +63,23 @@ $taskText = [regex]::Replace($taskText, '(?m)^  companyName:.*$', '  companyName
 $taskText = [regex]::Replace($taskText, '(?m)^  productName:.*$', '  productName: DungeonSweeperValidation')
 [IO.File]::WriteAllText($taskSettingsPath, $taskText)
 
-$taskResultPath = Join-Path $taskValidationRoot 'validation-result.txt'
+$taskResultName = if ($EditorOnly) { 'source-cleanup-result.txt' } else { 'validation-result.txt' }
+$taskResultPath = Join-Path $taskValidationRoot $taskResultName
 if (Test-Path -LiteralPath $taskResultPath) { Remove-Item -LiteralPath $taskResultPath }
 $taskLogPath = Join-Path $taskValidationRoot 'unity-validation.log'
-$taskUnityProcess = Start-Process -FilePath $UnityEditorPath -ArgumentList @('-batchmode', '-nographics', '-projectPath', ('"' + $taskValidationRoot + '"'), '-logFile', ('"' + $taskLogPath + '"'), '-executeMethod', 'GameFlowSmokeChecks.Run') -WindowStyle Hidden -PassThru
+$taskMethod = if ($EditorOnly) { 'SourceCleanupEditorChecks.RunStandalone' } else { 'GameFlowSmokeChecks.Run' }
+$taskUnityArgs = @('-batchmode', '-nographics', '-projectPath', ('"' + $taskValidationRoot + '"'), '-logFile', ('"' + $taskLogPath + '"'), '-executeMethod', $taskMethod)
+if ($EditorOnly) { $taskUnityArgs += '-quit' }
+$taskUnityProcess = Start-Process -FilePath $UnityEditorPath -ArgumentList $taskUnityArgs -WindowStyle Hidden -PassThru
 # Wait for Unity itself, not long-lived compiler services spawned by the editor.
 $taskUnityProcess.WaitForExit()
 if ($taskUnityProcess.ExitCode -ne 0) { throw "Unity validation failed. See $taskLogPath" }
+if ($EditorOnly -and (Select-String -LiteralPath $taskLogPath -Pattern 'error CS\d+|Scripts have compiler errors|Shader error|Failed to call static function|MissingReferenceException|NullReferenceException|GUI Error' -Quiet)) {
+    throw "Editor validation logged a code or GUI error. See $taskLogPath"
+}
 if (-not (Test-Path -LiteralPath $taskResultPath)) { throw "Unity produced no validation result. See $taskLogPath" }
 Get-Content -LiteralPath $taskResultPath
+if ($EditorOnly) { return }
 
 if ($CheckPlayerProtection -or $CaptureScreens) {
     $taskBuildLogPath = Join-Path $taskValidationRoot 'player-build.log'

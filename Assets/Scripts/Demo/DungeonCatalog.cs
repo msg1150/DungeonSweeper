@@ -13,7 +13,7 @@ public sealed class DungeonCatalog : ScriptableObject
     public CorpsePrefab[] corpsePrefabs = Array.Empty<CorpsePrefab>();
     private static DungeonCatalog active;
     public static DungeonCatalog Active => active != null ? active : active = Resources.Load<DungeonCatalog>("DungeonCatalog");
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)] private static void Reset() => active = null;
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)] private static void ResetRuntimeState() => active = null;
 
     public DungeonDefinition FindDungeon(string id)
     {

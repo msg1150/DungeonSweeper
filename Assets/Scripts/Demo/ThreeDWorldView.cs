@@ -62,7 +62,7 @@ public sealed class ThreeDWorldView : MonoBehaviour
         return Mathf.Abs(offset.x) < .4f && Mathf.Abs(offset.y) < .45f;
     }
     public static Vector3 Project(Vector2 point, float height = 0) => Current != null ? Map(point, height) : new Vector3(point.x, point.y, 0);
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)] private static void Reset() => Current = null;
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)] private static void ResetRuntimeState() => Current = null;
 
     public static void Create(Transform target, bool isDungeon)
     {

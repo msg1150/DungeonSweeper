@@ -23,12 +23,8 @@ public sealed class DungeonTuningEditor : Editor
             "월드 단위 반경입니다. 높이면 플레이어 주변의 완전히 밝은 원이 넓어집니다. 4.5는 현재 화면에서 중심부가 선명하게 보이는 기준값입니다.");
         Help("Dark Sight Radius / Outer Darkness",
             "Dark Sight Radius는 월드 단위로 최대 암전에 도달하는 거리이며, Clear Sight Radius보다 커야 합니다. Outer Darkness를 높이면 원 바깥이 더 검게, 낮추면 더 희미하게 보입니다.");
-        Help("Patrol Speed / Chase Speed",
-            "높이면 배회 또는 추적 중인 적이 빨라집니다. 낮추면 회피와 유인에 여유가 생깁니다. Chase Speed는 보통 Patrol Speed보다 높게 둡니다.");
-        Help("Detection Range",
-            "높이면 벽에 가리지 않은 적이 더 먼 거리에서 플레이어를 발견합니다. 낮추면 가까이 접근해야 추적을 시작합니다.");
-        Help("Hearing Range / Investigation Seconds",
-            "Hearing Range를 높이면 해체 실패 소리를 듣는 적의 범위가 넓어집니다. Investigation Seconds를 높이면 적이 소리 난 시체를 더 오래 조사합니다.");
+        Help("몬스터 능력치 설정 위치",
+            "이동 속도·순찰·인식·소음 조사·공격은 Assets/Prefabs/Monsters의 Monster Prefab > Stats에서 종류별로 설정합니다. 현재 프리팹에 적용되지 않는 구 전역 조절 항목은 이 화면에서 제거했습니다.");
         Help("Show Monster Perception Ranges (에디터 전용)",
             "플레이 중 체크하면 Game 뷰에 모든 몬스터의 기본 인식(노랑), 소음 청취(하늘색 점선), 소음 후 인식(빨강), 은신 발각(보라)을 표시합니다. 실제 게임 빌드에는 표시 코드가 포함되지 않습니다. 개별 수치는 Assets/Prefabs/Monsters의 Monster Prefab > Stats에서 설정합니다. Hiding Reveal Range는 숨는 순간 은신을 발각하는 반경입니다. Noise Detection Multiplier와 Noise Alert Seconds는 소음 후 시야 확대 배율·시간입니다.");
         Help("Player Move / Dash",

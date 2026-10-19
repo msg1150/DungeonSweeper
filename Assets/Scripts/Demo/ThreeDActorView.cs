@@ -16,7 +16,6 @@ public sealed class ThreeDActorView : MonoBehaviour
     private Transform faceOrigin, faceForward;
     private Quaternion facingCorrection = Quaternion.identity;
     public GameObject Model => model;
-    public string CurrentAnimation => state;
     public Vector2 VisibleForward => faceOrigin != null && faceForward != null
         ? new Vector2(faceForward.position.x-faceOrigin.position.x, faceForward.position.z-faceOrigin.position.z).normalized
         : model != null ? new Vector2(model.transform.forward.x, model.transform.forward.z) : Vector2.down;

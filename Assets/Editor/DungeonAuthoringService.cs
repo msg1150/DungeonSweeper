@@ -40,9 +40,12 @@ public static class DungeonAuthoringService
     public static void ConvertLegacy(DungeonDefinition dungeon)
     {
         if (dungeon.floors != null && dungeon.floors.Length > 0) return;
-        AddFloor(dungeon);
+        AddFloor(dungeon, true);
     }
     public static DungeonFloorDefinition AddFloor(DungeonDefinition dungeon)
+        => AddFloor(dungeon, false);
+
+    private static DungeonFloorDefinition AddFloor(DungeonDefinition dungeon, bool copyLegacySpawns)
     {
         if (dungeon == null || !EditorUtility.IsPersistent(dungeon)) throw new InvalidOperationException("먼저 던전 에셋을 저장하세요.");
         var list = dungeon.floors == null ? new List<DungeonFloorDefinition>() : new List<DungeonFloorDefinition>(dungeon.floors);
@@ -53,12 +56,16 @@ public static class DungeonAuthoringService
         var floor = ScriptableObject.CreateInstance<DungeonFloorDefinition>();
         floor.floorId = "floor." + Guid.NewGuid().ToString("N"); floor.displayName = $"{list.Count + 1}층";
         floor.map = DungeonLayoutFactory.LegacyMap(list.Count == 0 ? dungeon.layoutIndex : list.Count % 3);
-        floor.monsters = dungeon.monsters != null && dungeon.monsters.Length > 0 ? Clone(dungeon.monsters)
+        floor.monsters = copyLegacySpawns ? Clone(dungeon.monsters ?? Array.Empty<MonsterSpawnEntry>())
             : (DungeonCatalog.Active?.monsterPrefabs ?? Array.Empty<MonsterPrefab>()).Select(prefab => new MonsterSpawnEntry { prefab = prefab, count = 1 }).ToArray();
-        floor.corpses = dungeon.corpses != null && dungeon.corpses.Length > 0 ? Clone(dungeon.corpses)
+        floor.corpses = copyLegacySpawns ? Clone(dungeon.corpses ?? Array.Empty<CorpseSpawnEntry>())
             : (DungeonCatalog.Active?.corpsePrefabs ?? Array.Empty<CorpsePrefab>()).Select(prefab => new CorpseSpawnEntry { prefab = prefab, count = 1 }).ToArray();
         AssetDatabase.CreateAsset(floor, AssetDatabase.GenerateUniqueAssetPath(directory + $"/floor-{list.Count + 1:00}.asset"));
         Undo.RecordObject(dungeon, "Add dungeon floor"); list.Add(floor); dungeon.floors = list.ToArray();
+        if (copyLegacySpawns)
+        {
+            dungeon.monsters = Array.Empty<MonsterSpawnEntry>(); dungeon.corpses = Array.Empty<CorpseSpawnEntry>();
+        }
         NormalizeStairs(dungeon); EditorUtility.SetDirty(dungeon);
         return floor;
     }

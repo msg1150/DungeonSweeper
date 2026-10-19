@@ -256,10 +256,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 68b923773ccfc984798729724de531d0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerMovement
-  moveSpeed: 4.4
-  dashSpeed: 12
-  dashDuration: 0.15
-  dashCooldown: 0.75
 --- !u!70 &705
 CapsuleCollider2D:
   m_ObjectHideFlags: 0

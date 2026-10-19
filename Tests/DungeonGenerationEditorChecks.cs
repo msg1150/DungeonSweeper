@@ -38,6 +38,9 @@ public static class DungeonGenerationEditorChecks
             check(DungeonAuthoringService.TryNewAssetPath("Assets/Editor/../Editor/path-review.asset", out var normalized, out _)
                 && normalized == "Assets/Editor/path-review.asset", "authoring normalizes relative segments within Assets without creating a file");
             preview = DungeonGenerationPreview.Create(settings,"미리보기 검사");
+            preview.difficulty = DungeonDifficulty.VeryHard;
+            preview.selectionImage = Resources.Load<Texture2D>("Sprites/Environment/town-casual");
+            preview.selectionDescription = "선택창 표시 정보 저장 검사";
             check(preview.IsValid(out _) && !EditorUtility.IsPersistent(preview) && preview.floors.All(floor => !EditorUtility.IsPersistent(floor)),"generated candidate and all floors remain memory-only before adoption");
             check(catalog.dungeons.Length == previous.Length && AssetDatabase.GetAllAssetPaths().Length == assetCount,"preview creates no assets and registers no playable dungeon");
             settings.seed++;
@@ -52,6 +55,10 @@ public static class DungeonGenerationEditorChecks
             preview.extraExitFloor = -1;
             saved = DungeonGenerationPreview.Adopt(preview,path,out string error);
             check(saved != null,"adoption saves the reviewed candidate: " + error);
+            check(saved.difficulty == DungeonDifficulty.VeryHard && saved.DifficultyLabel == "매우 어려움"
+                && saved.selectionImage != null && saved.selectionImage == preview.selectionImage
+                && saved.selectionDescription == preview.selectionDescription,
+                "adoption preserves authored difficulty, optional image reference and description");
             folder = Path.GetDirectoryName(AssetDatabase.GetAssetPath(saved.floors[0])).Replace('\\','/');
             check(EditorUtility.IsPersistent(saved) && saved.floors.All(EditorUtility.IsPersistent) && catalog.FindDungeon(saved.dungeonId) == saved,
                 "approved candidate is persisted and automatically registered for gameplay");

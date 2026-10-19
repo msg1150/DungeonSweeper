@@ -33,14 +33,14 @@ public sealed class DungeonTuning : ScriptableObject
     [Min(.02f)] public float playerDashDuration = .15f;
     [Min(0f)] public float playerDashCooldown = 1f;
 
-    [Header("Monster Movement")]
-    [Min(.1f)] public float patrolSpeed = 1.35f;
-    [Min(1f)] public float patrolTravelDistance = 10f;
-    [Min(0f)] public float patrolArrivalPause = .75f;
-    [Min(.1f)] public float chaseSpeed = 2.15f;
-    [Min(.1f)] public float detectionRange = 3.8f;
-    [Min(.1f)] public float hearingRange = 8f;
-    [Min(.1f)] public float investigationSeconds = 6f;
+    // 구 저장 복원과 기본 프리팹 최초 생성에서만 사용한다. 현재 몬스터 조절은 프리팹 Stats가 담당한다.
+    [HideInInspector, Min(.1f)] public float patrolSpeed = 1.35f;
+    [HideInInspector, Min(1f)] public float patrolTravelDistance = 10f;
+    [HideInInspector, Min(0f)] public float patrolArrivalPause = .75f;
+    [HideInInspector, Min(.1f)] public float chaseSpeed = 2.15f;
+    [HideInInspector, Min(.1f)] public float detectionRange = 3.8f;
+    [HideInInspector, Min(.1f)] public float hearingRange = 8f;
+    [HideInInspector, Min(.1f)] public float investigationSeconds = 6f;
 
 #if UNITY_EDITOR
     [Header("Editor Debug")]
