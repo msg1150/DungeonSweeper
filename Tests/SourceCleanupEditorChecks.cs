@@ -119,6 +119,7 @@ public static class SourceCleanupEditorChecks
         Run(check);
         DungeonGenerationEditorChecks.Run(check);
         DungeonSelectionEditorChecks.Run(check);
+        LootRewardEditorChecks.Run(check);
         File.WriteAllText(Path.Combine(root, "source-cleanup-result.txt"), $"PASS: {count} editor checks; Play mode was not entered.");
     }
 }

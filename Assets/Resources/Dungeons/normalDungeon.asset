@@ -15,6 +15,7 @@ MonoBehaviour:
   generationHidingSpotsPerFloor: 4
   dungeonId: dungeon.97cd06a03da144d0ad56d44cdc87c2c2
   displayName: NormalDungeon
+  lootTable: {fileID: 11400000, guid: 00afa756bc6d5cf4bb4aa1ae8653932f, type: 2}
   difficulty: 1
   selectionImage: {fileID: 0}
   selectionDescription: 

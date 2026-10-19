@@ -26,6 +26,11 @@ public sealed class MonsterLootEntry
     public LootDefinition Roll()
     {
         if (float.IsNaN(dropChance) || dropChance <= 0f || (dropChance < 1f && UnityEngine.Random.value >= dropChance)) return null;
+        return CreateItem();
+    }
+
+    public LootDefinition CreateItem()
+    {
         int low = Mathf.Clamp(Mathf.Min(minPrice, maxPrice), 0, int.MaxValue - 1);
         int high = Mathf.Clamp(Mathf.Max(minPrice, maxPrice), low, int.MaxValue - 1);
         return new LootDefinition(lootName, width, height, UnityEngine.Random.Range(low, high + 1), shape, kindId);

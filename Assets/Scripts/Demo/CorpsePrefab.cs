@@ -36,7 +36,20 @@ public sealed class CorpsePrefab : MonoBehaviour
         foreach (var entry in loot) { var item = entry.Roll(); if (item != null) result.Add(item); }
         return result.ToArray();
     }
-    public CorpseRunData Spawn(Vector2 position, CorpseSaveData saved = null)
+    public LootDefinition[] ResolveLoot(CorpseSaveData saved, CorpseLootPlan plan = null)
+    {
+        // 저장된 확정 전리품은 현재 테이블과 무관하게 복원한다. 불러오기에서 난수를 소비하지 않는다.
+        if (saved == null)
+        {
+            if (plan != null && plan.prefabId != prefabId) throw new System.ArgumentException("Loot plan belongs to another corpse prefab.");
+            return plan != null ? plan.Roll() : RollLoot();
+        }
+        var items = new List<LootDefinition>();
+        foreach (var item in saved.loot) items.Add(item.Restore());
+        return items.ToArray();
+    }
+
+    public CorpseRunData Spawn(Vector2 position, CorpseSaveData saved = null, CorpseLootPlan lootPlan = null)
     {
         CorpsePrefab actor = DungeonActorPool.Rent(this, position);
         string label = saved?.name ?? displayName;
@@ -47,9 +60,7 @@ public sealed class CorpsePrefab : MonoBehaviour
             actor.GetComponentInChildren<SpriteRenderer>(true).sprite = frames.Length > sheetIndex ? frames[sheetIndex] : CasualArtLibrary.WhiteSprite;
         }
         var difficulty = saved == null ? Difficulty : new DismantleDifficulty(saved.requiredSuccesses, saved.maxFailures, saved.pointerSpeed, saved.windowSize);
-        LootDefinition[] items;
-        if (saved == null) items = RollLoot();
-        else { var list = new List<LootDefinition>(); foreach (var item in saved.loot) list.Add(item.Restore()); items = list.ToArray(); }
+        LootDefinition[] items = ResolveLoot(saved, lootPlan);
         actor.gameObject.SetActive(true);
         if (ThreeDWorldView.Current != null) ThreeDActorView.Attach(actor.gameObject, sheetIndex == 1 ? "slime" : sheetIndex == 2 ? "orc" : "goblin", true, model3D);
         // 시각 오브젝트만 재사용한다. 해체 세션과 확정 전리품은 매번 새 런 데이터에 보관한다.

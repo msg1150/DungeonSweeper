@@ -24,6 +24,7 @@ public sealed class DungeonBuilderWindow : EditorWindow
     [SerializeField] private DungeonDifficulty generatedDifficulty = DungeonDifficulty.Normal;
     [SerializeField] private Texture2D generatedSelectionImage;
     [SerializeField] private string generatedDescription = "";
+    [SerializeField] private LootRewardTable generatedLootTable;
     private bool automatic, showPreviewSpawns;
     private DungeonDefinition preview;
     private DungeonDefinition Displayed => automatic ? preview : dungeon;
@@ -151,6 +152,7 @@ public sealed class DungeonBuilderWindow : EditorWindow
         EditorGUILayout.PropertyField(settings.FindProperty("difficulty"), new GUIContent("난이도"));
         EditorGUILayout.PropertyField(settings.FindProperty("selectionImage"), new GUIContent("선택창 이미지 (선택)"));
         EditorGUILayout.PropertyField(settings.FindProperty("selectionDescription"), new GUIContent("선택창 설명 (선택)"));
+        LootRewardTableEditor.DrawReference(settings.FindProperty("lootTable"), "기본 보상 테이블 (선택)");
         EditorGUILayout.HelpBox("난이도는 선택창 표시용입니다. 실제 위험도는 층별 스폰과 몬스터 능력치로 조절하세요.", MessageType.None);
         using (new EditorGUI.DisabledScope(true)) EditorGUILayout.PropertyField(settings.FindProperty("dungeonId"), new GUIContent("저장 식별 ID"));
         EditorGUILayout.PropertyField(settings.FindProperty("extraExitFloor"), new GUIContent("추가 포탈 층 (-1 무작위)"));
@@ -186,6 +188,7 @@ public sealed class DungeonBuilderWindow : EditorWindow
         }
         using var floorSettings = new SerializedObject(Floor); floorSettings.Update();
         EditorGUILayout.PropertyField(floorSettings.FindProperty("displayName"), new GUIContent("층 이름"));
+        LootRewardTableEditor.DrawReference(floorSettings.FindProperty("lootTable"), "이 층의 보상 테이블 (선택)");
         using (new EditorGUI.DisabledScope(true)) EditorGUILayout.ObjectField("층 에셋", Floor, typeof(DungeonFloorDefinition), false);
         EditorGUILayout.Space(); EditorGUILayout.LabelField("도면", EditorStyles.boldLabel);
         desiredWidth = EditorGUILayout.IntField("가로 칸 수", desiredWidth);
@@ -333,6 +336,7 @@ public sealed class DungeonBuilderWindow : EditorWindow
         generatedDifficulty = (DungeonDifficulty)EditorGUILayout.EnumPopup("난이도", generatedDifficulty);
         generatedSelectionImage = (Texture2D)EditorGUILayout.ObjectField("선택창 이미지 (선택)", generatedSelectionImage, typeof(Texture2D), false);
         generatedDescription = EditorGUILayout.TextField("선택창 설명 (선택)", generatedDescription);
+        generatedLootTable = (LootRewardTable)EditorGUILayout.ObjectField("기본 보상 테이블 (선택)", generatedLootTable, typeof(LootRewardTable), false);
         generation.floorCount = EditorGUILayout.IntSlider("층 수",generation.floorCount,1,DungeonExpeditionData.MaximumFloors);
         generation.width = EditorGUILayout.IntSlider("기본 가로 칸",generation.width,4,DungeonFloorMap.MaximumSize);
         generation.height = EditorGUILayout.IntSlider("기본 세로 칸",generation.height,4,DungeonFloorMap.MaximumSize);
@@ -372,10 +376,11 @@ public sealed class DungeonBuilderWindow : EditorWindow
             using var spawnSettings = new SerializedObject(preview); spawnSettings.Update();
             EditorGUILayout.PropertyField(spawnSettings.FindProperty("extraExitFloor"),new GUIContent("추가 포탈 층 (-1 무작위)"));
             spawnSettings.ApplyModifiedProperties();
-            showPreviewSpawns = EditorGUILayout.Foldout(showPreviewSpawns,"이 층의 몬스터·시체 설정",true);
+            showPreviewSpawns = EditorGUILayout.Foldout(showPreviewSpawns,"이 층의 스폰·보상 설정",true);
             if (showPreviewSpawns)
             {
                 using var floorSettings = new SerializedObject(Floor); floorSettings.Update();
+                LootRewardTableEditor.DrawReference(floorSettings.FindProperty("lootTable"), "이 층의 보상 테이블 (선택)");
                 EditorGUILayout.PropertyField(floorSettings.FindProperty("monsters"),new GUIContent("몬스터"),true);
                 EditorGUILayout.PropertyField(floorSettings.FindProperty("corpses"),new GUIContent("시체"),true);
                 floorSettings.ApplyModifiedProperties();
@@ -415,6 +420,7 @@ public sealed class DungeonBuilderWindow : EditorWindow
         // 이미지와 난이도 변경은 도면 재생성을 요구하지 않는다. 채택할 후보에 함께 저장한다.
         candidate.displayName = generatedName; candidate.difficulty = generatedDifficulty;
         candidate.selectionImage = generatedSelectionImage; candidate.selectionDescription = generatedDescription;
+        candidate.lootTable = generatedLootTable;
     }
     private void AdoptPreview()
     {
@@ -443,6 +449,7 @@ public sealed class DungeonDefinitionInspector : Editor
         EditorGUILayout.PropertyField(serializedObject.FindProperty("difficulty"), new GUIContent("난이도"));
         EditorGUILayout.PropertyField(serializedObject.FindProperty("selectionImage"), new GUIContent("선택창 이미지 (선택)"));
         EditorGUILayout.PropertyField(serializedObject.FindProperty("selectionDescription"), new GUIContent("선택창 설명 (선택)"));
+        LootRewardTableEditor.DrawReference(serializedObject.FindProperty("lootTable"), "기본 보상 테이블 (선택)");
         if (dungeon.floors != null && dungeon.floors.Length > 0)
         {
             EditorGUILayout.PropertyField(serializedObject.FindProperty("extraExitFloor"), new GUIContent("추가 포탈 층 (-1 무작위)"));
@@ -479,6 +486,7 @@ public sealed class DungeonFloorInspector : Editor
         if (floor.map != null) EditorGUILayout.LabelField($"{floor.map.width} × {floor.map.height} 도면", DungeonDefinitionInspector.PopulationLabel(floor));
         serializedObject.Update();
         EditorGUILayout.PropertyField(serializedObject.FindProperty("displayName"), new GUIContent("층 이름"));
+        LootRewardTableEditor.DrawReference(serializedObject.FindProperty("lootTable"), "이 층의 보상 테이블 (선택)");
         EditorGUILayout.PropertyField(serializedObject.FindProperty("monsters"), new GUIContent("이 층의 몬스터 · 프리팹 / 수량"), true);
         EditorGUILayout.PropertyField(serializedObject.FindProperty("corpses"), new GUIContent("이 층의 시체 · 프리팹 / 수량"), true);
         serializedObject.ApplyModifiedProperties();

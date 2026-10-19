@@ -10,6 +10,8 @@ public sealed class DungeonFloorState
     public DungeonFloorMap map;
     public bool visited;
     public string[] monsterIds, corpseIds;
+    public int lootPlanVersion;
+    public List<CorpseLootPlan> lootPlans = new();
     public Vector2 specialGate;
     public List<CorpseSaveData> corpses = new();
     public List<EnemySaveData> enemies = new();
@@ -20,10 +22,28 @@ public sealed class DungeonFloorState
         copy.map = map?.Copy();
         copy.monsterIds = monsterIds == null ? null : (string[])monsterIds.Clone();
         copy.corpseIds = corpseIds == null ? null : (string[])corpseIds.Clone();
+        copy.lootPlans = lootPlans?.ConvertAll(item => item?.Copy());
         copy.corpses = corpses?.ConvertAll(item => item?.Copy());
         copy.enemies = enemies?.ConvertAll(item => item?.Copy());
         copy.discoveredCells = discoveredCells == null ? null : new List<Vector2Int>(discoveredCells);
         return copy;
+    }
+
+    public CorpseLootPlan FindLootPlan(string prefabId)
+    {
+        if (lootPlanVersion == 1 && lootPlans != null) foreach (var plan in lootPlans)
+            if (plan != null && plan.prefabId == prefabId) return plan;
+        return null;
+    }
+
+    public bool HasValidLootPlans()
+    {
+        if (lootPlanVersion == 0) return lootPlans == null || lootPlans.Count == 0; // 이전 저장은 기존 기본 드롭 경로를 유지한다.
+        if (lootPlanVersion != 1 || lootPlans == null || corpseIds == null || lootPlans.Count > 256) return false;
+        var required = new HashSet<string>(corpseIds);
+        foreach (var plan in lootPlans)
+            if (plan == null || !plan.IsValid() || !required.Remove(plan.prefabId)) return false;
+        return required.Count == 0;
     }
 }
 
@@ -50,8 +70,12 @@ public sealed class DungeonExpeditionData
             var monsters = new List<string>(); var corpses = new List<string>();
             foreach (var row in floor.monsters) for (int i = 0; i < row.count; i++) monsters.Add(row.prefab.prefabId);
             foreach (var row in floor.corpses) for (int i = 0; i < row.count; i++) corpses.Add(row.prefab.prefabId);
-            result.floors.Add(new DungeonFloorState { floorId = floor.floorId, displayName = floor.displayName, map = floor.map.Copy(),
-                monsterIds = monsters.ToArray(), corpseIds = corpses.ToArray() });
+            var state = new DungeonFloorState { floorId = floor.floorId, displayName = floor.displayName, map = floor.map.Copy(),
+                monsterIds = monsters.ToArray(), corpseIds = corpses.ToArray(), lootPlanVersion = 1 };
+            var captured = new HashSet<CorpsePrefab>();
+            foreach (var row in floor.corpses)
+                if (row.count > 0 && captured.Add(row.prefab)) state.lootPlans.Add(CorpseLootPlan.Capture(row.prefab, dungeon.lootTable, floor.lootTable));
+            result.floors.Add(state);
         }
         return result;
     }
@@ -70,6 +94,7 @@ public sealed class DungeonExpeditionData
             if (count > floor.map.PopulationCapacity || count > 256 || population > 1024) return false;
             foreach (string id in floor.monsterIds) if (DungeonCatalog.Active?.FindMonster(id) == null) return false;
             foreach (string id in floor.corpseIds) if (DungeonCatalog.Active?.FindCorpse(id) == null) return false;
+            if (!floor.HasValidLootPlans()) return false;
             if (floor.corpses == null || floor.enemies == null || floor.discoveredCells == null) return false;
             if (!floor.visited) { if (floor.corpses.Count != 0 || floor.enemies.Count != 0 || floor.discoveredCells.Count != 0) return false; continue; }
             // 기존 검증을 공유하여 비활성 층의 적·전리품 데이터도 검사한다.

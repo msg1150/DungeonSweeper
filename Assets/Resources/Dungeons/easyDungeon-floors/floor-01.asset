@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::DungeonFloorDefinition
   floorId: floor.ca830cfdd859447b96a86c065fb225fb
   displayName: "1\uCE35"
+  lootTable: {fileID: 0}
   map:
     width: 16
     height: 16

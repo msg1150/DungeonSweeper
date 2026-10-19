@@ -66,6 +66,7 @@ public sealed class DungeonFloorMap
 public sealed class DungeonFloorDefinition : ScriptableObject
 {
     public string floorId = "floor.custom", displayName = "새 층";
+    public LootRewardTable lootTable;
     public DungeonFloorMap map = new();
     public MonsterSpawnEntry[] monsters = Array.Empty<MonsterSpawnEntry>();
     public CorpseSpawnEntry[] corpses = Array.Empty<CorpseSpawnEntry>();

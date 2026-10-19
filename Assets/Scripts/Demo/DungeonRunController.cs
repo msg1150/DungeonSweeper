@@ -181,7 +181,13 @@ public class DungeonRunController : MonoBehaviour
             foreach (string id in expedition.Current.corpseIds) corpsePrefabs.Add(DungeonCatalog.Active.FindCorpse(id));
         }
         DungeonPopulationPlan population = DungeonPopulationPlan.Create(corpsePrefabs.Count, monsters);
-        for (int i = 0; i < corpsePrefabs.Count; i++) corpses.Add(corpsePrefabs[i].Spawn(population.Corpses[i]));
+        for (int i = 0; i < corpsePrefabs.Count; i++)
+        {
+            var prefab = corpsePrefabs[i];
+            var plan = expedition != null ? expedition.Current.FindLootPlan(prefab.prefabId)
+                : dungeonDefinition.lootTable != null ? CorpseLootPlan.Capture(prefab, dungeonDefinition.lootTable) : null;
+            corpses.Add(prefab.Spawn(population.Corpses[i], lootPlan: plan));
+        }
         for (int i = 0; i < monsters.Count; i++) enemies.Add(monsters[i].Spawn(player, population.Enemies[i], population.PatrolTargets[i]));
 
         specialGate = population.Gate;

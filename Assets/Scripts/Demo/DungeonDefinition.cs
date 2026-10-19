@@ -27,6 +27,7 @@ public sealed class DungeonDefinition : ScriptableObject
 {
     [HideInInspector] public int generationHidingSpotsPerFloor;
     public string dungeonId = "dungeon.custom", displayName = "던전";
+    public LootRewardTable lootTable;
     [Header("Dungeon selection · 입장 선택창")]
     [Tooltip("선택창에 표시할 난이도입니다. 몬스터 능력치와 스폰 수는 별도로 설정합니다.")]
     public DungeonDifficulty difficulty = DungeonDifficulty.Normal;
@@ -76,6 +77,7 @@ public sealed class DungeonDefinition : ScriptableObject
         error = null;
         if (!Enum.IsDefined(typeof(DungeonDifficulty), difficulty))
         { error = "던전 난이도 설정이 올바르지 않습니다."; return false; }
+        if (lootTable != null && !lootTable.IsValid(out error)) return false;
         if (floors != null && floors.Length > 0)
         {
             if (!LootKinds.ValidId(dungeonId) || string.IsNullOrWhiteSpace(displayName) || floors.Length > DungeonExpeditionData.MaximumFloors
@@ -90,6 +92,7 @@ public sealed class DungeonDefinition : ScriptableObject
                 if (floor.map.hasStairsUp != (i > 0) || floor.map.hasStairsDown != (i < floors.Length - 1))
                 { error = $"{i + 1}층 계단 연결을 확인하세요. 첫 층은 아래로, 마지막 층은 위로, 중간 층은 양쪽 계단이 필요합니다."; return false; }
                 if (!ValidateSpawns(floor.monsters, floor.corpses, floor.map.PopulationCapacity, out error, out long count)) return false;
+                if (!ValidateRewards(floor.corpses, floor.lootTable, out error)) return false;
                 population += count;
             }
             if (population > 1024) { error = "한 탐험의 전체 몬스터·시체 수는 1024개 이하여야 합니다."; return false; }
@@ -97,7 +100,17 @@ public sealed class DungeonDefinition : ScriptableObject
         }
         if (!LootKinds.ValidId(dungeonId) || string.IsNullOrWhiteSpace(displayName) || layoutIndex < 0 || layoutIndex > 2
             || monsters == null || corpses == null) { error = "던전 기본 설정이 올바르지 않습니다."; return false; }
-        return ValidateSpawns(monsters, corpses, DungeonLayoutFactory.PopulationCapacity(layoutIndex), out error, out _);
+        return ValidateSpawns(monsters, corpses, DungeonLayoutFactory.PopulationCapacity(layoutIndex), out error, out _)
+            && ValidateRewards(corpses, null, out error);
+    }
+    private bool ValidateRewards(CorpseSpawnEntry[] spawns, LootRewardTable floorTable, out string error)
+    {
+        error = null;
+        if (floorTable != null && !floorTable.IsValid(out error)) return false;
+        foreach (var row in spawns)
+            if (row.count > 0 && !CorpseLootPlan.Capture(row.prefab, lootTable, floorTable).IsValid())
+            { error = "보상 설정이 유효하지 않거나 시체 하나의 최대 전리품 수가 256개를 초과합니다."; return false; }
+        return true;
     }
     public static bool ValidateSpawns(MonsterSpawnEntry[] monsters, CorpseSpawnEntry[] corpses, int capacity, out string error, out long total)
     {

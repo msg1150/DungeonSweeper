@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f34a49006a2e42799ac158156e337441, type: 3}
+  m_Name: hardDungeonLoot
+  m_EditorClassIdentifier: Assembly-CSharp::LootRewardTable
+  entries:
+  - corpse: {fileID: 7823492119419530324, guid: 1680d2777235b1948bd9bbc113d11795, type: 3}
+    kindId: slime.gel
+    dropChance: 1
+    minQuantity: 1
+    maxQuantity: 3
+  - corpse: {fileID: 7823492119419530324, guid: 1680d2777235b1948bd9bbc113d11795, type: 3}
+    kindId: slime.core
+    dropChance: 0.7
+    minQuantity: 1
+    maxQuantity: 2
+  - corpse: {fileID: 1689500788646296613, guid: 10b87e3f2a1416c4d8572220c32624a1, type: 3}
+    kindId: goblin.tooth
+    dropChance: 1
+    minQuantity: 1
+    maxQuantity: 3
+  - corpse: {fileID: 1689500788646296613, guid: 10b87e3f2a1416c4d8572220c32624a1, type: 3}
+    kindId: goblin.dagger
+    dropChance: 0.8
+    minQuantity: 1
+    maxQuantity: 1
+  - corpse: {fileID: 1689500788646296613, guid: 10b87e3f2a1416c4d8572220c32624a1, type: 3}
+    kindId: goblin.hide
+    dropChance: 0.5
+    minQuantity: 1
+    maxQuantity: 2
+  - corpse: {fileID: 5555483854383871316, guid: 056208bae4f3c4e47b214abe3d25d0b4, type: 3}
+    kindId: orc.hide
+    dropChance: 0.8
+    minQuantity: 1
+    maxQuantity: 2
+  - corpse: {fileID: 5555483854383871316, guid: 056208bae4f3c4e47b214abe3d25d0b4, type: 3}
+    kindId: orc.horn
+    dropChance: 0.5
+    minQuantity: 1
+    maxQuantity: 2

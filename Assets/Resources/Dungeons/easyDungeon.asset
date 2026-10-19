@@ -15,6 +15,7 @@ MonoBehaviour:
   generationHidingSpotsPerFloor: 5
   dungeonId: dungeon.66a6653558224c9ca0c612813e2d2e1d
   displayName: EasyDungeon
+  lootTable: {fileID: 11400000, guid: 6e0d9b8a61527824abee91586779c94f, type: 2}
   difficulty: 0
   selectionImage: {fileID: 0}
   selectionDescription: 

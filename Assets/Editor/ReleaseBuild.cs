@@ -124,12 +124,29 @@ public sealed class ReleaseBuildValidator : IPreprocessBuildWithReport
         foreach (var dungeon in catalog.dungeons)
         {
             if (dungeon == null) continue;
-            foreach (var row in dungeon.CorpseSpawns())
-                if (row.count > 0 && row.prefab != null && row.prefab.loot != null)
-                    foreach (var loot in row.prefab.loot)
-                        if (loot != null && loot.dropChance > 0f) kinds.Add(loot.kindId ?? "");
+            if (dungeon.floors != null && dungeon.floors.Length > 0)
+            {
+                foreach (var floor in dungeon.floors) if (floor != null) Collect(floor.corpses, dungeon.lootTable, floor.lootTable);
+            }
+            else Collect(dungeon.corpses, dungeon.lootTable, null);
         }
         return kinds;
+
+        void Collect(CorpseSpawnEntry[] rows, LootRewardTable dungeonTable, LootRewardTable floorTable)
+        {
+            if (rows == null) return;
+            foreach (var row in rows)
+            {
+                if (row == null) continue;
+                if (row.count > 0 && row.prefab != null && row.prefab.loot != null)
+                    foreach (var loot in row.prefab.loot)
+                        if (loot != null)
+                        {
+                            var change = LootRewardTable.Resolve(row.prefab, loot.kindId, dungeonTable, floorTable);
+                            if ((change?.dropChance ?? loot.dropChance) > 0f && (change?.maxQuantity ?? 1) > 0) kinds.Add(loot.kindId ?? "");
+                        }
+            }
+        }
     }
     private static void ValidatePrefab(GameObject prefab, bool valid, List<string> issues)
     {
