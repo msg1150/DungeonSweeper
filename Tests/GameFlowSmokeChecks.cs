@@ -37,6 +37,7 @@ public static class GameFlowSmokeChecks
         SessionState.SetBool("DungeonValidation.FloorsComplete", false);
         floorTrials = null;
         DungeonGenerationEditorChecks.Run(Check);
+        DungeonDeletionEditorChecks.Run(Check);
         SessionState.SetFloat("DungeonValidation.Deadline", (float)EditorApplication.timeSinceStartup + 240f);
         Application.runInBackground = true;
         EditorSceneManager.OpenScene("Assets/Scenes/MainMenu.unity");

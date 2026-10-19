@@ -12,7 +12,7 @@ public sealed class DungeonBuilderWindow : EditorWindow
     [SerializeField] private int floorIndex;
     [SerializeField] private float cellSize = 24;
     private Brush brush = Brush.Floor;
-    private Vector2 sidebarScroll, gridScroll;
+    private Vector2 sidebarScroll, gridScroll, dungeonListScroll;
     private int desiredWidth = 20, desiredHeight = 12, strokeGroup = -1;
     private Vector2Int? lastCell;
     private string status;
@@ -36,25 +36,50 @@ public sealed class DungeonBuilderWindow : EditorWindow
 
     private void OnGUI()
     {
+        bool backToList = false, deleteDungeon = false;
         using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
         {
+            using (new EditorGUI.DisabledScope(!automatic && dungeon == null))
+                backToList = GUILayout.Button(new GUIContent("← 던전 목록", "기존 던전을 선택하는 화면으로 돌아갑니다."), EditorStyles.toolbarButton, GUILayout.Width(100));
             DungeonDefinition selected;
             using (new EditorGUI.DisabledScope(automatic)) selected = (DungeonDefinition)EditorGUILayout.ObjectField(dungeon, typeof(DungeonDefinition), false, GUILayout.Width(240));
             if (selected != dungeon) { EndStroke(); dungeon = selected; floorIndex = 0; SelectFloor(); status = null; }
             using (new EditorGUI.DisabledScope(EditorApplication.isPlaying))
             {
                 if (GUILayout.Button(automatic ? "미리보기 닫기" : "자동 생성", EditorStyles.toolbarButton))
-                { EndStroke(); automatic = !automatic; floorIndex = 0; DungeonGenerationPreview.Discard(preview); preview = null; status = null; SelectFloor(); }
+                {
+                    EndStroke(); automatic = !automatic; floorIndex = 0;
+                    // 목록으로 이동할 때 보관한 후보는 다시 이어서 볼 수 있다. 명시적으로 닫을 때만 해제한다.
+                    if (!automatic) { DungeonGenerationPreview.Discard(preview); preview = null; }
+                    status = null; SelectFloor();
+                }
             }
             using (new EditorGUI.DisabledScope(EditorApplication.isPlaying || automatic))
             {
                 if (GUILayout.Button("새 던전", EditorStyles.toolbarButton)) CreateDungeon();
+                using (new EditorGUI.DisabledScope(dungeon == null))
+                    deleteDungeon = GUILayout.Button(new GUIContent("던전 삭제", "선택한 던전과 공유되지 않는 연결 층을 휴지통으로 보냅니다."), EditorStyles.toolbarButton);
                 if (GUILayout.Button("검증", EditorStyles.toolbarButton)) status = dungeon != null && dungeon.IsValid(out _) ? "도면과 층 연결이 정상입니다." : dungeon == null ? "던전을 선택하세요." : ValidateError();
                 if (GUILayout.Button("저장 + 게임에 등록", EditorStyles.toolbarButton))
                     status = DungeonAuthoringService.SaveAndRegister(dungeon, out string error) ? "저장 완료. 다음 새 탐험부터 게임에서 사용합니다." : error;
             }
             using (new EditorGUI.DisabledScope(automatic || !EditorApplication.isPlaying || !GameSession.HasActiveGame || GameSession.IsLoading || DungeonRunController.Instance != null || dungeon == null))
                 if (GUILayout.Button("선택 던전 입장", EditorStyles.toolbarButton)) status = GameSession.EnterDungeon(out string error, dungeon) ? "선택한 던전으로 입장했습니다." : error;
+        }
+        if (deleteDungeon)
+        {
+            DeleteSelectedDungeon();
+            GUI.FocusControl(null); Repaint(); GUIUtility.ExitGUI();
+        }
+        if (backToList)
+        {
+            EndStroke(); automatic = false; dungeon = null; floorIndex = 0;
+            sidebarScroll = gridScroll = dungeonListScroll = Vector2.zero;
+            status = preview != null ? "작성 중인 자동 생성 후보는 ‘자동 생성’에서 이어서 확인할 수 있습니다." : null;
+            GUI.FocusControl(null);
+            Repaint();
+            // 도면과 목록의 GUILayout 구성이 바뀌므로 다음 Layout에서 새 화면을 그린다.
+            GUIUtility.ExitGUI();
         }
         if (!string.IsNullOrEmpty(status)) EditorGUILayout.HelpBox(status, MessageType.Info);
         if (automatic)
@@ -68,9 +93,24 @@ public sealed class DungeonBuilderWindow : EditorWindow
         }
         if (dungeon == null)
         {
+            EditorGUILayout.LabelField("던전 선택", EditorStyles.boldLabel);
             EditorGUILayout.HelpBox("새 던전을 만들거나 Project의 DungeonDefinition 에셋을 선택하세요. 벽·바닥을 그린 뒤 저장하면 카탈로그에 자동 등록됩니다.\n테스트: MainMenu에서 새 게임으로 마을에 간 뒤 '선택 던전 입장'을 누르세요.", MessageType.Info);
-            if (DungeonCatalog.Active != null) foreach (var entry in DungeonCatalog.Active.dungeons)
-                if (entry != null && GUILayout.Button(entry.displayName)) { dungeon = entry; floorIndex = 0; SelectFloor(); }
+            bool selectedDungeon = false;
+            using (var list = new EditorGUILayout.ScrollViewScope(dungeonListScroll))
+            {
+                dungeonListScroll = list.scrollPosition;
+                if (DungeonCatalog.Active?.dungeons != null) foreach (var entry in DungeonCatalog.Active.dungeons)
+                {
+                    if (entry == null) continue;
+                    if (GUILayout.Button($"{entry.displayName}  ·  {entry.name}", GUILayout.Height(28)))
+                    {
+                        dungeon = entry; floorIndex = 0; sidebarScroll = gridScroll = Vector2.zero; status = null; SelectFloor();
+                        selectedDungeon = true;
+                    }
+                    EditorGUILayout.LabelField(AssetDatabase.GetAssetPath(entry), EditorStyles.miniLabel);
+                }
+            }
+            if (selectedDungeon) { Repaint(); GUIUtility.ExitGUI(); }
             return;
         }
         using (new EditorGUILayout.HorizontalScope())
@@ -80,6 +120,19 @@ public sealed class DungeonBuilderWindow : EditorWindow
         }
         if (Event.current.rawType == EventType.MouseUp) EndStroke();
     }
+    private void DeleteSelectedDungeon()
+    {
+        EndStroke();
+        if (!DungeonDeletionService.TryPlan(dungeon, out var plan, out string error)) { status = error; return; }
+        string details = $"‘{plan.Name}’ 던전을 삭제할까요?\n\n{plan.DungeonPath}\n\n"
+            + $"던전 에셋 1개와 전용 층 {plan.FloorCount}개를 휴지통으로 보냅니다.\n"
+            + $"공유되거나 별도 보관이 필요한 층 {plan.RetainedFloorCount}개와 몬스터·시체 프리팹은 유지합니다.\n\n"
+            + "이 던전 안에서 저장한 진행은 삭제 후 불러올 수 없습니다.\n파일 삭제는 Ctrl+Z로 복구되지 않습니다.";
+        if (!EditorUtility.DisplayDialog("던전 삭제 확인", details, "삭제", "취소")) return;
+        if (!DungeonDeletionService.Delete(plan, out string result)) { status = result; return; }
+        dungeon = null; floorIndex = 0; sidebarScroll = gridScroll = dungeonListScroll = Vector2.zero; status = result;
+    }
+
     private string ValidateError() { dungeon.IsValid(out string error); return error; }
     private void DrawSidebar()
     {

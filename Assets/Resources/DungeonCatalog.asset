@@ -13,10 +13,6 @@ MonoBehaviour:
   m_Name: DungeonCatalog
   m_EditorClassIdentifier: Assembly-CSharp::DungeonCatalog
   dungeons:
-  - {fileID: 11400000, guid: c4b12c31f724a1141b7ff1f59a9ab7d7, type: 2}
-  - {fileID: 11400000, guid: a1f5fe0dae4708248897d5254e23027d, type: 2}
-  - {fileID: 11400000, guid: bf6e96fe360c9504c842be8eb1078515, type: 2}
-  - {fileID: 11400000, guid: d4664772a70a6c3448560bc7e2b7cbe7, type: 2}
   - {fileID: 11400000, guid: fd13a36ca1821d04586bcc8adbd1169f, type: 2}
   monsterPrefabs:
   - {fileID: 51470085052934561, guid: 40cff418e9740b44a986da3b15d8db97, type: 3}

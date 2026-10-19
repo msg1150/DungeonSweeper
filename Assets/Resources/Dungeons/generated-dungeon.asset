@@ -12,16 +12,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fa7e574d3854475596b3c5379f66163d, type: 3}
   m_Name: generated-dungeon
   m_EditorClassIdentifier: Assembly-CSharp::DungeonDefinition
-  generationHidingSpotsPerFloor: 0
-  dungeonId: dungeon.1b5d1dd103c34b918a4649eac3443bc4
+  generationHidingSpotsPerFloor: 3
+  dungeonId: dungeon.b60ff093202641828e8284a0be8e292c
   displayName: "\uC790\uB3D9 \uC0DD\uC131 \uB358\uC804"
   layoutIndex: 0
   monsters: []
   corpses: []
   floors:
-  - {fileID: 11400000, guid: 1070e88e4672cd44c9b684593b5c1d79, type: 2}
-  - {fileID: 11400000, guid: a66b063dcd1a7754da84832a7c0b418d, type: 2}
-  - {fileID: 11400000, guid: 766841af291aa7541b5bb9aca918d840, type: 2}
+  - {fileID: 11400000, guid: 0ffcff155dd63f34a9fd50bda90d570b, type: 2}
+  - {fileID: 11400000, guid: 8dcf1da149b4278429fe5889904f86a5, type: 2}
+  - {fileID: 11400000, guid: 75e6836d216dea64b84f4a7513569963, type: 2}
   extraExitFloor: -1
-  generationVersion: 1
+  generationVersion: 2
   generationSeed: 12345
