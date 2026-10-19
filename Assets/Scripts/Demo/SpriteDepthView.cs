@@ -41,6 +41,7 @@ public sealed class SpriteDepthView : MonoBehaviour
             var child = new GameObject(sources[i].name + " Billboard");
             child.transform.SetParent(display.transform, false);
             copies[i] = child.AddComponent<SpriteRenderer>();
+            copies[i].spriteSortPoint = SpriteSortPoint.Pivot;
             if (reference == null && sources[i].enabled && sources[i].sprite != null) reference = sources[i];
         }
         if (reference != null)
@@ -55,6 +56,8 @@ public sealed class SpriteDepthView : MonoBehaviour
         shadowObject.transform.SetParent(display.transform, false);
         shadow = shadowObject.AddComponent<SpriteRenderer>();
         shadowObject.transform.rotation = Quaternion.Euler(90, 0, 0);
+        shadowObject.transform.localScale = new Vector3(Mathf.Clamp(width * .65f, .45f, 3f), Mathf.Clamp(width * .28f, .22f, 1f), 1);
+        shadow.sortingOrder = -2;
         ThreeDWorldView.SetRenderLayer(display);
         BindWorld();
     }
@@ -66,6 +69,7 @@ public sealed class SpriteDepthView : MonoBehaviour
         foreach (var copy in copies) copy.sharedMaterial = boundWorld.SpriteMaterial;
         shadow.sharedMaterial = boundWorld.SpriteMaterial;
         shadow.sprite = boundWorld.ContactShadow;
+        shadow.color = new Color(.03f, .055f, .06f, boundWorld.IsDungeon ? .55f : .28f);
     }
 
     private void OnEnable() { if (display != null) display.SetActive(true); }
@@ -79,44 +83,39 @@ public sealed class SpriteDepthView : MonoBehaviour
         if (display == null || world == null || world.WorldCamera == null) return;
         var run = DungeonRunController.Instance;
         bool hidden = run != null && run.Player == transform && run.IsPlayerHidden;
-        display.SetActive(!hidden);
+        if (display.activeSelf == hidden) display.SetActive(!hidden);
         if (hidden) return;
         if (boundWorld != world) BindWorld(); // 재입장 후 새 월드 자원을 연결하며 표시 객체는 재사용한다.
-        var camera = world.WorldCamera;
         // 카메라의 기울기까지 따라 눕히면 그림의 상체가 지면 깊이 방향으로 뻗어
         // 발의 충돌 판정이 벽에 닿기 전에 머리/몸통부터 벽 메시를 뚫게 된다.
         // 지면에 수직으로 세우고 정사영에서 줄어드는 세로 길이만 보정한다.
-        Vector3 facing = Vector3.ProjectOnPlane(camera.transform.forward, Vector3.up);
-        Quaternion rotation = facing.sqrMagnitude > .0001f ? Quaternion.LookRotation(facing, Vector3.up) : Quaternion.identity;
-        float verticalProjection = Mathf.Max(.1f, Mathf.Abs(Vector3.Dot(camera.transform.up, Vector3.up)));
-        Vector3 visualUp = Vector3.up / verticalProjection;
+        world.GetSpriteBasis(out Quaternion rotation, out Vector3 visualUp, out Vector3 cameraRight);
         Vector3 ground = ThreeDWorldView.Map(transform.position, world.FloorHeight(transform.position) + .025f);
         HeadPosition = ground + visualUp * headOffset;
-        display.transform.position = ground;
-        display.transform.rotation = Quaternion.identity;
+        display.transform.SetPositionAndRotation(ground, Quaternion.identity);
         int order = 1000 - Mathf.RoundToInt(transform.position.y * 20);
         bool visible = false;
+        Color tint = world.IsDungeon ? new Color(.82f, .88f, .92f, 1) : Color.white;
         for (int i = 0; i < sources.Length; i++)
         {
             var source = sources[i]; var copy = copies[i];
-            copy.enabled = source != null && source.enabled && source.gameObject.activeInHierarchy && source.sprite != null;
-            if (!copy.enabled) continue;
+            bool enabled = source != null && source.enabled && source.gameObject.activeInHierarchy && source.sprite != null;
+            if (copy.enabled != enabled) copy.enabled = enabled;
+            if (!enabled) continue;
             visible = true;
-            copy.sprite = source.sprite; copy.flipX = source.flipX; copy.flipY = source.flipY;
-            Color tint = world.IsDungeon ? new Color(.82f, .88f, .92f, 1) : Color.white;
-            copy.color = source.color * tint;
-            copy.sortingOrder = order + source.sortingOrder;
-            copy.spriteSortPoint = SpriteSortPoint.Pivot;
+            // 애니메이션이 실제로 바뀐 속성만 렌더러에 전달한다.
+            if (copy.sprite != source.sprite) copy.sprite = source.sprite;
+            if (copy.flipX != source.flipX) copy.flipX = source.flipX;
+            if (copy.flipY != source.flipY) copy.flipY = source.flipY;
+            Color color = source.color * tint;
+            if (copy.color != color) copy.color = color;
+            int sortingOrder = order + source.sortingOrder;
+            if (copy.sortingOrder != sortingOrder) copy.sortingOrder = sortingOrder;
             Vector3 offset = source.transform.position - transform.position;
-            copy.transform.position = ground + visualUp * (footLift + offset.y) + camera.transform.right * offset.x;
-            copy.transform.rotation = rotation;
+            copy.transform.SetPositionAndRotation(ground + visualUp * (footLift + offset.y) + cameraRight * offset.x, rotation);
             Vector3 scale = source.transform.lossyScale;
-            copy.transform.localScale = new Vector3(scale.x, scale.y / verticalProjection, 1);
+            copy.transform.localScale = new Vector3(scale.x, scale.y * visualUp.y, 1);
         }
-        shadow.enabled = visible;
-        shadow.transform.position = ground;
-        shadow.transform.localScale = new Vector3(Mathf.Clamp(width * .65f, .45f, 3f), Mathf.Clamp(width * .28f, .22f, 1f), 1);
-        shadow.sortingOrder = -2;
-        shadow.color = new Color(.03f, .055f, .06f, world.IsDungeon ? .55f : .28f);
+        if (shadow.enabled != visible) shadow.enabled = visible;
     }
 }

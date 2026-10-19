@@ -42,7 +42,7 @@ public sealed class MonsterAwarenessIndicator : MonoBehaviour, IDungeonPoolReset
     public void ResetForPool()
     {
         displayed = MonsterAwareness.None; popTime = 0f;
-        if (marker != null) marker.SetActive(false);
+        if (marker != null && marker.activeSelf) marker.SetActive(false);
     }
     private void OnDisable() => ResetForPool();
     private void OnDestroy() { if (marker != null) Destroy(marker); }
@@ -69,7 +69,7 @@ public sealed class MonsterAwarenessIndicator : MonoBehaviour, IDungeonPoolReset
                 meshFilter.sharedMesh = searchingMesh;
             }
         }
-        marker.SetActive(true);
+        if (!marker.activeSelf) marker.SetActive(true);
         marker.layer = world != null ? ThreeDWorldView.RenderLayer : gameObject.layer;
         marker.transform.position = HeadPosition(world) + camera.transform.up * .38f;
         marker.transform.rotation = camera.transform.rotation;

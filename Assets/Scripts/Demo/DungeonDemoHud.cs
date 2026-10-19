@@ -107,7 +107,8 @@ public class DungeonDemoHud : MonoBehaviour
 
     private void DrawMinimap()
     {
-        if (run.Player == null) return;
+        // 지도에는 입력 컨트롤이 없다. Layout/마우스 이벤트마다 수천 칸을 다시 조회하지 않는다.
+        if (run.Player == null || Event.current.type != EventType.Repaint) return;
         Vector2Int playerCell = DungeonLayoutFactory.WorldToCell(run.Player.position);
 
         float panelY = Mathf.Max(210f, CompactBagCell * run.Inventory.Rows + 120f);
@@ -159,9 +160,22 @@ public class DungeonDemoHud : MonoBehaviour
             {
                 if (map.hasStairsUp && map.stairsUp == location) GUI.color = new Color(.4f, .65f, 1f);
                 if (map.hasStairsDown && map.stairsDown == location) GUI.color = new Color(1f, .73f, .3f);
-                if (map.HasHidingSpot(location)) GUI.color = new Color(.15f, .85f, .75f);
             }
             GUI.DrawTexture(tile, Texture2D.whiteTexture);
+        }
+        // 바닥마다 은신처 목록을 선형 검색하지 않고, 적은 수의 표식만 한 번 덧그린다.
+        // 도면을 별도로 캐시하지 않아 층 이동·저장 복원 시 오래된 표식이 남지 않는다.
+        if (map?.hidingSpots != null)
+        {
+            GUI.color = new Color(.15f, .85f, .75f);
+            foreach (var location in map.hidingSpots)
+            {
+                int screenRow = rows - 1 - location.y;
+                if (location.x < firstColumn || location.x > lastColumn || screenRow < firstRow || screenRow > lastRow
+                    || !run.IsCellDiscovered(location.x, location.y)) continue;
+                GUI.DrawTexture(new Rect(origin.x + location.x * cell + gap * .5f,
+                    origin.y + screenRow * cell + gap * .5f, cell - gap, cell - gap), Texture2D.whiteTexture);
+            }
         }
         // 작은 지도에서도 위치를 찾을 수 있게 플레이어 표식을 마지막에 덧그린다.
         float markerSize = Mathf.Max(5f, cell - gap);
@@ -394,7 +408,7 @@ public class DungeonDemoHud : MonoBehaviour
 
     private void DrawContextPrompt()
     {
-        if (run.IsLootPlacementOpen) return;
+        if (run.IsLootPlacementOpen || Event.current.type != EventType.Repaint) return;
         string prompt = run.GetContextPrompt();
         if (string.IsNullOrEmpty(prompt)) return;
         GUI.skin.label.alignment = TextAnchor.MiddleCenter;

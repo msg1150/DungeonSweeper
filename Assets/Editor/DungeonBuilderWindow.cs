@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -13,6 +14,8 @@ public sealed class DungeonBuilderWindow : EditorWindow
     [SerializeField] private float cellSize = 24;
     private Brush brush = Brush.Floor;
     private Vector2 sidebarScroll, gridScroll, dungeonListScroll;
+    private readonly HashSet<Vector2Int> gridHidingSpots = new();
+    private static readonly string[] brushLabels = { "바닥", "벽", "빈 공간", "입구 기준", "위층 계단", "아래층 계단", "은신처", "은신처 지우기" };
     private int desiredWidth = 20, desiredHeight = 12, strokeGroup = -1;
     private Vector2Int? lastCell;
     private string status;
@@ -140,7 +143,7 @@ public sealed class DungeonBuilderWindow : EditorWindow
         sidebarScroll = EditorGUILayout.BeginScrollView(sidebarScroll);
         EditorGUILayout.LabelField("던전", EditorStyles.boldLabel);
         if (dungeon.generationVersion > 0) EditorGUILayout.LabelField($"자동 생성 시드: {dungeon.generationSeed} · 생성기 v{dungeon.generationVersion}",EditorStyles.miniLabel);
-        var settings = new SerializedObject(dungeon); settings.Update();
+        using var settings = new SerializedObject(dungeon); settings.Update();
         EditorGUILayout.PropertyField(settings.FindProperty("displayName"), new GUIContent("표시 이름"));
         using (new EditorGUI.DisabledScope(true)) EditorGUILayout.PropertyField(settings.FindProperty("dungeonId"), new GUIContent("저장 식별 ID"));
         EditorGUILayout.PropertyField(settings.FindProperty("extraExitFloor"), new GUIContent("추가 포탈 층 (-1 무작위)"));
@@ -169,7 +172,12 @@ public sealed class DungeonBuilderWindow : EditorWindow
                 }
         }
         if (Floor == null) { EditorGUILayout.EndScrollView(); return; }
-        var floorSettings = new SerializedObject(Floor); floorSettings.Update();
+        if (!HasEditableMap(Floor.map))
+        {
+            EditorGUILayout.HelpBox("층 도면 크기 또는 타일 데이터가 잘못되었습니다. 다른 층을 선택하거나 층 에셋을 복구하세요.", MessageType.Error);
+            EditorGUILayout.EndScrollView(); return;
+        }
+        using var floorSettings = new SerializedObject(Floor); floorSettings.Update();
         EditorGUILayout.PropertyField(floorSettings.FindProperty("displayName"), new GUIContent("층 이름"));
         using (new EditorGUI.DisabledScope(true)) EditorGUILayout.ObjectField("층 에셋", Floor, typeof(DungeonFloorDefinition), false);
         EditorGUILayout.Space(); EditorGUILayout.LabelField("도면", EditorStyles.boldLabel);
@@ -177,7 +185,7 @@ public sealed class DungeonBuilderWindow : EditorWindow
         desiredHeight = EditorGUILayout.IntField("세로 칸 수", desiredHeight);
         if (GUILayout.Button("크기 변경 (기존 칸 유지)")) Resize();
         cellSize = EditorGUILayout.Slider("확대", cellSize, 12, 48);
-        brush = (Brush)GUILayout.SelectionGrid((int)brush, new[] { "바닥", "벽", "빈 공간", "입구 기준", "위층 계단", "아래층 계단", "은신처", "은신처 지우기" }, 2);
+        brush = (Brush)GUILayout.SelectionGrid((int)brush, brushLabels, 2);
         EditorGUILayout.HelpBox("왼쪽 드래그: 선택 도구\n오른쪽 드래그: 빈 공간\nCtrl+Z: 실행 취소\n첫 층의 입구 기준이 귀환 포탈입니다. 다른 층에서는 스폰 거리의 기준으로만 사용합니다.", MessageType.None);
         using (new EditorGUILayout.HorizontalScope())
         {
@@ -193,44 +201,70 @@ public sealed class DungeonBuilderWindow : EditorWindow
     }
     private void DrawGrid()
     {
-        if (Floor == null || Floor.map?.tiles == null) return;
+        if (Floor == null) return;
         var map = Floor.map;
+        if (!HasEditableMap(map))
+        {
+            EditorGUILayout.HelpBox("도면 크기와 타일 데이터가 일치하지 않습니다. 층 에셋을 복구하세요.", MessageType.Error);
+            return;
+        }
         using var panel = new EditorGUILayout.VerticalScope();
         EditorGUILayout.LabelField($"{map.width} × {map.height}  |  파랑: 입구 / 보라: 위층 / 초록: 아래층 / 청록 H: 은신처 {map.hidingSpots?.Count ?? 0}개", EditorStyles.boldLabel);
-        gridScroll = EditorGUILayout.BeginScrollView(gridScroll);
-        Rect area = GUILayoutUtility.GetRect(map.width * cellSize + 16, map.height * cellSize + 16, GUILayout.ExpandWidth(false), GUILayout.ExpandHeight(false));
-        Vector2 origin = area.position + new Vector2(8,8);
-        for (int x = 0; x < map.width; x++) for (int y = 0; y < map.height; y++)
+        Rect viewport = GUILayoutUtility.GetRect(0, 100000, 0, 100000, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+        bool pointerInViewport = viewport.Contains(Event.current.mousePosition);
+        Rect area = new Rect(0, 0, map.width * cellSize + 16, map.height * cellSize + 16);
+        gridScroll = GUI.BeginScrollView(viewport, gridScroll, area);
+        try
         {
-            var cell = new Vector2Int(x,y); var tile = map.Tile(x,y);
-            var rect = new Rect(origin.x + x * cellSize, origin.y + (map.height - 1 - y) * cellSize, cellSize - 1, cellSize - 1);
-            Color color = tile == DungeonTile.Floor ? new Color(.35f,.43f,.45f) : tile == DungeonTile.Wall ? new Color(.75f,.68f,.51f) : new Color(.12f,.14f,.16f);
-            string marker = null;
-            if (cell == map.entrance) { color = new Color(.25f,.55f,.95f); marker = "E"; }
-            if (map.hasStairsUp && cell == map.stairsUp) { color = new Color(.65f,.4f,.95f); marker = "↑"; }
-            if (map.hasStairsDown && cell == map.stairsDown) { color = new Color(.2f,.75f,.45f); marker = "↓"; }
-            if (map.HasHidingSpot(cell)) { color = new Color(.15f,.7f,.7f); marker = "H"; }
-            EditorGUI.DrawRect(rect, color); if (marker != null) GUI.Label(rect, marker, EditorStyles.whiteBoldLabel);
-        }
-        Event current = Event.current;
-        if (!automatic && !EditorApplication.isPlaying && area.Contains(current.mousePosition) && (current.type == EventType.MouseDown || current.type == EventType.MouseDrag) && current.button <= 1)
-        {
-            var cell = new Vector2Int(Mathf.FloorToInt((current.mousePosition.x - origin.x) / cellSize), map.height - 1 - Mathf.FloorToInt((current.mousePosition.y - origin.y) / cellSize));
-            if (cell.x >= 0 && cell.y >= 0 && cell.x < map.width && cell.y < map.height)
+            Vector2 origin = area.position + new Vector2(8,8);
+            // Layout에서는 영역만 확보하고, Repaint에서 화면 안의 칸만 그린다.
+            // 은신처는 매번 목록에서 읽어 Undo·자동 생성 미리보기에도 즉시 맞춘다.
+            if (Event.current.type == EventType.Repaint)
             {
-                if (strokeGroup < 0) { Undo.IncrementCurrentGroup(); strokeGroup = Undo.GetCurrentGroup(); Undo.RegisterCompleteObjectUndo(Floor, "Paint dungeon tiles"); }
-                var selected = current.button == 1 ? Brush.Empty : brush;
-                if (lastCell.HasValue && (int)selected <= (int)Brush.Empty)
+                gridHidingSpots.Clear();
+                if (map.hidingSpots != null) foreach (var spot in map.hidingSpots) gridHidingSpots.Add(spot);
+                int firstColumn = Mathf.Max(0, Mathf.FloorToInt((gridScroll.x - origin.x) / cellSize));
+                int lastColumn = Mathf.Min(map.width - 1, Mathf.FloorToInt((gridScroll.x + viewport.width - origin.x) / cellSize));
+                int firstRow = Mathf.Max(0, Mathf.FloorToInt((gridScroll.y - origin.y) / cellSize));
+                int lastRow = Mathf.Min(map.height - 1, Mathf.FloorToInt((gridScroll.y + viewport.height - origin.y) / cellSize));
+                for (int x = firstColumn; x <= lastColumn; x++) for (int row = firstRow; row <= lastRow; row++)
                 {
-                    Vector2Int from = lastCell.Value; int steps = Mathf.Max(Mathf.Abs(cell.x-from.x), Mathf.Abs(cell.y-from.y));
-                    for (int i = 0; i <= steps; i++) Paint(Vector2Int.RoundToInt(Vector2.Lerp(from,cell,steps == 0 ? 1 : (float)i/steps)), selected);
+                    int y = map.height - 1 - row;
+                    var cell = new Vector2Int(x,y); var tile = map.Tile(x,y);
+                    var rect = new Rect(origin.x + x * cellSize, origin.y + (map.height - 1 - y) * cellSize, cellSize - 1, cellSize - 1);
+                    Color color = tile == DungeonTile.Floor ? new Color(.35f,.43f,.45f) : tile == DungeonTile.Wall ? new Color(.75f,.68f,.51f) : new Color(.12f,.14f,.16f);
+                    string marker = null;
+                    if (cell == map.entrance) { color = new Color(.25f,.55f,.95f); marker = "E"; }
+                    if (map.hasStairsUp && cell == map.stairsUp) { color = new Color(.65f,.4f,.95f); marker = "↑"; }
+                    if (map.hasStairsDown && cell == map.stairsDown) { color = new Color(.2f,.75f,.45f); marker = "↓"; }
+                    if (gridHidingSpots.Contains(cell)) { color = new Color(.15f,.7f,.7f); marker = "H"; }
+                    EditorGUI.DrawRect(rect, color); if (marker != null) GUI.Label(rect, marker, EditorStyles.whiteBoldLabel);
                 }
-                else Paint(cell, selected);
-                lastCell = cell; EditorUtility.SetDirty(Floor); Repaint(); current.Use();
+            }
+            Event current = Event.current;
+            if (!automatic && !EditorApplication.isPlaying && pointerInViewport && area.Contains(current.mousePosition) && (current.type == EventType.MouseDown || current.type == EventType.MouseDrag) && current.button <= 1)
+            {
+                var cell = new Vector2Int(Mathf.FloorToInt((current.mousePosition.x - origin.x) / cellSize), map.height - 1 - Mathf.FloorToInt((current.mousePosition.y - origin.y) / cellSize));
+                if (cell.x >= 0 && cell.y >= 0 && cell.x < map.width && cell.y < map.height)
+                {
+                    if (strokeGroup < 0) { Undo.IncrementCurrentGroup(); strokeGroup = Undo.GetCurrentGroup(); Undo.RegisterCompleteObjectUndo(Floor, "Paint dungeon tiles"); }
+                    var selected = current.button == 1 ? Brush.Empty : brush;
+                    if (lastCell.HasValue && (int)selected <= (int)Brush.Empty)
+                    {
+                        Vector2Int from = lastCell.Value; int steps = Mathf.Max(Mathf.Abs(cell.x-from.x), Mathf.Abs(cell.y-from.y));
+                        for (int i = 0; i <= steps; i++) Paint(Vector2Int.RoundToInt(Vector2.Lerp(from,cell,steps == 0 ? 1 : (float)i/steps)), selected);
+                    }
+                    else Paint(cell, selected);
+                    lastCell = cell; EditorUtility.SetDirty(Floor); Repaint(); current.Use();
+                }
             }
         }
-        EditorGUILayout.EndScrollView();
+        finally { GUI.EndScrollView(); }
     }
+    // 연결 여부 등 제작 중 바뀌는 규칙은 검증 버튼에서 확인하고, 그릴 수 있는 배열인지만 먼저 확인한다.
+    private static bool HasEditableMap(DungeonFloorMap map) => map != null && map.width >= 4 && map.height >= 4
+        && map.width <= DungeonFloorMap.MaximumSize && map.height <= DungeonFloorMap.MaximumSize
+        && map.tiles != null && map.tiles.Length == map.width * map.height;
     private void Paint(Vector2Int cell, Brush selected)
     {
         var map = Floor.map;
@@ -257,7 +291,7 @@ public sealed class DungeonBuilderWindow : EditorWindow
         else map.stairsDown = cell;
     }
     private void EndStroke() { if (strokeGroup >= 0) Undo.CollapseUndoOperations(strokeGroup); strokeGroup = -1; lastCell = null; }
-    private void SelectFloor() { if (Floor != null) { desiredWidth = Floor.map.width; desiredHeight = Floor.map.height; } }
+    private void SelectFloor() { if (Floor?.map != null) { desiredWidth = Floor.map.width; desiredHeight = Floor.map.height; } }
     private void Resize()
     {
         int width = Mathf.Clamp(desiredWidth, 4, DungeonFloorMap.MaximumSize), height = Mathf.Clamp(desiredHeight, 4, DungeonFloorMap.MaximumSize);
@@ -325,13 +359,13 @@ public sealed class DungeonBuilderWindow : EditorWindow
             cellSize = EditorGUILayout.Slider("확대",cellSize,12,48);
             int floorCells = Floor.map.tiles.Count(tile => tile == (int)DungeonTile.Floor);
             EditorGUILayout.LabelField($"바닥 {floorCells}칸 · 스폰 용량 {Floor.map.PopulationCapacity}개");
-            var spawnSettings = new SerializedObject(preview); spawnSettings.Update();
+            using var spawnSettings = new SerializedObject(preview); spawnSettings.Update();
             EditorGUILayout.PropertyField(spawnSettings.FindProperty("extraExitFloor"),new GUIContent("추가 포탈 층 (-1 무작위)"));
             spawnSettings.ApplyModifiedProperties();
             showPreviewSpawns = EditorGUILayout.Foldout(showPreviewSpawns,"이 층의 몬스터·시체 설정",true);
             if (showPreviewSpawns)
             {
-                var floorSettings = new SerializedObject(Floor); floorSettings.Update();
+                using var floorSettings = new SerializedObject(Floor); floorSettings.Update();
                 EditorGUILayout.PropertyField(floorSettings.FindProperty("monsters"),new GUIContent("몬스터"),true);
                 EditorGUILayout.PropertyField(floorSettings.FindProperty("corpses"),new GUIContent("시체"),true);
                 floorSettings.ApplyModifiedProperties();

@@ -145,10 +145,18 @@ public static class DungeonMapGenerator
     private static void AddHidingSpots(DungeonFloorMap map, int requested, System.Random random)
     {
         var candidates = new List<Vector2Int>();
+        var separations = new List<float>();
+        var edgeBonuses = new List<float>();
         for (int y = 0; y < map.height; y++) for (int x = 0; x < map.width; x++)
         {
             var cell = new Vector2Int(x, y);
-            if (map.Walkable(cell) && !map.Reserved(cell)) candidates.Add(cell);
+            if (!map.Walkable(cell) || map.Reserved(cell)) continue;
+            candidates.Add(cell);
+            float separation = Vector2Int.Distance(cell, map.entrance);
+            foreach (var existing in map.hidingSpots) separation = Mathf.Min(separation, Vector2Int.Distance(cell, existing));
+            separations.Add(separation);
+            int edges = 0; foreach (var delta in directions) if (!map.Walkable(cell + delta)) edges++;
+            edgeBonuses.Add(edges * .75f);
         }
         // 추가 탈출 포탈에 필요한 한 칸은 남긴다. 작은 도면에는 가능한 수만 배치한다.
         int count = Mathf.Min(requested, Mathf.Max(0, candidates.Count - 1));
@@ -158,13 +166,14 @@ public static class DungeonMapGenerator
             for (int j = 0; j < candidates.Count; j++)
             {
                 var cell = candidates[j];
-                float separation = Vector2Int.Distance(cell, map.entrance);
-                foreach (var existing in map.hidingSpots) separation = Mathf.Min(separation, Vector2Int.Distance(cell, existing));
-                int edges = 0; foreach (var delta in directions) if (!map.Walkable(cell + delta)) edges++;
-                float score = separation + edges * .75f + (float)random.NextDouble() * .3f;
+                // 직전 선택 위치와의 거리만 최소값에 반영한다. 후보 순서와 난수 호출 순서는
+                // 그대로 두어 같은 시드가 기존과 같은 은신처를 만든다.
+                if (i > 0) separations[j] = Mathf.Min(separations[j], Vector2Int.Distance(cell, map.hidingSpots[map.hidingSpots.Count - 1]));
+                float score = separations[j] + edgeBonuses[j] + (float)random.NextDouble() * .3f;
                 if (score > bestScore) { bestScore = score; bestIndex = j; }
             }
             map.hidingSpots.Add(candidates[bestIndex]); candidates.RemoveAt(bestIndex);
+            separations.RemoveAt(bestIndex); edgeBonuses.RemoveAt(bestIndex);
         }
     }
     private static void AddWalls(DungeonFloorMap map)

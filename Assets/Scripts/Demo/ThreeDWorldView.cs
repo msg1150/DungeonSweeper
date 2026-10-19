@@ -20,6 +20,10 @@ public sealed class ThreeDWorldView : MonoBehaviour
     private readonly List<Mesh> ownedMeshes = new();
     private readonly Dictionary<Sprite, float> footLifts = new();
     private readonly Dictionary<Sprite, float> headTops = new();
+    private static readonly Vector2Int[] wallDirections = { Vector2Int.left, Vector2Int.right, Vector2Int.up, Vector2Int.down };
+    private bool hasSpriteBasis;
+    private Quaternion spriteCameraRotation, spriteRotation;
+    private Vector3 spriteUp, spriteRight;
     private Sprite contactShadow;
     private Texture2D shadowTexture;
     private SpriteRenderer townGround;
@@ -28,6 +32,20 @@ public sealed class ThreeDWorldView : MonoBehaviour
     public Sprite ContactShadow => contactShadow;
     public bool IsDungeon => dungeon;
     public Camera WorldCamera => camera;
+    /// <summary>전 개체가 공유하는 수직 표시 기준. 카메라 회전이 바뀔 때만 다시 계산한다.</summary>
+    public void GetSpriteBasis(out Quaternion rotation, out Vector3 visualUp, out Vector3 right)
+    {
+        Quaternion cameraRotation = camera.transform.rotation;
+        if (!hasSpriteBasis || !spriteCameraRotation.Equals(cameraRotation))
+        {
+            spriteCameraRotation = cameraRotation; hasSpriteBasis = true;
+            Vector3 facing = Vector3.ProjectOnPlane(cameraRotation * Vector3.forward, Vector3.up);
+            spriteRotation = facing.sqrMagnitude > .0001f ? Quaternion.LookRotation(facing, Vector3.up) : Quaternion.identity;
+            spriteUp = Vector3.up / Mathf.Max(.1f, Mathf.Abs(Vector3.Dot(cameraRotation * Vector3.up, Vector3.up)));
+            spriteRight = cameraRotation * Vector3.right;
+        }
+        rotation = spriteRotation; visualUp = spriteUp; right = spriteRight;
+    }
     public static Vector3 Map(Vector2 point, float height = 0) => new(point.x, height, point.y);
     public float FloorHeight(Vector2 point)
     {
@@ -226,7 +244,7 @@ public sealed class ThreeDWorldView : MonoBehaviour
             if (!DungeonLayoutFactory.IsWalkableCell(x,y)) continue;
             Vector2 p = DungeonLayoutFactory.CellCenter(x,y);
             AddBox(floors,cube,Map(p,-.12f),new Vector3(cell-.025f,.24f,cell-.025f));
-            foreach (Vector2Int direction in new[] { Vector2Int.left,Vector2Int.right,Vector2Int.up,Vector2Int.down })
+            foreach (Vector2Int direction in wallDirections)
             {
                 if (DungeonLayoutFactory.IsWalkableCell(x+direction.x,y+direction.y)) continue;
                 Vector2 wall = p+(Vector2)direction*cell*.5f;

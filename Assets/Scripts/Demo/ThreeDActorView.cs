@@ -86,7 +86,7 @@ public sealed class ThreeDActorView : MonoBehaviour
         EnsureModel(); if (model == null) return;
         var run = DungeonRunController.Instance;
         bool hidden = run != null && run.Player == transform && run.IsPlayerHidden;
-        model.SetActive(!hidden);
+        if (model.activeSelf == hidden) model.SetActive(!hidden);
         if (hidden) { previous = transform.position; return; }
         Vector2 position = transform.position;
         model.transform.position = ThreeDWorldView.Map(position);

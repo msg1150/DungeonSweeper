@@ -42,8 +42,11 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
     public float HidingRevealRange => definition?.HidingRevealRange ?? 0f;
     public MonsterAwareness Awareness => definition == null || !isActiveAndEnabled || IsTargetHidden ? MonsterAwareness.None
         : seesPlayer ? MonsterAwareness.Detected : hasLastSeenPlayerPosition ? MonsterAwareness.Searching : MonsterAwareness.None;
-    private bool IsTargetHidden => DungeonRunController.Instance != null && DungeonRunController.Instance.Player == player
-        && DungeonRunController.Instance.IsPlayerHidden;
+    private bool IsTargetHidden
+    {
+        get { var run = DungeonRunController.Instance; return run != null && run.Player == player && run.IsPlayerHidden; }
+    }
+    private const float ArrivalDistanceSquared = .18f * .18f;
     // 판정과 디버그 표시는 같은 값을 사용한다. 소음 청취 반경과는 별개인, 벽에 차단되는 시야 거리다.
     public float CurrentDetectionRange => BaseDetectionRange * (definition != null && noiseAlertRemaining > 0f ? definition.NoiseDetectionMultiplier : 1f);
     private float TravelDistance => definition.hasMovementStats ? definition.patrolTravelDistance : DungeonTuning.Active.patrolTravelDistance;
@@ -105,7 +108,7 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
     public void HearNoise(Vector2 noisePosition, float radius)
     {
         if (definition == null || !isActiveAndEnabled || !GameSaveData.Finite(noisePosition) || float.IsNaN(radius) || float.IsInfinity(radius) || radius <= 0f
-            || Vector2.Distance(transform.position, noisePosition) > radius) return;
+            || ((Vector2)transform.position - noisePosition).sqrMagnitude > radius * radius) return;
         Vector2Int noiseCell = DungeonLayoutFactory.WorldToCell(noisePosition);
         investigationTarget = DungeonLayoutFactory.IsWalkablePosition(noisePosition) ? noisePosition : DungeonLayoutFactory.CellCenter(noiseCell.x, noiseCell.y);
         investigationRemaining = definition.hasMovementStats ? definition.investigationSeconds : DungeonTuning.Active.investigationSeconds;
@@ -124,8 +127,10 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
     {
         // 이동·공격 중에도 경계 시간은 흐른다. 일시정지와 비활성 층에서는 Tick 자체가 멈춘다.
         noiseAlertRemaining = Mathf.Max(0f, noiseAlertRemaining - elapsed);
-        float distance = Vector2.Distance(transform.position, player.position);
-        bool isChasing = !IsTargetHidden && distance < CurrentDetectionRange && HasClearSight(player.position);
+        float distanceSquared = ((Vector2)(transform.position - player.position)).sqrMagnitude;
+        float detectionRange = CurrentDetectionRange;
+        bool targetHidden = IsTargetHidden;
+        bool isChasing = !targetHidden && distanceSquared < detectionRange * detectionRange && HasClearSight(player.position);
         seesPlayer = isChasing;
         if (isChasing)
         {
@@ -141,14 +146,15 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
             if (!damageApplied && progress >= .5f)
             {
                 damageApplied = true;
-                if (!IsTargetHidden && distance <= definition.attackRange + .25f && (isChasing || HasClearSight(player.position)))
+                float damageRange = definition.attackRange + .25f;
+                if (!targetHidden && distanceSquared <= damageRange * damageRange && (isChasing || HasClearSight(player.position)))
                     playerHealth?.TakeDamage(definition.attackDamage);
             }
             return;
         }
 
         bool finishedLastSeen = !isChasing && hasLastSeenPlayerPosition
-            && Vector2.Distance(transform.position, lastSeenPlayerPosition) < .18f;
+            && ((Vector2)transform.position - lastSeenPlayerPosition).sqrMagnitude < ArrivalDistanceSquared;
         if (finishedLastSeen)
         {
             hasLastSeenPlayerPosition = false;
@@ -163,7 +169,7 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
             {
                 SelectPatrolDestination();
             }
-            else if (Vector2.Distance(transform.position, roamTarget) < .18f)
+            else if (((Vector2)transform.position - roamTarget).sqrMagnitude < ArrivalDistanceSquared)
             {
                 if (patrolPauseRemaining > 0f) patrolPauseRemaining = Mathf.Max(0f, patrolPauseRemaining - elapsed);
                 if (patrolPauseRemaining <= 0f) SelectPatrolDestination();
@@ -176,7 +182,7 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
         float speed = definition.hasMovementStats ? (usesChaseSpeed ? definition.chaseSpeed : definition.patrolSpeed)
             : (usesChaseSpeed ? DungeonTuning.Active.chaseSpeed : DungeonTuning.Active.patrolSpeed);
         Vector2 before = transform.position;
-        bool arrivedBefore = Vector2.Distance(before, target) < .18f;
+        bool arrivedBefore = (before - target).sqrMagnitude < ArrivalDistanceSquared;
         if (!arrivedBefore && !FollowPath(target, speed * elapsed, isChasing ? 2 : isFollowingLastSeen ? 3 : isInvestigating ? 1 : 0)
             && isFollowingLastSeen)
         {
@@ -184,7 +190,7 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
             hasLastSeenPlayerPosition = false;
             SelectPatrolDestination();
         }
-        bool arrived = Vector2.Distance(transform.position, target) < .18f;
+        bool arrived = ((Vector2)transform.position - target).sqrMagnitude < ArrivalDistanceSquared;
         if (!isChasing && !isFollowingLastSeen && !isInvestigating && !arrivedBefore && arrived)
             patrolPauseRemaining = definition.hasMovementStats ? definition.patrolArrivalPause : DungeonTuning.Active.patrolArrivalPause;
         if (isInvestigating && arrived) investigationRemaining = Mathf.Max(0f, investigationRemaining - elapsed);
@@ -194,7 +200,7 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
         wasInvestigating = isInvestigating;
 
         if (attackCooldown > 0f) attackCooldown -= elapsed;
-        if (isChasing && distance <= definition.attackRange && attackCooldown <= 0f)
+        if (isChasing && distanceSquared <= definition.attackRange * definition.attackRange && attackCooldown <= 0f)
         {
             attackCooldown = definition.attackCooldown;
             attackTimer = definition.attackAnimationSeconds;
@@ -213,14 +219,20 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
         filter.SetLayerMask(Physics2D.DefaultRaycastLayers);
         sightHits.Clear();
         Physics2D.Raycast(origin, offset / distance, filter, sightHits, distance);
-        foreach (RaycastHit2D hit in sightHits)
+        return !HasBlockingHit(sightHits);
+    }
+
+    // 이동·시야 모두 다른 배우를 장애물로 취급하지 않는다. 트리거 포함 여부는 각 쿼리가 정한다.
+    private static bool HasBlockingHit(List<RaycastHit2D> hits)
+    {
+        foreach (RaycastHit2D hit in hits)
         {
             if (hit.collider == null) continue;
             if (hit.collider.GetComponentInParent<EnemyAgent>() != null) continue;
             if (hit.collider.GetComponentInParent<PlayerMovement>() != null) continue;
-            return false; // 활성화된 레이아웃 벽이 먼저 닿으면 시야가 막힌다.
+            return true;
         }
-        return true;
+        return false;
     }
 
     private void SelectPatrolDestination()
@@ -255,24 +267,25 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
             // 끝점이 같은 칸에서 움직여도 출발 칸부터 재탐색하지 않는다.
             if (pathIndex >= path.Count) pathIndex = path.Count - 1;
         }
+        // 한 이동 호출에서만 최대 8개의 지름길을 검사한다. 큰 deltaTime으로 여러 칸을
+        // 이동해도 같은 while 안에서 검사 예산이 다시 생기지 않게 한다.
+        int lookAhead = Mathf.Min(path.Count - 1, pathIndex + 8);
+        for (int i = pathIndex + 1; i <= lookAhead; i++)
+        {
+            if (!CanMoveDirectly(path[i])) break;
+            pathIndex = i;
+        }
         while (distance > 0f && pathIndex < path.Count)
         {
-            // 몸체가 벽에 걸리지 않는 구간만 중간 칸을 생략한다. 한 번의 검사량은 제한한다.
-            int lookAhead = Mathf.Min(path.Count - 1, pathIndex + 8);
-            for (int i = pathIndex + 1; i <= lookAhead; i++)
-            {
-                if (!CanMoveDirectly(path[i])) break;
-                pathIndex = i;
-            }
             Vector2 before = transform.position;
             Vector2 next = Vector2.MoveTowards(before, path[pathIndex], distance);
             distance -= Vector2.Distance(before, next);
             transform.position = next;
-            if (Vector2.Distance(next, path[pathIndex]) > .001f) break;
+            if ((next - path[pathIndex]).sqrMagnitude > .001f * .001f) break;
             pathIndex++;
         }
         // 도면 밖 좌표는 가장 가까운 바닥으로 보정된다. 그곳에서 도달 불가능한 목표를 계속 재시도하지 않는다.
-        return pathIndex < path.Count || Vector2.Distance(transform.position, target) < .18f;
+        return pathIndex < path.Count || ((Vector2)transform.position - target).sqrMagnitude < ArrivalDistanceSquared;
     }
 
     private bool CanMoveDirectly(Vector2 target)
@@ -296,13 +309,7 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
         movementHits.Clear();
         // 시야용 선 하나 대신 실제 몸체 크기를 쓸어 벽·모서리에 몸이 파고드는 지름길은 거부한다.
         Physics2D.BoxCast(origin, size, angle, offset / length, filter, movementHits, length);
-        foreach (var hit in movementHits)
-        {
-            if (hit.collider == null || hit.collider.GetComponentInParent<EnemyAgent>() != null
-                || hit.collider.GetComponentInParent<PlayerMovement>() != null) continue;
-            return false;
-        }
-        return true;
+        return !HasBlockingHit(movementHits);
     }
 
     public EnemySaveData Capture() => new()
@@ -334,7 +341,7 @@ public class EnemyAgent : MonoBehaviour, IDungeonPoolResettable
         hasLastSeenPlayerPosition = state.hasLastSeenPlayerPosition;
         previousPatrolOrigin = state.previousPatrolOrigin;
         hasPreviousPatrolOrigin = state.hasPreviousPatrolOrigin;
-        pathMode = -1;
+        path.Clear(); pathIndex = 0; pathMode = -1;
     }
 
 }

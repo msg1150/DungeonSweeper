@@ -44,6 +44,7 @@ Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/DungeonBuilderChecks.c
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/DungeonGenerationChecks.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/DungeonGenerationChecks.cs" -Force
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/DungeonGenerationEditorChecks.cs') -Destination "$taskValidationRoot/Assets/Editor/DungeonGenerationEditorChecks.cs" -Force
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/DungeonDeletionEditorChecks.cs') -Destination "$taskValidationRoot/Assets/Editor/DungeonDeletionEditorChecks.cs" -Force
+Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/OptimizationEditorChecks.cs') -Destination "$taskValidationRoot/Assets/Editor/OptimizationEditorChecks.cs" -Force
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/PlayerProtectionValidationBuild.cs') -Destination "$taskValidationRoot/Assets/Editor/PlayerProtectionValidationBuild.cs" -Force
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/PlayerProtectionValidationDriver.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/PlayerProtectionValidationDriver.cs" -Force
 

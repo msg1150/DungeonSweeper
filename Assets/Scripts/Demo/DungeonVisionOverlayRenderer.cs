@@ -2,6 +2,8 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>UI 셰이더 한 장으로 플레이어 중심의 원형 시야를 안정적으로 합성한다.</summary>
+// 카메라(500)와 2.5D 표시(700)가 이동한 뒤 같은 프레임의 시야를 계산한다.
+[DefaultExecutionOrder(900)]
 public sealed class DungeonVisionOverlayRenderer : MonoBehaviour
 {
     private Transform player;
