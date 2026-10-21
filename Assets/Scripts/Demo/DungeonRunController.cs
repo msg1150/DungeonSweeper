@@ -133,6 +133,8 @@ public class DungeonRunController : MonoBehaviour
     private void LateUpdate() { if (IsRunActive) DiscoverAroundPlayer(); }
 
     public bool IsCellDiscovered(int x, int y) => discoveredCells.Contains(new Vector2Int(x, y));
+    // 탐색은 같은 런에서 추가만 된다. 미니맵 캐시는 새 칸이 발견될 때만 다시 만든다.
+    public int DiscoveredCellCount => discoveredCells.Count;
 
     private void DiscoverAroundPlayer()
     {

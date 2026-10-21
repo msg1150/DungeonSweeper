@@ -17,6 +17,8 @@ public class DungeonDemoHud : MonoBehaviour
     private float bagCell;
     private Vector2 pendingLootScroll;
     private const float MinimapViewportSize = 210f;
+    private readonly DungeonMinimapTexture minimap = new();
+    private System.Func<int, int, bool> isDiscovered;
     // 층 이동 때 HUD가 다시 생성되어도 사용자가 고른 내부 지도 배율은 유지한다.
     private static readonly float[] minimapZoomLevels = { 1f, 1.5f, 2f, 3f };
     private static int minimapZoomIndex = 1;
@@ -24,7 +26,13 @@ public class DungeonDemoHud : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetMinimapZoom() => minimapZoomIndex = 1;
 
-    public void Initialize(DungeonRunController controller) => run = controller;
+    public void Initialize(DungeonRunController controller)
+    {
+        minimap.Dispose();
+        run = controller; isDiscovered = controller.IsCellDiscovered;
+    }
+    private void OnDestroy() => minimap.Dispose();
+    private void OnDisable() => minimap.Dispose();
 
     private void OnGUI()
     {
@@ -143,40 +151,10 @@ public class DungeonDemoHud : MonoBehaviour
         Vector2 origin = MinimapOrigin(columns, rows, cell, playerCell);
         var map = DungeonLayoutFactory.ActiveMap;
         float gap = Mathf.Min(.6f, cell * .12f);
-        // 확대해서 화면 밖으로 나간 칸은 탐색 상태 조회와 그리기를 생략한다.
-        int firstColumn = Mathf.Max(0, Mathf.FloorToInt(-origin.x / cell));
-        int lastColumn = Mathf.Min(columns - 1, Mathf.CeilToInt((MinimapViewportSize - origin.x) / cell) - 1);
-        int firstRow = Mathf.Max(0, Mathf.FloorToInt(-origin.y / cell));
-        int lastRow = Mathf.Min(rows - 1, Mathf.CeilToInt((MinimapViewportSize - origin.y) / cell) - 1);
-        for (int x = firstColumn; x <= lastColumn; x++)
-        for (int screenRow = firstRow; screenRow <= lastRow; screenRow++)
-        {
-            int y = rows - 1 - screenRow;
-            if (!run.IsCellDiscovered(x, y)) continue;
-            Vector2Int location = new(x, y);
-            Rect tile = new Rect(origin.x + x * cell + gap * .5f, origin.y + screenRow * cell + gap * .5f, cell - gap, cell - gap);
-            GUI.color = new Color(.57f, .68f, .75f);
-            if (map != null)
-            {
-                if (map.hasStairsUp && map.stairsUp == location) GUI.color = new Color(.4f, .65f, 1f);
-                if (map.hasStairsDown && map.stairsDown == location) GUI.color = new Color(1f, .73f, .3f);
-            }
-            GUI.DrawTexture(tile, Texture2D.whiteTexture);
-        }
-        // 바닥마다 은신처 목록을 선형 검색하지 않고, 적은 수의 표식만 한 번 덧그린다.
-        // 도면을 별도로 캐시하지 않아 층 이동·저장 복원 시 오래된 표식이 남지 않는다.
-        if (map?.hidingSpots != null)
-        {
-            GUI.color = new Color(.15f, .85f, .75f);
-            foreach (var location in map.hidingSpots)
-            {
-                int screenRow = rows - 1 - location.y;
-                if (location.x < firstColumn || location.x > lastColumn || screenRow < firstRow || screenRow > lastRow
-                    || !run.IsCellDiscovered(location.x, location.y)) continue;
-                GUI.DrawTexture(new Rect(origin.x + location.x * cell + gap * .5f,
-                    origin.y + screenRow * cell + gap * .5f, cell - gap, cell - gap), Texture2D.whiteTexture);
-            }
-        }
+        // 플레이어 이동·지도 스크롤만으로는 업로드하지 않는다. 탐색·층·배율이 바뀔 때만 갱신한다.
+        minimap.Refresh(map, columns, rows, run.DiscoveredCellCount, cell, isDiscovered);
+        GUI.color = Color.white;
+        GUI.DrawTexture(new Rect(origin.x, origin.y, columns * cell, rows * cell), minimap.Texture);
         // 작은 지도에서도 위치를 찾을 수 있게 플레이어 표식을 마지막에 덧그린다.
         float markerSize = Mathf.Max(5f, cell - gap);
         Vector2 markerCenter = new(origin.x + (playerCell.x + .5f) * cell,

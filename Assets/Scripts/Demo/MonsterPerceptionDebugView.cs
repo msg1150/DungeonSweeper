@@ -1,7 +1,9 @@
 #if UNITY_EDITOR
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>에디터 전용 Game 뷰 표시. 실제 AI의 반경을 투영하며 어둠·벽에 가려진 범위도 확인할 수 있다.</summary>
+[DefaultExecutionOrder(950)]
 public sealed class MonsterPerceptionDebugView : MonoBehaviour
 {
     private const int Segments = 64;
@@ -12,6 +14,9 @@ public sealed class MonsterPerceptionDebugView : MonoBehaviour
     private readonly Vector2[] circle = new Vector2[Segments + 1];
     private DungeonRunController run;
     private GUIStyle label;
+    private Canvas lineCanvas;
+    private readonly List<MonsterPerceptionLines> batches = new();
+    private int batchIndex;
 
     public void Initialize(DungeonRunController controller)
     {
@@ -23,11 +28,76 @@ public sealed class MonsterPerceptionDebugView : MonoBehaviour
         }
     }
 
+    private bool ShouldDraw => run != null && run.IsRunActive && DungeonTuning.Active.showMonsterPerceptionRanges
+        && GameShell.IsGameplayHudVisible;
+
+    private void LateUpdate()
+    {
+        if (!ShouldDraw) { if (lineCanvas != null) lineCanvas.enabled = false; return; }
+        var world = ThreeDWorldView.Current;
+        Camera camera = world != null ? world.WorldCamera : Camera.main;
+        if (camera == null) { if (lineCanvas != null) lineCanvas.enabled = false; return; }
+        EnsureCanvas();
+        lineCanvas.enabled = true;
+        batchIndex = 0;
+        foreach (var batch in batches) batch.ClearSegments();
+        float width = 2f * Mathf.Max(.001f, Mathf.Min(Screen.width / GameGuiScope.Width, Screen.height / GameGuiScope.Height));
+        foreach (var enemy in run.Enemies)
+        {
+            if (enemy == null || !enemy.isActiveAndEnabled) continue;
+            Vector2 center = enemy.transform.position;
+            float height = world != null ? world.FloorHeight(center) + .04f : 0f;
+            DrawCircle(camera, center, height, enemy.HearingRange, HearingColor, true, width);
+            DrawCircle(camera, center, height, enemy.BaseDetectionRange, BaseColor, false, width);
+            DrawCircle(camera, center, height, enemy.HidingRevealRange, HidingColor, false, width);
+            if (enemy.NoiseAlertRemaining > 0f) DrawCircle(camera, center, height, enemy.CurrentDetectionRange, AlertColor, false, width);
+        }
+        foreach (var batch in batches) { batch.enabled = batch.SegmentCount > 0; batch.SetVerticesDirty(); }
+    }
+
+    private void OnDisable() { if (lineCanvas != null) lineCanvas.enabled = false; }
+
+    private void EnsureCanvas()
+    {
+        if (lineCanvas != null) return;
+        // ScreenSpaceOverlay는 최상위 오브젝트여야 한다. 일반 HUD의 자식으로 두면
+        // 메시가 있어도 Game 뷰에서 누락될 수 있으므로 수명만 이 컴포넌트가 관리한다.
+        var root = new GameObject("Batched perception debug", typeof(RectTransform), typeof(Canvas));
+        UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(root, gameObject.scene);
+        lineCanvas = root.GetComponent<Canvas>();
+        lineCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        lineCanvas.sortingOrder = 150; // 시야 오버레이(100) 위, IMGUI HUD 아래.
+    }
+
+    private void OnDestroy()
+    {
+        if (lineCanvas == null) return;
+        if (Application.isPlaying) Destroy(lineCanvas.gameObject); else DestroyImmediate(lineCanvas.gameObject);
+    }
+
+    private void AddSegment(Vector2 from, Vector2 to, float width, Color color)
+    {
+        if (batches.Count > batchIndex && batches[batchIndex].SegmentCount == MonsterPerceptionLines.MaximumSegments) batchIndex++;
+        if (batchIndex == batches.Count)
+        {
+            var obj = new GameObject("Perception lines " + batchIndex, typeof(RectTransform));
+            obj.transform.SetParent(lineCanvas.transform, false);
+            var batch = obj.AddComponent<MonsterPerceptionLines>();
+            batch.raycastTarget = false;
+            var rect = batch.rectTransform;
+            rect.anchorMin = Vector2.zero; rect.anchorMax = Vector2.one;
+            rect.offsetMin = rect.offsetMax = Vector2.zero;
+            batches.Add(batch);
+        }
+        // ScreenSpaceOverlay의 중앙 피벗 기준. 색은 재질 변경 없이 정점에 저장한다.
+        Vector2 origin = new(Screen.width * .5f, Screen.height * .5f);
+        batches[batchIndex].AddSegment(from - origin, to - origin, width, color);
+    }
+
     private void OnGUI()
     {
-        // 꺼진 상태에는 투영·그리기·문자열 생성을 하지 않는다. 개체 검색이나 별도 렌더링 자원도 필요 없다.
-        if (run == null || !run.IsRunActive || !DungeonTuning.Active.showMonsterPerceptionRanges
-            || !GameShell.IsGameplayHudVisible || Event.current.type != EventType.Repaint) return;
+        // 원은 하나의 UI 메시로 그리고, 텍스트만 기존 HUD 좌표계를 사용한다.
+        if (!ShouldDraw || Event.current.type != EventType.Repaint) return;
         var world = ThreeDWorldView.Current;
         Camera camera = world != null ? world.WorldCamera : Camera.main;
         if (camera == null) return;
@@ -44,11 +114,6 @@ public sealed class MonsterPerceptionDebugView : MonoBehaviour
                 if (enemy == null || !enemy.isActiveAndEnabled) continue;
                 Vector2 center = enemy.transform.position;
                 float height = world != null ? world.FloorHeight(center) + .04f : 0f;
-                DrawCircle(camera, inverse, center, height, enemy.HearingRange, HearingColor, true);
-                DrawCircle(camera, inverse, center, height, enemy.BaseDetectionRange, BaseColor, false);
-                DrawCircle(camera, inverse, center, height, enemy.HidingRevealRange, HidingColor, false);
-                if (enemy.NoiseAlertRemaining > 0f)
-                    DrawCircle(camera, inverse, center, height, enemy.CurrentDetectionRange, AlertColor, false);
                 if (!Project(camera, inverse, center, height, out var point)
                     || point.x < 0 || point.x > GameGuiScope.Width || point.y < 0 || point.y > GameGuiScope.Height) continue;
                 string text = $"{enemy.DisplayName}  인식 {enemy.CurrentDetectionRange:0.0} / 기본 {enemy.BaseDetectionRange:0.0} / 청취 {enemy.HearingRange:0.0} / 은신 발각 {enemy.HidingRevealRange:0.0}";
@@ -69,27 +134,19 @@ public sealed class MonsterPerceptionDebugView : MonoBehaviour
         GUI.Label(new Rect(rect.x + 5f, rect.y + 2f, rect.width - 10f, rect.height), text, label);
     }
 
-    private void DrawCircle(Camera camera, Matrix4x4 inverse, Vector2 center, float height, float radius, Color color, bool dashed)
+    private void DrawCircle(Camera camera, Vector2 center, float height, float radius, Color color, bool dashed, float width)
     {
-        GUI.color = color;
-        Matrix4x4 matrix = GUI.matrix;
-        bool previousVisible = Project(camera, inverse, center + circle[0] * radius, height, out var previous);
+        Vector3 previous = camera.WorldToScreenPoint(ThreeDWorldView.Project(center + circle[0] * radius, height));
+        Rect viewport = camera.pixelRect;
         for (int i = 1; i <= Segments; i++)
         {
-            bool visible = Project(camera, inverse, center + circle[i] * radius, height, out var next);
-            if (previousVisible && visible && (!dashed || i % 2 == 0)
-                && Mathf.Max(previous.x, next.x) >= 0f && Mathf.Min(previous.x, next.x) <= GameGuiScope.Width
-                && Mathf.Max(previous.y, next.y) >= 0f && Mathf.Min(previous.y, next.y) <= GameGuiScope.Height)
-            {
-                Vector2 delta = next - previous;
-                GUIUtility.RotateAroundPivot(Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg, previous);
-                GUI.DrawTexture(new Rect(previous.x, previous.y - 1f, delta.magnitude, 2f), Texture2D.whiteTexture);
-                GUI.matrix = matrix;
-            }
+            Vector3 next = camera.WorldToScreenPoint(ThreeDWorldView.Project(center + circle[i] * radius, height));
+            if (previous.z > camera.nearClipPlane && next.z > camera.nearClipPlane && (!dashed || i % 2 == 0)
+                && Mathf.Max(previous.x, next.x) >= viewport.xMin && Mathf.Min(previous.x, next.x) <= viewport.xMax
+                && Mathf.Max(previous.y, next.y) >= viewport.yMin && Mathf.Min(previous.y, next.y) <= viewport.yMax)
+                AddSegment(previous, next, width, color);
             previous = next;
-            previousVisible = visible;
         }
-        GUI.color = Color.white;
     }
 
     private static bool Project(Camera camera, Matrix4x4 inverse, Vector2 point, float height, out Vector2 result)
