@@ -36,6 +36,8 @@ public class DungeonRunController : MonoBehaviour
     private bool lootPlacementOpen;
     private bool actorsReleased;
     private Vector2Int hidingCell;
+    private Vector2 hidingPosition;
+    private bool bodySimulatedBeforeHiding;
     private SpriteRenderer[] playerSprites;
     public bool IsPlayerHidden { get; private set; }
     public const float HidingInteractionRange = .9f;
@@ -166,7 +168,7 @@ public class DungeonRunController : MonoBehaviour
         playerSprites = player.GetComponentsInChildren<SpriteRenderer>(true);
         playerBody = player.GetComponent<Rigidbody2D>();
         DungeonCameraFollow.Ensure(player);
-        DungeonVisionOverlayRenderer.Create(player);
+        DungeonVisionOverlayRenderer.Create(player, dungeonDefinition);
 
         return true;
     }
@@ -267,12 +269,38 @@ public class DungeonRunController : MonoBehaviour
 
     private void SetPlayerHidden(bool hidden)
     {
+        if (IsPlayerHidden == hidden) return;
+        if (hidden)
+        {
+            hidingPosition = player.position;
+            if (playerBody != null)
+            {
+                bodySimulatedBeforeHiding = playerBody.simulated;
+                playerBody.linearVelocity = Vector2.zero;
+                playerBody.angularVelocity = 0f;
+                playerBody.position = hidingPosition;
+                // 입력만 막으면 충돌 해결 과정에서 밀린다. 은신 중에는 몬스터의 통행도 막지 않는다.
+                playerBody.simulated = false;
+            }
+        }
+        else RestoreHidingPhysics();
         IsPlayerHidden = hidden;
         if (!hidden) hidingCell = default;
         movement.SetMovementEnabled(!hidden);
         if (playerSprites != null) foreach (var sprite in playerSprites) if (sprite != null) sprite.forceRenderingOff = hidden;
         if (hidden) foreach (var enemy in enemies) if (enemy != null) enemy.ForgetHiddenPlayer();
         player.GetComponent<SpriteDepthView>()?.Sync();
+    }
+
+    private void RestoreHidingPhysics()
+    {
+        if (!IsPlayerHidden) return;
+        if (player != null) player.position = hidingPosition;
+        if (playerBody == null) return;
+        playerBody.position = hidingPosition;
+        playerBody.linearVelocity = Vector2.zero;
+        playerBody.angularVelocity = 0f;
+        playerBody.simulated = bodySimulatedBeforeHiding;
     }
 
     private void CreateHidingMarkers()
@@ -467,7 +495,7 @@ public class DungeonRunController : MonoBehaviour
         {
             dungeonId = activeDungeonId, layoutIndex = DungeonLayoutFactory.LayoutIndex, health = playerHealth.Current,
             bagWidth = inventory.Columns, bagHeight = inventory.Rows,
-            playerPosition = player.position, specialGate = specialGate,
+            playerPosition = IsPlayerHidden ? hidingPosition : (Vector2)player.position, specialGate = specialGate,
             playerHidden = IsPlayerHidden, hidingCell = hidingCell,
             activeCorpseIndex = activeCorpse == null ? -1 : corpses.IndexOf(activeCorpse),
             lootPlacementOpen = lootPlacementOpen, inventory = inventory.Capture(), totalValue = inventory.TotalValue,
@@ -617,6 +645,7 @@ public class DungeonRunController : MonoBehaviour
 
     private void OnDestroy()
     {
+        RestoreHidingPhysics();
         ReleaseActors();
         if (Instance == this)
         {

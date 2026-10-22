@@ -4,7 +4,7 @@
 
 현재는 메인 메뉴부터 마을·던전·저장/불러오기까지 플레이할 수 있는 **개발 중인 프로토타입**입니다. 최종 이미지·영상·음악을 연결할 구조를 마련했으며, 콘텐츠와 출시 검증은 계속 진행 중입니다.
 
-문서 기준: **2026-10-21** · 던전 선택·난이도 표시, 층별 설정 화면 통합, 던전·층별 보상 테이블, 미사용 코드 정리와 Windows DX11 고정을 반영했습니다.
+문서 기준: **2026-10-21** · 던전 선택·난이도 표시, 층별 설정 화면 통합, 던전·층별 보상 테이블, 던전별 시야·어둠, 미사용 코드 정리와 Windows DX11 고정을 반영했습니다.
 
 고양이와 몬스터의 일러스트 애니메이션에 입체 바닥·벽과 그림자를 결합한 **2.5D 표시**를 사용합니다. 밝은 마을과 어두운 던전을 정사영 카메라로 보여 줍니다. 캐릭터 그림은 지면에 수직으로 세우고 화면상 비율을 보정해, 상체가 벽 메시와 교차하는 문제를 줄였습니다. [2.5D 구조와 편집](Docs/2_5D_PRESENTATION.md), [아트 적용 기록](Docs/ART_DIRECTION.md)을 참고하세요. Blender 3D 모델은 비교·재사용용 실험 원본으로 보관합니다.
 
@@ -146,9 +146,9 @@ Unity 메뉴 **Dungeon Sweeper → Dungeon Builder**에서 제작 창을 엽니�
 | 에셋 | 수정할 내용 |
 | --- | --- |
 | [GameFlowConfig](Assets/Resources/GameFlowConfig.asset) | 씬 이름, 수동 저장 슬롯 수, 상호작용 거리 |
-| [DungeonTuning](Assets/Resources/DungeonTuning.asset) | 플레이어 이동·대시·체력·시야, 전리품 가치 배율, 풀 보관 한도 |
+| [DungeonTuning](Assets/Resources/DungeonTuning.asset) | 플레이어 이동·대시·체력, 새 던전의 시야 초기값, 전리품 가치 배율, 풀 보관 한도 |
 | [DungeonCatalog](Assets/Resources/DungeonCatalog.asset) | 입장 가능한 던전 설정과 전체 몬스터·시체 프리팹 등록 목록 |
-| [Dungeons](Assets/Resources/Dungeons) | 던전별 이름·난이도·선택창 이미지·설명과 층별 스폰 수 요약 |
+| [Dungeons](Assets/Resources/Dungeons) | 던전별 이름·난이도·선택창 이미지·설명·시야와 어둠, 층별 스폰 수 요약 |
 | DungeonFloorDefinition | 층별 바닥·벽 도면, 입구·계단, 몬스터·시체 프리팹과 생성 수 |
 | LootRewardTable | 시체의 기본 드롭 목록에 대한 던전·층별 확률과 수량 덮어쓰기 |
 | [몬스터 프리팹](Assets/Prefabs/Monsters) | 공통 이동·순찰·감지·청각·공격 능력치와 외형 |
@@ -158,6 +158,7 @@ Unity 메뉴 **Dungeon Sweeper → Dungeon Builder**에서 제작 창을 엽니�
 | [PlayerVisualProfile](Assets/Resources/PlayerVisualProfile.asset) | 플레이어 스프라이트와 애니메이션 |
 | [ThreeDPresentation](Assets/Resources/ThreeDPresentation.asset) | 2.5D 표시, 카메라 각도·화면 범위, 보관 중인 3D 모델 선택 |
 | [MainMenuPresentation](Assets/Resources/MainMenuPresentation.asset) | 메인 배경·로고·영상·글꼴, 씬별 음악, 버튼 효과음, 믹서 출력 |
+| [MenuUiArt](Assets/Resources/MenuUiArt.asset) | 메뉴·옵션·저장 확인 패널, 버튼 상태, 음량 슬라이더, 화면 모드 스위치, 수직 동기화 체크박스와 탐색 아이콘 |
 
 ### 던전별 스폰 설정
 
@@ -174,6 +175,10 @@ Unity 메뉴 **Dungeon Sweeper → Dungeon Builder**에서 제작 창을 엽니�
 새 던전은 **Dungeon Sweeper → Dungeon Builder → 새 던전 / 자동 생성**으로 제작합니다. 도구가 고유 ID와 층 연결을 구성하고 **저장 + 게임에 등록**으로 카탈로그에 연결합니다. 특정 던전 테스트는 Dungeon 씬의 `DungeonRunController.dungeonDefinition`에 등록된 에셋을 지정한 뒤 직접 Play하거나 `GameSession.EnterDungeon(out error, definition)`을 사용합니다.
 
 불러오기는 저장 당시의 레이아웃·프리팹 ID·개체 수·능력치·시체 난이도·해체 진행·확정 전리품을 복원합니다. 변경된 배열로 다시 스폰하거나 전리품을 다시 뽑지 않습니다. 스폰 배열에서 제거한 종류도 프리팹 에셋과 `DungeonCatalog`의 등록 항목을 유지하면 기존 저장을 복원할 수 있습니다. **배포 후 Dungeon Id / Prefab Id를 바꾸거나 사용된 던전·프리팹 에셋 및 카탈로그 등록을 삭제하면 해당 저장을 불러올 수 없으므로 유지해야 합니다.** 폴더를 옮길 때는 `.meta`도 함께 이동해 참조를 보존하세요. ID가 없는 이전 저장은 기존 생성 방식으로 호환합니다.
+
+### 던전별 시야·어둠
+
+제작 툴의 수동 편집·자동 생성 화면 또는 던전 에셋 Inspector의 **시야·어둠 (던전 전체)**에서 조절합니다. 기존 던전은 **선명 시야 반경 3 / 바깥 어둠 반경 5 / 바깥 어둠 강도 0.9**를 유지합니다. 새 던전은 DungeonTuning의 초기값을 복사하며, **현재 기본값 가져오기**로 원하는 던전에 다시 적용할 수 있습니다. 같은 던전의 모든 층에 적용하고 몬스터 감지 거리와는 별개입니다. [설정·테스트 방법](Docs/DUNGEON_VISION.md)
 
 ### 던전·층별 보상 설정
 
@@ -200,6 +205,8 @@ Project 창의 **Create → Dungeon Sweeper → Loot Reward Table**로 테이블
 ### 메뉴 미디어
 
 `MainMenuPresentation`의 **Background Image / Logo / Background Video**에 에셋을 지정하면 메뉴에 표시됩니다. 영상이 준비되기 전이나 재생에 실패하면 배경 이미지로 돌아갑니다. 영상 자체의 음성은 사용하지 않습니다.
+
+제공된 메뉴 원화는 `Assets/Art/MainMenu/UI`에 보관하며 **Menu Ui**에 연결된 `MenuUiArt`가 화면별 이미지를 선택합니다. 메인·일시정지·슬롯·옵션·저장 확인창에 적용했고, 투명 여백은 UV로 제외해 클릭 영역과 그림 크기를 맞춥니다. 로고 아래 설명은 표시하지 않습니다. [이미지 연결과 수동 확인 방법](Docs/MENU_UI_ART.md)을 참고하세요.
 
 **Menu / Town / Dungeon Music**은 씬별 반복 음악이며 **Button Sound**는 메뉴 효과음입니다. 음악·메뉴 효과음의 음량과 믹서 출력 연결을 지원합니다. 미디어가 비어 있어도 기본 메뉴는 동작합니다. 개별 게임 효과음 연결과 최종 사운드 작업은 후속 작업입니다. 배포용 한글 글꼴은 **UI Font**에 지정하세요. 현재 비어 있으면 OS 글꼴을 사용합니다.
 
@@ -237,9 +244,9 @@ Unity가 기본 설치 경로에 없으면 `-UnityEditorPath "C:/path/to/Unity.e
 
 검사는 `.utmp/UnityValidation`에 만든 복사본에서 실행하고, 저장과 옵션을 테스트용으로 분리합니다. 테스트 드라이버는 `Tests`에 두고 복사본에만 주입하여 실제 배포 코드에 포함하지 않습니다. 로그·결과·촬영 화면도 이 폴더에서 확인할 수 있습니다.
 
-**최신 에디터 검사 기록 · 2026-10-21**
+**최신 에디터 검사 기록 · 2026-10-22**
 
-`-EditorOnly`로 **114개 검사**를 통과했습니다. 기존 정리·층 생성·던전 선택·보상 검사에 더해 범위 선 메시의 정점 한도·색·두께와 실제 CanvasRenderer 메시 제출, 최상위 Canvas 배치·정리, 미니맵 좌표·표식·미탐색 정보와 캐시 갱신·해제를 확인했습니다. 최종 로그에 C# 컴파일 오류·경고와 검사 예외는 남지 않았습니다. 이 실행에는 플레이 테스트가 포함되지 않았으며 실제 조작·화면과 Draw Calls 변화는 별도 확인 대상입니다. 자세한 범위는 [정리 기록](Docs/SOURCE_CLEANUP_2026-10-19.md), [보상 테이블 검사 기록](Docs/LOOT_REWARD_TABLES.md#에디터-검사), [그리기 요청 최적화 기록](Docs/RENDERING_OPTIMIZATION_2026-10-21.md)을 참고하세요.
+`-EditorOnly`로 **167개 검사**를 통과했습니다. 기존 정리·층 생성·던전 선택·보상·그리기 요청·던전 시야 검사에 더해 임시 물리 장면에서 은신 중 밀림 방지, 숨은 좌표의 저장·복원, 원래 충돌 상태의 복구를 확인했습니다. 메뉴 이미지가 사라지던 UV 저장 형식 오류를 수정하고, Unity가 실제로 읽은 원화 16개의 참조·표시 영역과 기본 테마 전환 조건도 검사합니다. 컴파일 오류·경고와 검사 예외는 없었습니다. 게임의 Play 모드는 켜지 않았으며 실제 조작·화면과 Draw Calls 변화는 별도 확인 대상입니다. 자세한 범위는 [정리 기록](Docs/SOURCE_CLEANUP_2026-10-19.md), [보상 테이블 검사 기록](Docs/LOOT_REWARD_TABLES.md#에디터-검사), [그리기 요청 최적화 기록](Docs/RENDERING_OPTIMIZATION_2026-10-21.md), [던전 시야 검사 기록](Docs/DUNGEON_VISION.md#에디터-검사), [은신 확인 순서](Docs/DUNGEON_BUILDER.md#확인-순서), [메뉴 이미지 확인](Docs/MENU_UI_ART.md#확인-범위와-수동-확인)을 참고하세요.
 
 Windows x86/x64의 그래픽 API 자동 선택이 꺼져 있고 목록에 Direct3D 11만 있는지도 Unity API로 확인했습니다. 별도의 격리 에디터 실행에서 `-force-d3d11`로 실제 Direct3D 11 초기화를 확인했으며, 이 확인에서도 Play 모드는 실행하지 않았습니다. 이는 장시간 사용 시 종료 문제가 해결되었다는 검증을 의미하지는 않습니다.
 

@@ -1,0 +1,142 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8c0c8faff5f84b779aec058c924dc562, type: 3}
+  m_Name: MenuUiArt
+  m_EditorClassIdentifier: Assembly-CSharp::MenuUiArt
+  menuPanel:
+    texture: {fileID: 2800000, guid: 7146af319acb4425a4b43060239f2b89, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.041509435
+      y: 0.08221024
+      width: 0.91698116
+      height: 0.8349057
+  optionsPanel:
+    texture: {fileID: 2800000, guid: edbd839656ec406da52a8f6480a7bc33, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.027817404
+      y: 0.07664884
+      width: 0.94507843
+      height: 0.85026735
+  dialogPanel:
+    texture: {fileID: 2800000, guid: 7eff7ca167aa422abb9aff450844a514, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.016276041
+      y: 0.15039062
+      width: 0.96809894
+      height: 0.7236328
+  buttonNormal:
+    texture: {fileID: 2800000, guid: f1e6e4056f084e0394f9eb62bfe4f196, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.050428644
+      y: 0.22698613
+      width: 0.9001513
+      height: 0.56116015
+  buttonHover:
+    texture: {fileID: 2800000, guid: 01356b6b4b194c44a9e96174b2d1417c, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.051437218
+      y: 0.22824717
+      width: 0.89914274
+      height: 0.5586381
+  buttonPressed:
+    texture: {fileID: 2800000, guid: fe3ba58420f5486891c8d39b9ea0208e, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.05141129
+      y: 0.23076923
+      width: 0.8981855
+      height: 0.55737704
+  buttonDisabled:
+    texture: {fileID: 2800000, guid: 05dcc5f6f7db4adf90cb5882780317cb, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.05345436
+      y: 0.23455234
+      width: 0.8956127
+      height: 0.5498108
+  sliderTrack:
+    texture: {fileID: 2800000, guid: eacd0ecd6801459eb442bd4d26534462, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.0359116
+      y: 0.30939227
+      width: 0.9286372
+      height: 0.37983426
+  sliderFill:
+    texture: {fileID: 2800000, guid: 7e18145f766848c19af9bd3c92761c4c, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.024710035
+      y: 0.39344263
+      width: 0.9495714
+      height: 0.21311475
+  sliderThumb:
+    texture: {fileID: 2800000, guid: 8c4827257ece4ed9a94015081eb7b2ce, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.22567783
+      y: 0.22488038
+      width: 0.5478469
+      height: 0.5494418
+  toggleOn:
+    texture: {fileID: 2800000, guid: 7eec7c3756354659997cf726598014dc, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.08399098
+      y: 0.20518602
+      width: 0.83258176
+      height: 0.6009019
+  toggleOff:
+    texture: {fileID: 2800000, guid: f3c67401abc3441a93b190b885df6a4a, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.12626833
+      y: 0.22435175
+      width: 0.74746335
+      height: 0.5524239
+  checkboxOn:
+    texture: {fileID: 2800000, guid: 15d06a4706594104ac15607c09fe5801, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.17304625
+      y: 0.19298245
+      width: 0.6555024
+      height: 0.61563
+  checkboxOff:
+    texture: {fileID: 2800000, guid: 7a7d67f487fb4ad4b21dc6ded49634f7, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.17783093
+      y: 0.19856459
+      width: 0.6435407
+      height: 0.6052632
+  backIcon:
+    texture: {fileID: 2800000, guid: 14c9a0919c714ce29064553454e298b9, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.14114833
+      y: 0.15311004
+      width: 0.71770334
+      height: 0.69936204
+  closeIcon:
+    texture: {fileID: 2800000, guid: 3bf934cb085041c1944d1a831e374f8c, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.1275917
+      y: 0.14513557
+      width: 0.74720895
+      height: 0.70414674

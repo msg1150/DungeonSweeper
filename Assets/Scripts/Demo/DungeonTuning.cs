@@ -20,7 +20,8 @@ public sealed class DungeonTuning : ScriptableObject
     [Header("Loot Economy")]
     [Min(.1f)] public float lootValueMultiplier = 1f;
 
-    [Header("Player Vision")]
+    [Header("New Dungeon Vision Defaults · 새 던전의 초기값")]
+    [Tooltip("새 던전의 초기값입니다. 기존 던전은 DungeonDefinition의 시야·어둠 설정을 수정하세요.")]
     [Min(.1f)] public float clearSightRadius = 4.5f;
     [Min(.1f)] public float darkSightRadius = 11f;
     [Range(0f, 1f)] public float outerDarkness = .5f;

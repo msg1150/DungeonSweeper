@@ -32,6 +32,7 @@ public static class DungeonAuthoringService
     {
         if (!TryNewAssetPath(path, out path, out string error)) throw new InvalidOperationException(error);
         var dungeon = ScriptableObject.CreateInstance<DungeonDefinition>();
+        dungeon.vision = DungeonVisionSettings.FromDefaults();
         dungeon.dungeonId = "dungeon." + Guid.NewGuid().ToString("N"); dungeon.displayName = name;
         AssetDatabase.CreateAsset(dungeon, path);
         AddFloor(dungeon);

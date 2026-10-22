@@ -12,6 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fa7e574d3854475596b3c5379f66163d, type: 3}
   m_Name: normalDungeon
   m_EditorClassIdentifier: Assembly-CSharp::DungeonDefinition
+  vision:
+    clearSightRadius: 3
+    darkSightRadius: 5
+    outerDarkness: 0.9
   generationHidingSpotsPerFloor: 4
   dungeonId: dungeon.97cd06a03da144d0ad56d44cdc87c2c2
   displayName: NormalDungeon

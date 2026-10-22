@@ -121,6 +121,9 @@ public static class SourceCleanupEditorChecks
         DungeonSelectionEditorChecks.Run(check);
         LootRewardEditorChecks.Run(check);
         RenderingBatchEditorChecks.Run(check);
+        DungeonVisionEditorChecks.Run(check);
+        MenuUiArtEditorChecks.Run(check);
+        HidingPhysicsEditorChecks.Run(check);
         File.WriteAllText(Path.Combine(root, "source-cleanup-result.txt"), $"PASS: {count} editor checks; Play mode was not entered.");
     }
 }

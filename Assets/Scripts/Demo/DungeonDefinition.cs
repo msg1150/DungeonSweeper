@@ -28,6 +28,7 @@ public sealed class DungeonDefinition : ScriptableObject
     [HideInInspector] public int generationHidingSpotsPerFloor;
     public string dungeonId = "dungeon.custom", displayName = "던전";
     public LootRewardTable lootTable;
+    public DungeonVisionSettings vision = new();
     [Header("Dungeon selection · 입장 선택창")]
     [Tooltip("선택창에 표시할 난이도입니다. 몬스터 능력치와 스폰 수는 별도로 설정합니다.")]
     public DungeonDifficulty difficulty = DungeonDifficulty.Normal;
@@ -75,6 +76,8 @@ public sealed class DungeonDefinition : ScriptableObject
     public bool IsValid(out string error)
     {
         error = null;
+        if (vision != null && !vision.IsValid())
+        { error = "던전 시야 반경은 양수이며 바깥 반경이 선명 반경보다 커야 합니다. 어둠 강도는 0~1 사이여야 합니다."; return false; }
         if (!Enum.IsDefined(typeof(DungeonDifficulty), difficulty))
         { error = "던전 난이도 설정이 올바르지 않습니다."; return false; }
         if (lootTable != null && !lootTable.IsValid(out error)) return false;

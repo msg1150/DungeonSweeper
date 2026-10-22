@@ -36,6 +36,8 @@ public static class GameUiTheme
         StyleButton(skin.button);
         skin.box.normal.background = Rounded(Paper);
         skin.box.border = new RectOffset(12, 12, 12, 12);
+        MakePassive(skin.box);
+        MakePassive(skin.label);
         Texture2D field = Rounded(Color.white);
         foreach (GUIStyle style in new[] { skin.textField, skin.textArea })
         {
@@ -61,6 +63,17 @@ public static class GameUiTheme
     {
         style.normal.textColor = style.hover.textColor = style.active.textColor = style.focused.textColor = Ink;
         style.onNormal.textColor = style.onHover.textColor = style.onActive.textColor = style.onFocused.textColor = Ink;
+    }
+
+    /// <summary>장식 패널·라벨은 원본 스킨의 hover/active 색과 배경을 상속하지 않는다.</summary>
+    public static void MakePassive(GUIStyle style)
+    {
+        foreach (var state in new[] { style.hover, style.active, style.focused, style.onNormal,
+            style.onHover, style.onActive, style.onFocused })
+        {
+            state.textColor = style.normal.textColor;
+            state.background = style.normal.background;
+        }
     }
 
     private static void StyleButton(GUIStyle style)

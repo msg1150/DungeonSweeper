@@ -44,6 +44,17 @@ public sealed class GameShell : MonoBehaviour
     private float nextAutosaveAttempt;
     private GUIStyle titleStyle, subtitleStyle, buttonStyle, slotStyle, labelStyle, smallStyle, panelStyle;
     private Font fallbackFont;
+    private MenuUiRenderer menuUi;
+    private MenuUiArt styledMenuArt;
+    private GUIStyle artButtonStyle, artSlotStyle, mainButtonStyle;
+    private MenuUiArt MenuArt
+    {
+        get
+        {
+            var art = MainMenuPresentationConfig.Active.menuUi;
+            return art != null && art.IsReady ? art : null;
+        }
+    }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetInstance() => instance = null;
@@ -245,17 +256,23 @@ public sealed class GameShell : MonoBehaviour
 
     private void EnsureStyles()
     {
-        if (titleStyle != null) return;
+        var art = MenuArt;
+        if (titleStyle != null && styledMenuArt == art) return;
+        styledMenuArt = art;
+        menuUi = null;
+        artButtonStyle = artSlotStyle = mainButtonStyle = null;
         Font font = EnsureFont();
         Color white = GameUiTheme.Ink;
+        if (MenuArt != null) white = new Color(1f, .96f, .85f);
         titleStyle = new GUIStyle(GUI.skin.label) { font = font, fontSize = 52, fontStyle = FontStyle.Bold, wordWrap = true };
         titleStyle.normal.textColor = white;
         subtitleStyle = new GUIStyle(GUI.skin.label) { font = font, fontSize = 21, wordWrap = true };
-        subtitleStyle.normal.textColor = GameUiTheme.MutedInk;
+        subtitleStyle.normal.textColor = MenuArt != null ? white : GameUiTheme.MutedInk;
         labelStyle = new GUIStyle(GUI.skin.label) { font = font, fontSize = 19, alignment = TextAnchor.MiddleLeft, wordWrap = true };
         labelStyle.normal.textColor = white;
         smallStyle = new GUIStyle(labelStyle) { fontSize = 15 };
-        smallStyle.normal.textColor = GameUiTheme.MutedInk;
+        smallStyle.normal.textColor = MenuArt != null ? new Color(.79f, .83f, .84f) : GameUiTheme.MutedInk;
+        foreach (var style in new[] { titleStyle, subtitleStyle, labelStyle, smallStyle }) GameUiTheme.MakePassive(style);
         GUISkin theme = GameUiTheme.GetSkin(GUI.skin);
         buttonStyle = new GUIStyle(theme.button)
         {
@@ -263,6 +280,17 @@ public sealed class GameShell : MonoBehaviour
         };
         slotStyle = new GUIStyle(buttonStyle) { alignment = TextAnchor.MiddleLeft, fontSize = 18, wordWrap = true };
         panelStyle = new GUIStyle(theme.box);
+        if (MenuArt != null)
+        {
+            menuUi = new MenuUiRenderer(MenuArt);
+            artButtonStyle = new GUIStyle(labelStyle)
+            {
+                alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold,
+                padding = new RectOffset(16, 16, 4, 4)
+            };
+            artSlotStyle = new GUIStyle(artButtonStyle) { alignment = TextAnchor.MiddleLeft, fontSize = 18 };
+            mainButtonStyle = new GUIStyle(artButtonStyle) { fontSize = 28 };
+        }
     }
 
     public static Font UiFont => instance != null ? instance.EnsureFont() : null;
@@ -279,9 +307,23 @@ public sealed class GameShell : MonoBehaviour
         return font;
     }
 
-    private bool Button(Rect rect, string label)
+    private bool Button(Rect rect, string label, GUIStyle textStyle = null)
     {
-        bool clicked = GUI.Button(rect, label, buttonStyle);
+        bool clicked = menuUi != null ? menuUi.Button(rect, label, textStyle ?? artButtonStyle) : GUI.Button(rect, label, buttonStyle);
+        if (clicked) audio.PlayButton();
+        return clicked;
+    }
+
+    private void MenuPanel(Rect rect, MenuUiImage image, float opacity = 1f)
+    {
+        if (image != null && image.IsAvailable) image.DrawPanel(rect, opacity);
+        else GUI.Box(rect, GUIContent.none, panelStyle);
+    }
+
+    private bool IconButton(Rect rect, string tooltip, MenuUiImage image)
+    {
+        if (menuUi == null || image == null || !image.IsAvailable) return Button(rect, tooltip);
+        bool clicked = menuUi.IconButton(rect, tooltip, image);
         if (clicked) audio.PlayButton();
         return clicked;
     }
@@ -332,7 +374,7 @@ public sealed class GameShell : MonoBehaviour
         if (overwriteSlot != -2) DrawOverwriteConfirmation();
         if (!string.IsNullOrEmpty(notice) && Time.unscaledTime < noticeUntil)
         {
-            GUI.Box(new Rect(200, 665, 880, 42), GUIContent.none, panelStyle);
+            MenuPanel(new Rect(200, 665, 880, 42), MenuArt?.dialogPanel);
             GUI.Label(new Rect(218, 670, 844, 30), notice, smallStyle);
         }
         GUI.matrix = originalMatrix;
@@ -346,24 +388,34 @@ public sealed class GameShell : MonoBehaviour
         // 배경만 반투명하게 한다. 글자까지 GUI.color로 흐리게 만들지 않는다.
         Color previousBackground = GUI.backgroundColor;
         var config = MainMenuPresentationConfig.Active;
-        GUI.backgroundColor = new Color(1, 1, 1, Mathf.Clamp01(config.menuPanelOpacity));
-        GUI.Box(new Rect(138, 110, 400, 512), GUIContent.none, panelStyle);
+        if (MenuArt != null) MenuPanel(new Rect(90, 55, 370, 610), MenuArt.menuPanel, config.menuPanelOpacity);
+        else
+        {
+            GUI.backgroundColor = new Color(1, 1, 1, Mathf.Clamp01(config.menuPanelOpacity));
+            GUI.Box(new Rect(138, 110, 400, 512), GUIContent.none, panelStyle);
+        }
         GUI.backgroundColor = new Color(1, 1, 1, Mathf.Clamp01(config.menuButtonOpacity));
-        if (presentation != null && presentation.Config.logo != null)
-            GUI.DrawTexture(new Rect(160, 130, 570, 150), presentation.Config.logo, ScaleMode.ScaleToFit);
-        else GUI.Label(new Rect(160, 130, 660, 140), "DUNGEON\nSWEEPER", titleStyle);
-        GUI.Label(new Rect(168, 275, 500, 60), "들키기 전에 회수하고,\n무사히 돌아오세요.", subtitleStyle);
-        if (Button(new Rect(168, 345, 340, 54), "새 게임"))
+        Texture2D logo = presentation != null ? presentation.Config.logo : config.logo;
+        Rect titleRect = MenuArt != null ? new Rect(125, 100, 300, 170) : new Rect(168, 130, 340, 190);
+        if (logo != null)
+            GUI.DrawTexture(titleRect, logo, ScaleMode.ScaleToFit);
+        else GUI.Label(titleRect, "DUNGEON\nSWEEPER", titleStyle);
+        float buttonX = MenuArt != null ? 130f : 168f;
+        float buttonY = MenuArt != null ? 303f : 345f;
+        float buttonWidth = MenuArt != null ? 290f : 340f;
+        float buttonHeight = MenuArt != null ? 66f : 54f;
+        float buttonStep = MenuArt != null ? 80f : 66f;
+        if (Button(new Rect(buttonX, buttonY, buttonWidth, buttonHeight), "새 게임", mainButtonStyle))
             if (!GameSession.StartNewGame(out string error)) ShowNotice(error);
-        if (Button(new Rect(168, 411, 340, 54), "이어하기")) OpenSlots(false);
-        if (Button(new Rect(168, 477, 340, 54), "옵션")) OpenOptions();
-        if (Button(new Rect(168, 543, 340, 54), "게임종료")) RequestQuit();
+        if (Button(new Rect(buttonX, buttonY + buttonStep, buttonWidth, buttonHeight), "이어하기", mainButtonStyle)) OpenSlots(false);
+        if (Button(new Rect(buttonX, buttonY + buttonStep * 2f, buttonWidth, buttonHeight), "옵션", mainButtonStyle)) OpenOptions();
+        if (Button(new Rect(buttonX, buttonY + buttonStep * 3f, buttonWidth, buttonHeight), "게임 종료", mainButtonStyle)) RequestQuit();
         GUI.backgroundColor = previousBackground;
     }
 
     private void DrawPause()
     {
-        GUI.Box(new Rect(380, 85, 520, 550), GUIContent.none, panelStyle);
+        MenuPanel(new Rect(380, 85, 520, 550), MenuArt?.menuPanel);
         GUI.Label(new Rect(440, 108, 400, 55), "잠시 쉬어가기", subtitleStyle);
         for (int i = 0; i < pauseLabels.Length; i++)
         {
@@ -383,7 +435,7 @@ public sealed class GameShell : MonoBehaviour
 
     private void DrawSlots()
     {
-        GUI.Box(new Rect(130, 60, 1020, 580), GUIContent.none, panelStyle);
+        MenuPanel(new Rect(130, 60, 1020, 580), MenuArt?.optionsPanel);
         GUI.Label(new Rect(170, 85, 870, 45), page == Page.Save ? "저장할 슬롯 선택" : "이어할 저장 선택", subtitleStyle);
         slots ??= GameSaveService.GetSlots();
         slotScroll = GUI.BeginScrollView(new Rect(170, 145, 940, 400), slotScroll, new Rect(0, 0, 914, slots.Count * 76));
@@ -393,7 +445,10 @@ public sealed class GameShell : MonoBehaviour
             string detail = slot.CanLoad ? Describe(slot.Data) : slot.Exists ? slot.Error : "비어 있음";
             bool oldEnabled = GUI.enabled;
             GUI.enabled = oldEnabled && (page == Page.Save ? slot.Index >= 0 : slot.CanLoad);
-            if (GUI.Button(new Rect(0, i * 76, 910, 66), $"{slot.Name}\n{detail}", slotStyle))
+            Rect slotRect = new Rect(0, i * 76, 910, 66);
+            string slotLabel = $"{slot.Name}\n{detail}";
+            bool clicked = menuUi != null ? menuUi.Button(slotRect, slotLabel, artSlotStyle) : GUI.Button(slotRect, slotLabel, slotStyle);
+            if (clicked)
             {
                 audio.PlayButton();
                 if (page == Page.Load)
@@ -408,7 +463,11 @@ public sealed class GameShell : MonoBehaviour
             GUI.enabled = oldEnabled;
         }
         GUI.EndScrollView();
-        if (Button(new Rect(170, 568, 180, 45), "뒤로")) page = returnPage;
+        if (MenuArt != null)
+        {
+            if (IconButton(new Rect(170, 562, 52, 52), "뒤로", MenuArt.backIcon)) page = returnPage;
+        }
+        else if (Button(new Rect(170, 568, 180, 45), "뒤로")) page = returnPage;
         GUI.Label(new Rect(390, 573, 690, 35), page == Page.Save ? "자동 저장은 게임이 최신 상태로 갱신합니다." : "저장된 항목을 선택하면 해당 상태로 시작합니다.", smallStyle);
     }
 
@@ -428,7 +487,7 @@ public sealed class GameShell : MonoBehaviour
 
     private void DrawOverwriteConfirmation()
     {
-        GUI.Box(new Rect(370, 235, 540, 210), GUIContent.none, panelStyle);
+        MenuPanel(new Rect(370, 235, 540, 210), MenuArt?.dialogPanel);
         GUI.Label(new Rect(405, 265, 470, 60), $"저장 슬롯 {overwriteSlot + 1}을 현재 상태로 덮어쓸까요?", labelStyle);
         if (Button(new Rect(405, 357, 220, 48), "저장")) SaveManual(overwriteSlot);
         if (Button(new Rect(655, 357, 220, 48), "취소")) overwriteSlot = -2;
@@ -436,15 +495,21 @@ public sealed class GameShell : MonoBehaviour
 
     private void DrawOptions()
     {
-        GUI.Box(new Rect(190, 50, 900, 590), GUIContent.none, panelStyle);
+        MenuPanel(new Rect(190, 50, 900, 590), MenuArt?.optionsPanel);
         GUI.Label(new Rect(230, 72, 760, 40), "옵션", subtitleStyle);
+        if (MenuArt != null && IconButton(new Rect(1020, 72, 38, 38), "옵션 닫기", MenuArt.closeIcon)) page = returnPage;
         GUI.Label(new Rect(230, 125, 350, 30), "사운드", subtitleStyle);
         draft.masterVolume = VolumeRow(165, "전체 음량", draft.masterVolume);
         draft.musicVolume = VolumeRow(208, "음악", draft.musicVolume);
         draft.effectsVolume = VolumeRow(251, "효과음", draft.effectsVolume);
         GUI.Label(new Rect(230, 300, 350, 30), "화면과 그래픽", subtitleStyle);
         GUI.Label(new Rect(230, 346, 240, 35), "화면 모드", labelStyle);
-        if (Button(new Rect(490, 346, 530, 35), draft.fullscreen ? "전체화면" : "창 모드")) draft.fullscreen = !draft.fullscreen;
+        if (MenuArt != null)
+        {
+            if (IconButton(new Rect(490, 346, 96, 35), "전체화면 전환", draft.fullscreen ? MenuArt.toggleOn : MenuArt.toggleOff)) draft.fullscreen = !draft.fullscreen;
+            GUI.Label(new Rect(610, 346, 300, 35), draft.fullscreen ? "전체화면" : "창 모드", labelStyle);
+        }
+        else if (Button(new Rect(490, 346, 530, 35), draft.fullscreen ? "전체화면" : "창 모드")) draft.fullscreen = !draft.fullscreen;
         GUI.Label(new Rect(230, 388, 240, 35), "해상도", labelStyle);
         if (Button(new Rect(490, 388, 530, 35), $"{draft.width} × {draft.height}"))
         {
@@ -457,19 +522,25 @@ public sealed class GameShell : MonoBehaviour
         if (Button(new Rect(490, 430, 530, 35), quality.Length > 0 ? quality[Mathf.Clamp(draft.qualityLevel, 0, quality.Length - 1)] : "기본"))
             draft.qualityLevel = (draft.qualityLevel + 1) % Mathf.Max(1, quality.Length);
         GUI.Label(new Rect(230, 472, 240, 35), "수직 동기화", labelStyle);
-        if (Button(new Rect(490, 472, 250, 35), draft.vSync ? "켜짐" : "꺼짐")) draft.vSync = !draft.vSync;
+        if (MenuArt != null)
+        {
+            if (IconButton(new Rect(490, 472, 35, 35), "수직 동기화 전환", draft.vSync ? MenuArt.checkboxOn : MenuArt.checkboxOff)) draft.vSync = !draft.vSync;
+            GUI.Label(new Rect(545, 472, 190, 35), draft.vSync ? "켜짐" : "꺼짐", labelStyle);
+        }
+        else if (Button(new Rect(490, 472, 250, 35), draft.vSync ? "켜짐" : "꺼짐")) draft.vSync = !draft.vSync;
         if (Button(new Rect(770, 472, 250, 35), draft.frameRate == -1 ? "프레임 제한 없음" : $"{draft.frameRate} FPS"))
             draft.frameRate = draft.frameRate == 30 ? 60 : draft.frameRate == 60 ? 120 : draft.frameRate == 120 ? -1 : 30;
         GUI.Label(new Rect(230, 518, 790, 26), "수직 동기화를 켜면 모니터 주사율을 따릅니다.", smallStyle);
         if (Button(new Rect(230, 570, 230, 45), "적용")) { GameSettings.Apply(draft); draft = GameSettings.Copy(); ShowNotice("옵션을 적용했습니다."); }
         if (Button(new Rect(495, 570, 230, 45), "기본값")) draft = GameSettings.Defaults();
-        if (Button(new Rect(760, 570, 260, 45), "뒤로")) page = returnPage;
+        if (Button(new Rect(760, 570, 260, 45), "돌아가기")) page = returnPage;
     }
 
     private float VolumeRow(float y, string label, float volume)
     {
         GUI.Label(new Rect(230, y, 250, 35), label, labelStyle);
-        volume = GUI.HorizontalSlider(new Rect(490, y + 12, 450, 20), volume, 0f, 1f);
+        volume = menuUi != null ? menuUi.Slider(new Rect(490, y + 3, 450, 30), volume)
+            : GUI.HorizontalSlider(new Rect(490, y + 12, 450, 20), volume, 0f, 1f);
         GUI.Label(new Rect(960, y, 70, 35), $"{Mathf.RoundToInt(volume * 100)}%", labelStyle);
         return volume;
     }

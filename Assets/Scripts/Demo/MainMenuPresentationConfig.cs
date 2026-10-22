@@ -8,6 +8,7 @@ public sealed class MainMenuPresentationConfig : ScriptableObject
     [Header("Main Menu Art")]
     public Texture2D backgroundImage;
     public Texture2D logo;
+    public MenuUiArt menuUi;
     public VideoClip backgroundVideo;
     public Font uiFont;
     [Range(0f, 1f)] public float backgroundDarkness = 0f;

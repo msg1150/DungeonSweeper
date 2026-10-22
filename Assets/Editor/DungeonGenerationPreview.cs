@@ -13,6 +13,7 @@ public static class DungeonGenerationPreview
     {
         var maps = DungeonMapGenerator.Generate(settings);
         var draft = ScriptableObject.CreateInstance<DungeonDefinition>();
+        draft.vision = DungeonVisionSettings.FromDefaults();
         draft.hideFlags = HideFlags.HideAndDontSave; draft.name = "자동 생성 미리보기";
         draft.dungeonId = "dungeon." + Guid.NewGuid().ToString("N"); draft.displayName = name;
         draft.generationVersion = DungeonMapGenerator.Version; draft.generationSeed = settings.seed;

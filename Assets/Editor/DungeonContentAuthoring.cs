@@ -83,6 +83,7 @@ public static class DungeonContentAuthoring
             {
                 if (File.Exists(path)) throw new System.InvalidOperationException("Existing asset is not a DungeonDefinition: " + path);
                 dungeon = ScriptableObject.CreateInstance<DungeonDefinition>();
+                dungeon.vision = DungeonVisionSettings.FromDefaults();
                 dungeon.dungeonId = "dungeon." + ids[i]; dungeon.displayName = names[i]; dungeon.layoutIndex = i;
                 dungeon.monsters = monsters.ConvertAll(prefab => new MonsterSpawnEntry { prefab = prefab, count = 1 }).ToArray();
                 dungeon.corpses = corpses.ConvertAll(prefab => new CorpseSpawnEntry { prefab = prefab, count = 1 }).ToArray();

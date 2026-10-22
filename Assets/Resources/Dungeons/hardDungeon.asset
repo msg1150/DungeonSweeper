@@ -12,6 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fa7e574d3854475596b3c5379f66163d, type: 3}
   m_Name: hardDungeon
   m_EditorClassIdentifier: Assembly-CSharp::DungeonDefinition
+  vision:
+    clearSightRadius: 3
+    darkSightRadius: 5
+    outerDarkness: 0.9
   generationHidingSpotsPerFloor: 4
   dungeonId: dungeon.0b96a9304fa34ba6a71fad94d1f39064
   displayName: HardDungeon

@@ -9,12 +9,14 @@ public sealed class DungeonVisionOverlayRenderer : MonoBehaviour
     private Transform player;
     private Camera worldCamera;
     private Material material;
+    private DungeonDefinition dungeon;
 
-    public static void Create(Transform target)
+    public static void Create(Transform target, DungeonDefinition definition = null)
     {
         GameObject root = new GameObject("Dungeon Vision Overlay");
         DungeonVisionOverlayRenderer overlay = root.AddComponent<DungeonVisionOverlayRenderer>();
         overlay.player = target;
+        overlay.dungeon = definition;
         overlay.worldCamera = Camera.main;
 
         Canvas canvas = root.AddComponent<Canvas>();
@@ -45,7 +47,6 @@ public sealed class DungeonVisionOverlayRenderer : MonoBehaviour
         if (player == null || material == null) return;
         if (worldCamera == null) worldCamera = Camera.main;
         if (worldCamera == null) return;
-        DungeonTuning tuning = DungeonTuning.Active;
         if (ThreeDWorldView.Current != null)
         {
             Vector3 origin = worldCamera.transform.position;
@@ -65,9 +66,7 @@ public sealed class DungeonVisionOverlayRenderer : MonoBehaviour
             material.SetVector("_Ray10", worldCamera.ViewportToWorldPoint(new Vector3(1,0,1)) - origin);
             material.SetVector("_Ray01", worldCamera.ViewportToWorldPoint(new Vector3(0,1,1)) - origin);
             material.SetVector("_Ray11", worldCamera.ViewportToWorldPoint(new Vector3(1,1,1)) - origin);
-            material.SetFloat("_ClearRadius", tuning.clearSightRadius);
-            material.SetFloat("_DarkRadius", Mathf.Max(tuning.darkSightRadius,tuning.clearSightRadius+.01f));
-            material.SetFloat("_OuterDarkness", tuning.outerDarkness);
+            ApplyVision(1f);
             return;
         }
         material.SetFloat("_UseWorld3D", 0f);
@@ -75,10 +74,20 @@ public sealed class DungeonVisionOverlayRenderer : MonoBehaviour
         Vector3 viewport = worldCamera.WorldToViewportPoint(player.position);
         float screenWorldHeight = worldCamera.orthographicSize * 2f;
         material.SetVector("_VisionCenter", new Vector4(viewport.x, viewport.y, 0f, 0f));
-        material.SetFloat("_ClearRadius", tuning.clearSightRadius / screenWorldHeight);
-        material.SetFloat("_DarkRadius", Mathf.Max(tuning.darkSightRadius, tuning.clearSightRadius + .01f) / screenWorldHeight);
-        material.SetFloat("_OuterDarkness", tuning.outerDarkness);
+        ApplyVision(1f / screenWorldHeight);
         material.SetFloat("_Aspect", Screen.width / Mathf.Max(1f, Screen.height));
+    }
+
+    private void ApplyVision(float radiusScale)
+    {
+        // 직접 실행·이어하기에서도 연결된 던전의 현재 표시 설정을 사용한다.
+        var vision = dungeon != null ? dungeon.vision : null;
+        var defaults = vision == null ? DungeonTuning.Active : null;
+        float clear = vision?.clearSightRadius ?? defaults.clearSightRadius;
+        float dark = vision?.darkSightRadius ?? defaults.darkSightRadius;
+        material.SetFloat("_ClearRadius", clear * radiusScale);
+        material.SetFloat("_DarkRadius", Mathf.Max(dark, clear + .01f) * radiusScale);
+        material.SetFloat("_OuterDarkness", vision?.outerDarkness ?? defaults.outerDarkness);
     }
 
     private void OnDestroy()
