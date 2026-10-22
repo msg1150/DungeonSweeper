@@ -70,10 +70,10 @@ public static class ReleaseLogicChecks
             var previewObject = new GameObject("Rotation Preview Validation");
             try
             {
-                var hud = previewObject.AddComponent<DungeonDemoHud>();
+                var hud = previewObject.AddComponent<DungeonHud>();
                 var flags = BindingFlags.Instance | BindingFlags.NonPublic;
-                var toggle = typeof(DungeonDemoHud).GetMethod("ToggleRotation", flags);
-                var display = typeof(DungeonDemoHud).GetMethod("DisplayLoot", flags);
+                var toggle = typeof(DungeonHud).GetMethod("ToggleRotation", flags);
+                var display = typeof(DungeonHud).GetMethod("DisplayLoot", flags);
                 toggle.Invoke(hud, new object[] { shape });
                 var preview = (LootDefinition)display.Invoke(hud, new object[] { shape });
                 check(ReferenceEquals(preview, display.Invoke(hud, new object[] { shape })) && !ReferenceEquals(preview, shape),

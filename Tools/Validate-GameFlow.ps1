@@ -15,48 +15,53 @@ $taskOldPrefabRoot = [IO.Path]::GetFullPath((Join-Path $taskValidationRoot 'Asse
 if (-not $taskOldPrefabRoot.StartsWith(([IO.Path]::GetFullPath($taskValidationRoot) + [IO.Path]::DirectorySeparatorChar), [StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid isolated prefab cleanup path.' }
 if (Test-Path -LiteralPath $taskOldPrefabRoot) { Remove-Item -LiteralPath $taskOldPrefabRoot -Recurse -Force }
 if (Test-Path -LiteralPath ($taskOldPrefabRoot + '.meta')) { Remove-Item -LiteralPath ($taskOldPrefabRoot + '.meta') -Force }
-foreach ($taskFolder in @('Scripts', 'Resources', 'Prefabs', 'Scenes', 'Settings', 'Editor', 'Art', 'Audio', 'Models')) {
+# Synchronize only this tool's isolated code copies. Moving production sources must not leave
+# stale scripts or duplicate GUIDs behind; saves, art caches and profiling captures are preserved.
+function Remove-StaleValidationCode([string]$folder) {
+    $source = Join-Path $taskProjectRoot "Assets/$folder"
+    $target = [IO.Path]::GetFullPath((Join-Path $taskValidationRoot "Assets/$folder"))
+    $allowed = [IO.Path]::GetFullPath((Join-Path $taskValidationRoot 'Assets')) + [IO.Path]::DirectorySeparatorChar
+    if (-not $target.StartsWith($allowed, [StringComparison]::OrdinalIgnoreCase) -or $folder -notin @('Scripts','Editor')) { throw 'Invalid isolated source cleanup path.' }
+    if (-not (Test-Path -LiteralPath $target)) { return }
+    foreach ($file in @(Get-ChildItem -LiteralPath $target -Recurse -File)) {
+        $relative = $file.FullName.Substring($target.Length + 1)
+        $code = $file.Name.EndsWith('.cs') -or $file.Name.EndsWith('.cs.meta')
+        $folderMeta = $file.Extension -eq '.meta' -and (Test-Path -LiteralPath $file.FullName.Substring(0,$file.FullName.Length-5) -PathType Container)
+        if (($code -or $folderMeta) -and -not (Test-Path -LiteralPath (Join-Path $source $relative))) {
+            Remove-Item -LiteralPath $file.FullName -Force
+        }
+    }
+    foreach ($directory in @(Get-ChildItem -LiteralPath $target -Recurse -Directory | Sort-Object { $_.FullName.Length } -Descending)) {
+        if (@(Get-ChildItem -LiteralPath $directory.FullName -Force).Count -eq 0) { Remove-Item -LiteralPath $directory.FullName }
+    }
+}
+Remove-StaleValidationCode 'Scripts'
+Remove-StaleValidationCode 'Editor'
+# The sandbox moved with its original GUID; remove its obsolete isolated path before copying it.
+foreach ($taskSandboxName in @('Dungeon_Test.unity', 'Dungeon_Test.unity.meta')) {
+    $taskSandboxPath = Join-Path $taskValidationRoot "Assets/Scenes/$taskSandboxName"
+    if (Test-Path -LiteralPath $taskSandboxPath) { Remove-Item -LiteralPath $taskSandboxPath -Force }
+}
+foreach ($taskFolder in @('Scripts', 'Resources', 'Prefabs', 'Scenes', 'Settings', 'Editor', 'Art', 'Audio', 'Models', 'Tests')) {
     Copy-Item -LiteralPath (Join-Path $taskProjectRoot "Assets/$taskFolder") -Destination "$taskValidationRoot/Assets" -Recurse -Force
     $taskFolderMeta = Join-Path $taskProjectRoot "Assets/$taskFolder.meta"
     if (Test-Path -LiteralPath $taskFolderMeta) { Copy-Item -LiteralPath $taskFolderMeta -Destination "$taskValidationRoot/Assets" -Force }
 }
-# Directory copies do not remove old files. Drop only the retired sources
-# from this isolated fixture so compilation also verifies their removal from the real project.
-foreach ($taskRetiredSource in @('Demo/DungeonDemoBootstrap.cs', 'Demo/DungeonTestVerticalSlice.cs', 'Demo/DungeonVisionFog.cs', 'Demo/DungeonTestBootstrap.cs', 'Interaction/PlayerInteractor.cs', 'Interaction/IInteractable.cs', 'Dismantling/DismantleController.cs', 'Dismantling/CorpseInteractable.cs')) {
-    $taskRetiredPath = Join-Path $taskValidationRoot "Assets/Scripts/$taskRetiredSource"
-    foreach ($taskRetiredFile in @($taskRetiredPath, ($taskRetiredPath + '.meta'))) {
-        if (Test-Path -LiteralPath $taskRetiredFile) { Remove-Item -LiteralPath $taskRetiredFile -Force }
-    }
-}
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'ProjectSettings') -Destination $taskValidationRoot -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Packages/manifest.json'), (Join-Path $taskProjectRoot 'Packages/packages-lock.json') -Destination "$taskValidationRoot/Packages" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/GameFlowSmokeChecks.cs') -Destination "$taskValidationRoot/Assets/Editor/GameFlowSmokeChecks.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/ValidationRuntimeDriver.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/ValidationRuntimeDriver.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/SaveProtectionChecks.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/SaveProtectionChecks.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/ReleaseLogicChecks.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/ReleaseLogicChecks.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/TownEconomyChecks.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/TownEconomyChecks.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/FocusPauseChecks.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/FocusPauseChecks.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/DungeonPopulationChecks.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/DungeonPopulationChecks.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/DungeonPrefabChecks.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/DungeonPrefabChecks.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/ContinueEntryChecks.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/ContinueEntryChecks.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/DungeonPoolChecks.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/DungeonPoolChecks.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/DungeonBuilderChecks.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/DungeonBuilderChecks.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/DungeonGenerationChecks.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/DungeonGenerationChecks.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/DungeonGenerationEditorChecks.cs') -Destination "$taskValidationRoot/Assets/Editor/DungeonGenerationEditorChecks.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/DungeonDeletionEditorChecks.cs') -Destination "$taskValidationRoot/Assets/Editor/DungeonDeletionEditorChecks.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/OptimizationEditorChecks.cs') -Destination "$taskValidationRoot/Assets/Editor/OptimizationEditorChecks.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/DungeonSelectionEditorChecks.cs') -Destination "$taskValidationRoot/Assets/Editor/DungeonSelectionEditorChecks.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/SourceCleanupEditorChecks.cs') -Destination "$taskValidationRoot/Assets/Editor/SourceCleanupEditorChecks.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/LootRewardEditorChecks.cs') -Destination "$taskValidationRoot/Assets/Editor/LootRewardEditorChecks.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/RenderingBatchEditorChecks.cs') -Destination "$taskValidationRoot/Assets/Editor/RenderingBatchEditorChecks.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/DungeonVisionEditorChecks.cs') -Destination "$taskValidationRoot/Assets/Editor/DungeonVisionEditorChecks.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/HidingPhysicsEditorChecks.cs') -Destination "$taskValidationRoot/Assets/Editor/HidingPhysicsEditorChecks.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/MenuUiArtEditorChecks.cs') -Destination "$taskValidationRoot/Assets/Editor/MenuUiArtEditorChecks.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/PlayerProtectionValidationBuild.cs') -Destination "$taskValidationRoot/Assets/Editor/PlayerProtectionValidationBuild.cs" -Force
-Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Tests/PlayerProtectionValidationDriver.cs') -Destination "$taskValidationRoot/Assets/Scripts/Demo/PlayerProtectionValidationDriver.cs" -Force
-
+# Test-only scripts never live beside the shipping runtime sources.
+$taskRuntimeChecks = @('ValidationRuntimeDriver', 'SaveProtectionChecks', 'ReleaseLogicChecks', 'TownEconomyChecks', 'FocusPauseChecks', 'DungeonPopulationChecks', 'DungeonPrefabChecks', 'ContinueEntryChecks', 'DungeonPoolChecks', 'DungeonBuilderChecks', 'DungeonGenerationChecks', 'PlayerProtectionValidationDriver')
+$taskEditorChecks = @('GameFlowSmokeChecks', 'DungeonGenerationEditorChecks', 'DungeonDeletionEditorChecks', 'OptimizationEditorChecks', 'DungeonSelectionEditorChecks', 'SourceCleanupEditorChecks', 'LootRewardEditorChecks', 'RenderingBatchEditorChecks', 'DungeonVisionEditorChecks', 'HidingPhysicsEditorChecks', 'MenuUiArtEditorChecks', 'PlayerProtectionValidationBuild', 'ValidationContentFixture', 'ProductionRefactorEditorChecks')
+foreach ($taskGroup in @('Runtime','Editor')) {
+    $taskCheckRoot = "$taskValidationRoot/Assets/Validation/$taskGroup"
+    New-Item -ItemType Directory -Path $taskCheckRoot -Force | Out-Null
+    $taskChecks = if ($taskGroup -eq 'Runtime') { $taskRuntimeChecks } else { $taskEditorChecks }
+    foreach ($taskCheck in $taskChecks) {
+        Copy-Item -LiteralPath (Join-Path $taskProjectRoot "Tests/$taskCheck.cs") -Destination "$taskCheckRoot/$taskCheck.cs" -Force
+    }
+}
 # Only the isolated copy writes test saves into the workspace and uses test preferences.
-$taskSaveServicePath = "$taskValidationRoot/Assets/Scripts/Demo/GameSaveService.cs"
+$taskSaveServicePath = "$taskValidationRoot/Assets/Scripts/Runtime/Persistence/GameSaveService.cs"
 $taskText = Get-Content -LiteralPath $taskSaveServicePath -Raw
 $taskOriginalExpression = 'Path.Combine(Application.persistentDataPath, "Saves")'
 if (-not $taskText.Contains($taskOriginalExpression)) { throw 'Save directory expression changed; update the isolated test fixture.' }

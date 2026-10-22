@@ -49,7 +49,7 @@ public static class SourceCleanupEditorChecks
         foreach (string retired in new[] { "PlayerInteractor", "DismantleController", "CorpseInteractable", "IInteractable", "DungeonTestBootstrap" })
             check(Type.GetType(retired + ", Assembly-CSharp") == null, "retired type removed: " + retired);
 
-        foreach (string path in new[] { "Assets/Scenes/MainMenu.unity", "Assets/Scenes/Town.unity", "Assets/Scenes/Dungeon.unity", "Assets/Scenes/Dungeon_Test.unity" })
+        foreach (string path in new[] { "Assets/Scenes/MainMenu.unity", "Assets/Scenes/Town.unity", "Assets/Scenes/Dungeon.unity", "Assets/Tests/Scenes/DungeonSandbox.unity" })
         {
             Scene scene = SceneManager.GetSceneByPath(path); bool opened = !scene.isLoaded;
             if (opened) scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Additive);
@@ -57,7 +57,7 @@ public static class SourceCleanupEditorChecks
             {
                 var objects = scene.GetRootGameObjects().SelectMany(root => root.GetComponentsInChildren<Transform>(true)).Select(item => item.gameObject).ToArray();
                 check(objects.All(item => GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(item) == 0), "no missing scripts in " + path);
-                if (path.EndsWith("Dungeon.unity") || path.EndsWith("Dungeon_Test.unity"))
+                if (path.EndsWith("Dungeon.unity") || path.EndsWith("DungeonSandbox.unity"))
                 {
                     check(objects.Count(item => item.GetComponent<DungeonRunController>() != null) == 1
                         && objects.Count(item => item.GetComponent<PlayerMovement>() != null) == 1, "current run controller/player in " + path);
@@ -123,6 +123,7 @@ public static class SourceCleanupEditorChecks
         RenderingBatchEditorChecks.Run(check);
         DungeonVisionEditorChecks.Run(check);
         MenuUiArtEditorChecks.Run(check);
+        ProductionRefactorEditorChecks.Run(check);
         HidingPhysicsEditorChecks.Run(check);
         File.WriteAllText(Path.Combine(root, "source-cleanup-result.txt"), $"PASS: {count} editor checks; Play mode was not entered.");
     }

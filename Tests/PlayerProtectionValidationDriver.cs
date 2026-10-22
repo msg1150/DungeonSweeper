@@ -203,8 +203,8 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         yield return null; yield return null;
         if (capture)
         {
-            var hud = UnityEngine.Object.FindAnyObjectByType<DungeonDemoHud>();
-            typeof(DungeonDemoHud).GetField("pendingLootScroll", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(hud, new Vector2(0f, 500f));
+            var hud = UnityEngine.Object.FindAnyObjectByType<DungeonHud>();
+            typeof(DungeonHud).GetField("pendingLootScroll", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(hud, new Vector2(0f, 500f));
             Snapshot("release-loot-scrolled"); yield return null; yield return null;
             var small = GameSettings.Copy(); small.width = 640; small.height = 360;
             GameSettings.Apply(small, false);
@@ -326,7 +326,7 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
             }
             var overlay = UnityEngine.Object.FindAnyObjectByType<DungeonVisionOverlayRenderer>();
             if (overlay != null) overlay.gameObject.SetActive(false);
-            UnityEngine.Object.FindAnyObjectByType<DungeonDemoHud>().enabled = false;
+            UnityEngine.Object.FindAnyObjectByType<DungeonHud>().enabled = false;
             Snapshot("release-spawn-layout-" + layout);
         });
         while (populationTrials.MoveNext()) yield return populationTrials.Current;

@@ -16,7 +16,6 @@ MonoBehaviour:
   manualSaveSlotCount: 10
   townSceneName: Town
   dungeonSceneName: Dungeon
-  dungeonTestSceneName: Dungeon_Test
   corpseRange: 1.25
   exitRange: 1.15
   townGateRange: 1.5
