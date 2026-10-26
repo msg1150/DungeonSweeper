@@ -1,4 +1,4 @@
-param([string]$UnityEditorPath, [switch]$CheckPlayerProtection, [switch]$CaptureScreens, [switch]$EditorOnly)
+param([string]$UnityEditorPath, [switch]$CheckPlayerProtection, [switch]$CaptureScreens, [switch]$EditorOnly, [string]$ValidationWorkspace)
 
 $ErrorActionPreference = 'Stop'
 $taskProjectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
@@ -9,6 +9,13 @@ if (-not $UnityEditorPath) {
 if (-not (Test-Path -LiteralPath $UnityEditorPath)) { throw 'Unity editor executable was not found. Pass -UnityEditorPath.' }
 
 $taskValidationRoot = Join-Path $taskProjectRoot '.utmp/UnityValidation'
+if ($ValidationWorkspace) {
+    # Keep independent experiments/profiling fixtures intact by choosing a separate workspace.
+    $taskValidationWorkspace = [IO.Path]::GetFullPath((Join-Path $taskProjectRoot $ValidationWorkspace))
+    $taskAllowedWorkspace = [IO.Path]::GetFullPath((Join-Path $taskProjectRoot '.utmp')) + [IO.Path]::DirectorySeparatorChar
+    if (-not $taskValidationWorkspace.StartsWith($taskAllowedWorkspace, [StringComparison]::OrdinalIgnoreCase)) { throw 'Validation workspace must be inside this project .utmp folder.' }
+    $taskValidationRoot = Join-Path $taskValidationWorkspace '.utmp/UnityValidation'
+}
 New-Item -ItemType Directory -Path "$taskValidationRoot/Assets/Editor", "$taskValidationRoot/ProjectSettings", "$taskValidationRoot/Packages" -Force | Out-Null
 # Remove only the obsolete prefab copy left by earlier validations; preserve saves and profiling results.
 $taskOldPrefabRoot = [IO.Path]::GetFullPath((Join-Path $taskValidationRoot 'Assets/Resources/Prefabs'))
@@ -51,7 +58,7 @@ Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'ProjectSettings') -Destinati
 Copy-Item -LiteralPath (Join-Path $taskProjectRoot 'Packages/manifest.json'), (Join-Path $taskProjectRoot 'Packages/packages-lock.json') -Destination "$taskValidationRoot/Packages" -Force
 # Test-only scripts never live beside the shipping runtime sources.
 $taskRuntimeChecks = @('ValidationRuntimeDriver', 'SaveProtectionChecks', 'ReleaseLogicChecks', 'TownEconomyChecks', 'FocusPauseChecks', 'DungeonPopulationChecks', 'DungeonPrefabChecks', 'ContinueEntryChecks', 'DungeonPoolChecks', 'DungeonBuilderChecks', 'DungeonGenerationChecks', 'PlayerProtectionValidationDriver')
-$taskEditorChecks = @('GameFlowSmokeChecks', 'DungeonGenerationEditorChecks', 'DungeonDeletionEditorChecks', 'OptimizationEditorChecks', 'DungeonSelectionEditorChecks', 'SourceCleanupEditorChecks', 'LootRewardEditorChecks', 'RenderingBatchEditorChecks', 'DungeonVisionEditorChecks', 'HidingPhysicsEditorChecks', 'MenuUiArtEditorChecks', 'PlayerProtectionValidationBuild', 'ValidationContentFixture', 'ProductionRefactorEditorChecks')
+$taskEditorChecks = @('GameFlowSmokeChecks', 'DungeonGenerationEditorChecks', 'DungeonDeletionEditorChecks', 'OptimizationEditorChecks', 'DungeonSelectionEditorChecks', 'SourceCleanupEditorChecks', 'LootRewardEditorChecks', 'RenderingBatchEditorChecks', 'DungeonVisionEditorChecks', 'HidingPhysicsEditorChecks', 'MenuUiArtEditorChecks', 'PlayerProtectionValidationBuild', 'ValidationContentFixture', 'ProductionRefactorEditorChecks', 'QuestEditorChecks')
 foreach ($taskGroup in @('Runtime','Editor')) {
     $taskCheckRoot = "$taskValidationRoot/Assets/Validation/$taskGroup"
     New-Item -ItemType Directory -Path $taskCheckRoot -Force | Out-Null

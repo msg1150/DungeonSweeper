@@ -54,15 +54,15 @@ public class TownHubController : MonoBehaviour
     {
         if (GameShell.IsGameplayInputBlocked) return;
         using var gui = new GameGuiScope(true);
-        bool hasDetail = TownProgress.HasAcceptedContract || TownProgress.LastRecoveredCount > 0;
+        bool hasDetail = TownProgress.HasActiveQuest || TownProgress.LastRecoveredCount > 0;
         DrawPanel(new Rect(18, 16, 390, hasDetail ? 78 : 54), new Color(1f, .98f, .91f, .64f));
         GUI.skin.label.alignment = TextAnchor.UpperLeft;
         GUI.skin.label.fontSize = 16;
         GUI.color = Color.white;
         GUI.Label(new Rect(30, 22, 368, 24), $"금고 {TownProgress.Gold}G   |   보급 도구 {TownProgress.SupplyKits}");
         GUI.Label(new Rect(30, 45, 368, 24), $"창고 {TownProgress.WarehouseCount}개   |   가방 {TownProgress.BagSize.x} × {TownProgress.BagSize.y}");
-        if (TownProgress.HasAcceptedContract)
-            GUI.Label(new Rect(30, 68, 368, 24), $"의뢰 {TownProgress.ContractTargetName} 1개  |  +{TownProgress.ActiveContractBonus}G");
+        if (TownProgress.HasActiveQuest)
+            GUI.Label(new Rect(30, 68, 368, 24), $"의뢰 {TownProgress.QuestProgressText} · 창고 기준");
         else if (TownProgress.LastRecoveredCount > 0)
             GUI.Label(new Rect(30, 68, 368, 24), $"최근 회수 {TownProgress.LastRecoveredCount}개 · 창고 보관 완료");
         GameFlowConfig flow = GameFlowConfig.Active;

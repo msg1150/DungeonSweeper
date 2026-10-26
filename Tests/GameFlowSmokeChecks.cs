@@ -292,7 +292,7 @@ public static class GameFlowSmokeChecks
                     Next(9);
                     break;
                 case 9:
-                    Check(TownProgress.Gold == 0 && TownProgress.SupplyKits == 0 && !TownProgress.HasAcceptedContract, "new game resets all progress");
+                    Check(TownProgress.Gold == 0 && TownProgress.SupplyKits == 0 && !TownProgress.HasActiveQuest, "new game resets all progress");
                     Check(GameSaveService.TryLoad(0, out var manual, out _) && manual.town.gold == 345, "new game retains manual saves");
                     CallShell("ReturnToMain");
                     Next(10);

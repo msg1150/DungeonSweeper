@@ -97,7 +97,7 @@ public sealed partial class DungeonHud : MonoBehaviour
         GameUiTheme.Panel(new Rect(8, 8, 1000, 58));
         GUI.color = Color.white;
         GUI.Label(new Rect(16, 14, 740, 25), "DUNGEON SWEEPER  ·  던전 회수 작업");
-        string contract = TownProgress.HasAcceptedContract ? $"  |  의뢰: {TownProgress.ContractTargetName} +{TownProgress.ActiveContractBonus}G" : string.Empty;
+        string contract = TownProgress.HasActiveQuest ? $"  |  의뢰: {TownProgress.ActiveQuest.Title} +{TownProgress.ActiveQuest.GoldReward}G" : string.Empty;
         GUI.Label(new Rect(16, 39, 900, 24), $"{run.DungeonName}  |  회수 가치 {run.Inventory.TotalValue}G{contract}    |    [WASD] 이동 / [Space] 대시 / [E] 상호작용");
     }
 

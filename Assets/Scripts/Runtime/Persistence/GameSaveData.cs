@@ -12,16 +12,33 @@ public sealed class TownProgressData
     public int gold, supplyKits, lastRunGold, lastContractBonus;
     public bool hasAcceptedContract;
     public LootShape contractTarget = LootShape.Dagger;
+    // 0은 이전 단일 품목 의뢰 저장이다. 새 필드를 읽을 수 없어도 기존 저장 자체를 거부하지 않는다.
+    public int questDataVersion;
+    public QuestSaveData activeQuest;
+    public List<string> completedQuestIds = new();
     public int bagLevel, lastRecoveredCount, lastRecoveredValue, nextWarehouseId = 1;
     public List<WarehouseStackData> warehouse = new();
     public List<string> saleLockedKinds = new();
 
     public bool IsValid() => version == 1 && gold >= 0 && supplyKits >= 0 && lastRunGold >= 0
-        && lastContractBonus >= 0 && lastContractBonus <= 120 && lastContractBonus <= lastRunGold
-        && (contractTarget == LootShape.Dagger || contractTarget == LootShape.Core
-            || contractTarget == LootShape.Hide || contractTarget == LootShape.Horn)
+        && lastContractBonus >= 0 && lastContractBonus <= lastRunGold && ValidQuests()
         && bagLevel >= 0 && bagLevel <= TownEconomyConfig.Active.bagUpgrades.Count && lastRecoveredCount >= 0
         && lastRecoveredValue >= 0 && ValidWarehouse();
+
+    private bool ValidQuests()
+    {
+        if (questDataVersion == 0) return lastContractBonus <= 120 && LegacyQuestMigration.ValidTarget(contractTarget)
+            && (activeQuest == null || activeQuest.IsEmpty) && (completedQuestIds == null || completedQuestIds.Count == 0);
+        if (questDataVersion != 1) return false;
+        if (hasAcceptedContract ? activeQuest == null || !activeQuest.IsValid(out _)
+            : activeQuest != null && !activeQuest.IsEmpty) return false;
+        if (completedQuestIds == null) return true;
+        if (completedQuestIds.Count > QuestSaveData.MaximumCompletedQuests) return false;
+        var completed = new HashSet<string>();
+        foreach (string id in completedQuestIds)
+            if (!LootKinds.ValidId(id) || !completed.Add(id)) return false;
+        return !hasAcceptedContract || activeQuest.repeatable || !completed.Contains(activeQuest.questId);
+    }
 
     private bool ValidWarehouse()
     {

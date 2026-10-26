@@ -155,6 +155,11 @@ public static partial class TownProgress
     private static void Consume(List<WarehouseStackData> staged, string kindId, int quantity)
     {
         staged.Sort((a, b) => a.unitPrice != b.unitPrice ? a.unitPrice.CompareTo(b.unitPrice) : a.id.CompareTo(b.id));
+        ConsumeSorted(staged, kindId, quantity);
+    }
+
+    private static void ConsumeSorted(List<WarehouseStackData> staged, string kindId, int quantity)
+    {
         foreach (var stack in staged)
         {
             if (stack.loot.kindId != kindId) continue;
@@ -205,17 +210,6 @@ public static partial class TownProgress
         var next = NextBagUpgrade; var staged = CopyWarehouse();
         foreach (var material in next.materials) Consume(staged, material.kindId, material.quantity);
         warehouse = staged; Gold -= next.goldCost; BagLevel++;
-        WarehouseChanged();
-        GameSession.RequestAutosave(); return true;
-    }
-    public static bool TrySubmitContract(out string error)
-    {
-        error = null;
-        if (!InTown || !HasAcceptedContract) { error = "진행 중인 회수 의뢰가 없습니다."; return false; }
-        if (MaterialCount(ContractKindId) < 1) { error = "창고에 의뢰 제출품이 없습니다."; return false; }
-        if ((long)Gold + ContractBonus > int.MaxValue) { error = "골드를 더 받을 수 없습니다."; return false; }
-        var staged = CopyWarehouse(); Consume(staged, ContractKindId, 1); warehouse = staged;
-        Gold += ContractBonus; LastContractBonus = LastRunGold = ContractBonus; HasAcceptedContract = false;
         WarehouseChanged();
         GameSession.RequestAutosave(); return true;
     }

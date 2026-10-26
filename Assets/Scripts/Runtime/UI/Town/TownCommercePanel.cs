@@ -7,7 +7,7 @@ using UnityEngine.SceneManagement;
 public enum TownFacility { Warehouse, Market, Upgrades, Guild, Dungeons }
 
 /// <summary>마을 시설과 던전 선택창의 일시정지·입력 차단·닫기를 공유한다.</summary>
-public sealed class TownCommercePanel : MonoBehaviour
+public sealed partial class TownCommercePanel : MonoBehaviour
 {
     private static TownCommercePanel instance;
     private bool open;
@@ -39,6 +39,7 @@ public sealed class TownCommercePanel : MonoBehaviour
         if (GameSession.IsLoading || GameShell.IsMenuOpen) return;
         dungeonChoices.Clear(); selectedDungeon = -1;
         if (target == TownFacility.Dungeons) RefreshDungeons();
+        if (target == TownFacility.Guild) RefreshQuests();
         if (!open) previousScale = Time.timeScale;
         facility = target; open = true; Time.timeScale = 0f;
         listScroll = detailScroll = Vector2.zero; notice = null;
@@ -262,20 +263,5 @@ public sealed class TownCommercePanel : MonoBehaviour
         bool buy = GUI.Button(new Rect(176, 548, 430, 40), $"재료와 {next.goldCost}G를 사용해 가방 확장"); GUI.enabled = previousEnabled;
         if (!ready) Text(new Rect(626, 552, 464, 38), error, 16);
         if (buy) notice = TownProgress.TryUpgradeBag(out error) ? "가방 확장을 완료했습니다. 다음 던전부터 적용됩니다." : error;
-    }
-    private void DrawGuild()
-    {
-        if (!TownProgress.HasAcceptedContract)
-        {
-            Text(new Rect(176, 210, 900, 85), "전리품 회수 의뢰\n요구 전리품 1개를 창고에서 제출하면 보상 120G를 받습니다.", 20);
-            if (GUI.Button(new Rect(176, 334, 430, 40), "새 회수 의뢰 수락")) notice = TownProgress.AcceptContract() ? "회수 의뢰를 수락했습니다." : "의뢰를 수락할 수 없습니다.";
-            return;
-        }
-        Text(new Rect(176, 210, 900, 70), $"의뢰 제출품: {TownProgress.ContractTargetName} 1개\n창고 보유: {TownProgress.MaterialCount(TownProgress.ContractKindId)}개 · 보상 120G", 22);
-        Text(new Rect(176, 300, 900, 65), "제출한 전리품은 소비됩니다. 가격이 낮은 것부터 사용하며 판매 잠금은 제출을 막지 않습니다.", 16);
-        bool previousEnabled = GUI.enabled;
-        GUI.enabled = previousEnabled && TownProgress.MaterialCount(TownProgress.ContractKindId) >= 1;
-        bool submit = GUI.Button(new Rect(176, 394, 430, 40), "창고 전리품 1개 제출 · 보상 받기"); GUI.enabled = previousEnabled;
-        if (submit) notice = TownProgress.TrySubmitContract(out string error) ? "의뢰를 완료했습니다. +120G" : error;
     }
 }

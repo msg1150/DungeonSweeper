@@ -105,13 +105,13 @@ public static class TownEconomyChecks
             check(!TownProgress.TrySellOne(TownProgress.GetStacks(LootKinds.GoblinHide)[0].id, out _)
                 && TownProgress.WarehouseCount == 1, "gold overflow cannot consume sold item");
 
-            TownProgress.Reset(); TownProgress.AcceptContract();
-            check(!TownProgress.TrySubmitContract(out _) && TownProgress.HasAcceptedContract, "missing submission keeps quest active");
-            ReceiveItems(TownProgress.ContractKindId, TownProgress.ContractTargetName, TownProgress.ContractTarget, 70, 1);
-            check(TownProgress.Gold == 0 && TownProgress.HasAcceptedContract, "return does not automatically complete quest");
-            check(TownProgress.TrySubmitContract(out _) && TownProgress.Gold == 120 && TownProgress.WarehouseCount == 0,
+            TownProgress.Reset(); TownProgress.TryAcceptQuest(QuestCatalog.Active.Find("quest.goblin-tools"), out _);
+            check(!TownProgress.TrySubmitQuest(out _) && TownProgress.HasActiveQuest, "missing submission keeps quest active");
+            ReceiveItems(TownProgress.ActiveQuest.Objectives[0].KindId, TownProgress.ActiveQuest.Objectives[0].DisplayName, LootShape.Dagger, 70, 1);
+            check(TownProgress.Gold == 0 && TownProgress.HasActiveQuest, "return does not automatically complete quest");
+            check(TownProgress.TrySubmitQuest(out _) && TownProgress.Gold == 120 && TownProgress.WarehouseCount == 0,
                 "guild consumes submission once and awards contract gold");
-            check(!TownProgress.TrySubmitContract(out _) && TownProgress.Gold == 120, "completed quest cannot award twice");
+            check(!TownProgress.TrySubmitQuest(out _) && TownProgress.Gold == 120, "completed quest cannot award twice");
             ReceiveItems(LootKinds.GoblinHide, "고블린 가죽", LootShape.Hide, 40, 4);
             var lack = TownProgress.Capture(); lack.gold = 2000; TownProgress.Restore(lack);
             check(!TownProgress.TryUpgradeBag(out _) && TownProgress.Gold == 2000 && TownProgress.WarehouseCount == 4,

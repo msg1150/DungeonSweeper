@@ -104,7 +104,7 @@ public sealed partial class DungeonRunController : MonoBehaviour
 #if UNITY_EDITOR
         hud.gameObject.AddComponent<MonsterPerceptionDebugView>().Initialize(this);
 #endif
-        Say(TownProgress.HasAcceptedContract ? $"의뢰 목표: {TownProgress.ContractTargetName}을 회수해 마을 길드에 제출하세요." : "입구입니다. 시체를 해체하고 전리품을 가방에 배치해 회수하세요.", 6f);
+        Say(TownProgress.HasActiveQuest ? $"의뢰 목표: {TownProgress.ActiveQuest.Title} — 요구 재료를 회수해 마을 길드에 제출하세요." : "입구입니다. 시체를 해체하고 전리품을 가방에 배치해 회수하세요.", 6f);
     }
 
     private void Update()

@@ -136,7 +136,7 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         while (artChecks.MoveNext()) yield return artChecks.Current;
         TownProgress.Restore(new TownProgressData { gold = 250 });
         Check(TownProgress.TryBuySupplyKit() && TownProgress.Gold == 225, "release supply transaction");
-        TownProgress.AcceptContract();
+        TownProgress.TryAcceptQuest(QuestCatalog.Active.Find("quest.goblin-tools"), out _);
         Vector2 townPosition = UnityEngine.Object.FindAnyObjectByType<PlayerMovement>().transform.position;
         yield return null;
         Snapshot("release-town");
@@ -165,7 +165,7 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         }
         Check(GameSaveService.TryLoad(-1, out var entry, out _) && entry.area == SaveArea.Dungeon, "dungeon entry checkpoint persisted");
         Call(Shell, "OpenPause");
-        Check(run.Inventory.TryPlace(LootDefinition.CreateShaped("회수품", 50, TownProgress.ContractTarget,
+        Check(run.Inventory.TryPlace(LootDefinition.CreateShaped("회수품", 50, LootShape.Dagger,
             Vector2Int.zero, Vector2Int.right, Vector2Int.up), 1, 1), "release shaped loot fits inventory");
         Check(run.Inventory.TryPlace(new LootDefinition("판매용 이빨", 1, 1, 70), 4, 0), "release separately priced trade loot fits inventory");
         run.PlayerHealth.TakeDamage(17);
@@ -227,7 +227,7 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         int banked = TownProgress.Gold;
         Call(run, "FinishRun", "중복 귀환");
         Check(banked == 225 && TownProgress.Gold == banked && TownProgress.WarehouseCount == 2 && run.Inventory.Items.Count == 0
-            && TownProgress.HasAcceptedContract && !run.PlayerHealth.TakeDamage(10), "escape stores loot once without auto-selling or auto-submitting quest");
+            && TownProgress.HasActiveQuest && !run.PlayerHealth.TakeDamage(10), "escape stores loot once without auto-selling or auto-submitting quest");
         yield return null;
         Check(GameSaveService.TryLoad(-1, out var escaped, out _) && escaped.area == SaveArea.Town && escaped.town.gold == banked,
             "escape autosave contains committed town reward");
@@ -241,7 +241,7 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
             "release focus loss silently pauses gameplay");
         Call(Shell, "OnApplicationFocus", true);
         Check(Time.timeScale == 1f && !GameShell.IsMenuOpen, "release focus return automatically resumes");
-        Check(TownProgress.TrySubmitContract(out _) && TownProgress.Gold == 345 && TownProgress.WarehouseCount == 1,
+        Check(TownProgress.TrySubmitQuest(out _) && TownProgress.Gold == 345 && TownProgress.WarehouseCount == 1,
             "release guild submission consumes recovered quest loot and rewards once");
         Check(TownProgress.TrySellOne(TownProgress.GetStacks("goblin.tooth")[0].id, out _) && TownProgress.Gold == 415,
             "release market sells recovered item at its preserved price");
@@ -273,7 +273,7 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
             && TownProgress.GetStacks(LootKinds.GoblinHide)[0].unitPrice == 90 && TownProgress.WarehouseCount == 3,
             "release recipe consumes low-priced materials and gold atomically");
         commerce.Close(); banked = TownProgress.Gold;
-        TownProgress.AcceptContract();
+        TownProgress.TryAcceptQuest(QuestCatalog.Active.Find("quest.goblin-tools"), out _);
         Check(GameSession.EnterDungeon(out _), "release second dungeon begins");
         while (!Ready("Dungeon")) { CheckTime(); yield return null; }
         yield return null;
@@ -298,7 +298,7 @@ public sealed class PlayerProtectionValidationDriver : MonoBehaviour
         Check(run.PlayerHealth.TakeDamage(2), "release lethal damage applied");
         while (!Ready("Town")) { CheckTime(); yield return null; }
         yield return null;
-        Check(TownProgress.Gold == banked && !TownProgress.HasAcceptedContract && TownProgress.LastRunGold == 0 && TownProgress.WarehouseCount == 3,
+        Check(TownProgress.Gold == banked && !TownProgress.HasActiveQuest && TownProgress.LastRunGold == 0 && TownProgress.WarehouseCount == 3,
             "death loses unbanked loot and contract without changing banked gold");
         Call(Shell, "Resume");
         string autoPath = Path.Combine(GameSaveService.SaveDirectory, "autosave.sav");

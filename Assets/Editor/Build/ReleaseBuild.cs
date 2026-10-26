@@ -72,6 +72,16 @@ public sealed class ReleaseBuildValidator : IPreprocessBuildWithReport
                 if (prefab != null) ValidatePrefab(prefab.gameObject, prefab.IsValid(), issues);
             lootKinds = CollectLootSources(catalog);
         }
+        QuestCatalog quests = Resources.Load<QuestCatalog>("QuestCatalog");
+        if (quests == null) issues.Add("Missing Resources/QuestCatalog.");
+        else
+        {
+            issues.AddRange(quests.CollectIssues());
+            if (quests.quests != null) foreach (var quest in quests.quests)
+                if (quest != null && quest.requirements != null) foreach (var requirement in quest.requirements)
+                    if (requirement != null && !lootKinds.Contains(requirement.kindId))
+                        issues.Add("Quest material has no loot source: " + quest.questId + " / " + requirement.kindId);
+        }
         TownEconomyConfig economy = Resources.Load<TownEconomyConfig>("TownEconomyConfig");
         if (economy?.bagUpgrades == null) issues.Add("Missing town economy config.");
         else

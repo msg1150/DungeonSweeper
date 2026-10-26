@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ffaa15de246f4cee8a248a3c6b279d6d, type: 3}
+  m_Name: slime-research
+  m_EditorClassIdentifier: Assembly-CSharp::QuestDefinition
+  questId: quest.slime-research
+  displayName: 슬라임 연구 재료
+  description: 연구에 사용할 점액과 핵이 필요합니다. 재료를 모아 창고에 보관한 뒤 제출하세요.
+  requirements:
+  - kindId: slime.gel
+    displayName: 슬라임 점액
+    quantity: 5
+  - kindId: slime.core
+    displayName: 슬라임 핵
+    quantity: 1
+  goldReward: 220
+  repeatable: 1

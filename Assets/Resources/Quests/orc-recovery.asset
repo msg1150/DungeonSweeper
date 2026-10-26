@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ffaa15de246f4cee8a248a3c6b279d6d, type: 3}
+  m_Name: orc-recovery
+  m_EditorClassIdentifier: Assembly-CSharp::QuestDefinition
+  questId: quest.orc-recovery
+  displayName: 오크 잔해 정리
+  description: 오크 시체에서 회수한 엄니와 가죽을 조달해 주세요.
+  requirements:
+  - kindId: orc.horn
+    displayName: 오크 엄니
+    quantity: 2
+  - kindId: orc.hide
+    displayName: 두꺼운 가죽
+    quantity: 1
+  goldReward: 300
+  repeatable: 1
