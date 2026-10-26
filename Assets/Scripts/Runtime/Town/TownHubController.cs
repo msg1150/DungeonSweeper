@@ -22,11 +22,17 @@ public class TownHubController : MonoBehaviour
         supplyShop = GameObject.Find("Supply Shop")?.transform;
         warehouse = GameObject.Find("Town Warehouse")?.transform;
         if (player != null) PlayerVisualAnimator.Ensure(player.gameObject);
-        if (player != null && GameSession.TakeTownPosition(out Vector2 restoredPosition))
+        if (player != null)
         {
-            player.position = restoredPosition;
+            bool restored = GameSession.TakeTownPosition(out Vector2 restoredPosition);
+            var art = TownPresentationConfig.Active;
+            bool authoredTown = art != null && art.IsValid() && (!ThreeDPresentationConfig.Enabled || ThreeDPresentationConfig.SpritesEnabled);
+            bool depth = ThreeDPresentationConfig.SpritesEnabled;
+            Vector2 position = restored ? restoredPosition : authoredTown ? art.ToWorld(art.playerSpawn, depth) : (Vector2)player.position;
+            if (authoredTown) position = TownCasualVisuals.ResolvePlayerPosition(position, player.GetComponent<BoxCollider2D>(), depth);
+            player.position = position;
             Rigidbody2D body = player.GetComponent<Rigidbody2D>();
-            if (body != null) body.position = restoredPosition;
+            if (body != null) body.position = position;
         }
         if (player != null) ThreeDWorldView.Create(player, false);
     }

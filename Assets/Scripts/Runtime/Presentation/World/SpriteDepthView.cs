@@ -12,6 +12,7 @@ public sealed class SpriteDepthView : MonoBehaviour
     private SpriteRenderer shadow;
     private ThreeDWorldView boundWorld;
     private float footLift, width, headOffset;
+    private bool authoredTownAnchor;
     public Vector3 HeadPosition { get; private set; }
     public GameObject Display => display;
     public SpriteRenderer[] Copies => copies;
@@ -46,11 +47,22 @@ public sealed class SpriteDepthView : MonoBehaviour
         }
         if (reference != null)
         {
-            // 최초 자세의 실제 불투명 발 위치를 사용한다. 공격 궤적/프레임 여백에 따라 출렁이지 않는다.
-            footLift = ThreeDWorldView.Current.FootLift(reference.sprite) * Mathf.Abs(reference.transform.lossyScale.y);
-            width = reference.sprite.bounds.size.x * Mathf.Abs(reference.transform.lossyScale.x);
-            headOffset = footLift + ThreeDWorldView.Current.HeadTop(reference.sprite) * Mathf.Abs(reference.transform.lossyScale.y)
-                + reference.transform.position.y - transform.position.y;
+            var facility = GetComponent<TownFacilityView>();
+            authoredTownAnchor = facility != null;
+            if (authoredTownAnchor)
+            {
+                // 투명 여백과 발판 피벗을 임포트 시 지정했다. 건물마다 GPU 알파 읽기를 반복하지 않는다.
+                footLift = 0f; width = facility.VisibleWidth;
+                headOffset = reference.sprite.bounds.max.y * Mathf.Abs(reference.transform.lossyScale.y);
+            }
+            else
+            {
+                // 최초 자세의 실제 불투명 발 위치를 사용한다. 공격 궤적/프레임 여백에 따라 출렁이지 않는다.
+                footLift = ThreeDWorldView.Current.FootLift(reference.sprite) * Mathf.Abs(reference.transform.lossyScale.y);
+                width = reference.sprite.bounds.size.x * Mathf.Abs(reference.transform.lossyScale.x);
+                headOffset = footLift + ThreeDWorldView.Current.HeadTop(reference.sprite) * Mathf.Abs(reference.transform.lossyScale.y)
+                    + reference.transform.position.y - transform.position.y;
+            }
         }
         var shadowObject = new GameObject("Ground contact shadow");
         shadowObject.transform.SetParent(display.transform, false);
@@ -116,6 +128,7 @@ public sealed class SpriteDepthView : MonoBehaviour
             Vector3 scale = source.transform.lossyScale;
             copy.transform.localScale = new Vector3(scale.x, scale.y * visualUp.y, 1);
         }
-        if (shadow.enabled != visible) shadow.enabled = visible;
+        bool showShadow = visible && !authoredTownAnchor; // 마을 원화에는 접지 그림자가 포함돼 있다.
+        if (shadow.enabled != showShadow) shadow.enabled = showShadow;
     }
 }

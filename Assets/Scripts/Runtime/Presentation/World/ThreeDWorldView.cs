@@ -27,6 +27,7 @@ public sealed class ThreeDWorldView : MonoBehaviour
     private Sprite contactShadow;
     private Texture2D shadowTexture;
     private SpriteRenderer townGround;
+    private TownPresentationConfig townArt;
     private int viewportWidth, viewportHeight;
     public Material SpriteMaterial { get; private set; }
     public Sprite ContactShadow => contactShadow;
@@ -78,6 +79,12 @@ public sealed class ThreeDWorldView : MonoBehaviour
     {
         camera = Camera.main;
         if (camera == null) return;
+        if (!dungeon && ThreeDPresentationConfig.SpritesEnabled)
+        {
+            townArt = TownPresentationConfig.Active;
+            if (townArt != null && !townArt.IsValid()) townArt = null;
+        }
+        camera.rect = new Rect(0, 0, 1, 1); camera.ResetAspect();
         camera.GetUniversalAdditionalCameraData().SetRenderer(ThreeDPresentationConfig.Active.forwardRendererIndex);
         camera.cullingMask = 1 << RenderLayer;
         camera.orthographic = ThreeDPresentationConfig.SpritesEnabled;
@@ -162,16 +169,18 @@ public sealed class ThreeDWorldView : MonoBehaviour
         var groundObject = new GameObject("Illustrated town ground"); groundObject.transform.SetParent(transform, false);
         groundObject.layer = RenderLayer;
         townGround = groundObject.AddComponent<SpriteRenderer>();
-        townGround.sprite = CasualArtLibrary.LoadFull("Sprites/Environment/town-casual", 100f);
+        townGround.sprite = townArt != null ? townArt.background : CasualArtLibrary.LoadFull("Sprites/Environment/town-casual", 100f);
         townGround.sharedMaterial = SpriteMaterial; townGround.sortingOrder = -10;
         groundObject.transform.rotation = Quaternion.Euler(90, 0, 0);
-        groundObject.transform.position = new Vector3(0, -.03f, 0);
+        groundObject.transform.position = townArt != null ? Vector3.zero : new Vector3(0, -.03f, 0);
         foreach (string name in new[] { "Salvager Guild", "Supply Shop", "Town Warehouse", "Dungeon Entrance" })
         {
             var facility = GameObject.Find(name);
             if (facility != null) SpriteDepthView.Attach(facility);
         }
         // 시설 앞에서 상호작용하며, 그림의 몸통을 통과하지 않는다.
+        // 새 원화는 시설 루트와 같은 배치 데이터로 충돌·외곽선을 생성했다.
+        if (townArt != null) return;
         var obstacles = new GameObject("Town 2.5D Logic Footprints"); obstacles.transform.SetParent(transform);
         Obstacle(obstacles.transform, new Vector2(-4.3f, 2.1f), new Vector2(2.5f, 1.2f));
         Obstacle(obstacles.transform, new Vector2(.2f, 2.9f), new Vector2(2.3f, 1.0f));
@@ -186,6 +195,13 @@ public sealed class ThreeDWorldView : MonoBehaviour
         if (townGround == null || townGround.sprite == null || camera == null) return;
         float height = camera.orthographicSize * 2;
         Vector3 size = townGround.sprite.bounds.size;
+        if (townArt != null)
+        {
+            townGround.transform.localScale = new Vector3(townArt.ViewWidth / size.x,
+                townArt.ViewHeight / townArt.DepthScale(true) / size.y, 1f);
+            viewportWidth = Screen.width; viewportHeight = Screen.height;
+            return;
+        }
         float scale = Mathf.Max(height * camera.aspect / size.x, height / size.y) * 1.03f;
         // 배경 그림의 화면 비율을 보존하되 지면으로 눕혀 배우와 앞뒤 공간을 공유한다.
         float tilt = Mathf.Sin(ThreeDPresentationConfig.Active.spriteCameraElevation * Mathf.Deg2Rad);
@@ -333,7 +349,12 @@ public sealed class ThreeDWorldView : MonoBehaviour
         if (camera==null || player==null)return;
         if (ThreeDPresentationConfig.SpritesEnabled)
         {
-            Vector3 center = dungeon && !overview ? Map(player.position, .35f) : new Vector3(0, .35f, 0);
+            if (townArt != null)
+            {
+                camera.rect = TownPresentationConfig.FitViewport((float)Screen.width / Mathf.Max(1, Screen.height), townArt.referenceAspect);
+                camera.aspect = townArt.referenceAspect;
+            }
+            Vector3 center = dungeon && !overview ? Map(player.position, .35f) : townArt != null ? Vector3.zero : new Vector3(0, .35f, 0);
             Quaternion rotation = Quaternion.Euler(ThreeDPresentationConfig.Active.spriteCameraElevation, 0, 0);
             Vector3 desiredPosition = center - rotation * Vector3.forward * 35;
             camera.transform.position = immediate ? desiredPosition : Vector3.Lerp(camera.transform.position, desiredPosition, 1 - Mathf.Exp(-12 * Time.unscaledDeltaTime));

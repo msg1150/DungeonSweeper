@@ -56,6 +56,8 @@ public sealed class ReleaseBuildValidator : IPreprocessBuildWithReport
         }
         if (Resources.Load<Shader>("VisionOverlay") == null) issues.Add("Missing Resources/VisionOverlay shader.");
         if (Resources.Load<MainMenuPresentationConfig>("MainMenuPresentation") == null) issues.Add("Missing menu presentation config.");
+        var townArt = Resources.Load<TownPresentationConfig>("TownPresentation");
+        if (townArt == null || !townArt.IsValid()) issues.Add("Missing or invalid town presentation config.");
         PlayerVisualProfile profile = Resources.Load<PlayerVisualProfile>("PlayerVisualProfile");
         if (profile == null) issues.Add("Missing player visual profile.");
         else if (profile.columns < 1 || profile.rows < 1 || !Positive(profile.walkFramesPerSecond)

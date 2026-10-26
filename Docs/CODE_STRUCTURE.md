@@ -74,3 +74,11 @@
 Runtime/Quests에 의뢰 정의·카탈로그·수락 조건을 추가했습니다. TownQuestProgress는 수락·제출·포기·완료 이력을, QuestSaveData와 LegacyQuestMigration은 수락 조건 보존과 이전 저장 복원을 처리합니다. 길드 UI는 TownCommercePanel.Quests.cs로 분리했습니다. [에셋 작성과 검증](GUILD_QUESTS.md)을 참고하세요.
 
 이 변경 이후 런타임 .cs는 77개, 에디터 도구는 16개이며 프로파일링 도구 3개는 유지합니다. 최신 에디터 검사 수는 225개입니다.
+
+## 2026-10-26 마을 원화 적용
+
+`TownPresentationConfig`가 배경·시설의 발판 좌표·그림 크기·충돌·육지 외곽선을 공유합니다. `TownCasualVisuals`에서 논리 배치를 적용하고 `ThreeDWorldView`와 `SpriteDepthView`는 같은 좌표를 2.5D로 표시합니다. `TownFacilityView`는 임포트 시 정한 발판 피벗을 사용한다는 표시이며 건물별 GPU 알파 읽기와 중복 접지 그림자를 생략합니다. `TownHubController`는 새 배치와 겹치는 구 마을 저장 위치만 보정합니다.
+
+`TownFootprintBaker`는 PNG 알파의 밑동 외곽선을 에디터에서 생성·단순화해 저장합니다. 기존 사각 충돌을 비활성화하고 같은 데이터로 PolygonCollider2D와 저장 위치 검사를 구성합니다. 런타임에 픽셀별 검사를 추가하지 않습니다.
+
+현재 런타임 .cs는 79개, 에디터 도구는 18개이며 프로파일링 도구 3개는 유지합니다. 최신 에디터 검사 수는 288개입니다. [배치 설정·수동 확인](TOWN_ART.md)을 참고하세요.
