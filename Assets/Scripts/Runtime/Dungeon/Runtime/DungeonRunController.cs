@@ -40,6 +40,7 @@ public sealed partial class DungeonRunController : MonoBehaviour
     private bool bodySimulatedBeforeHiding;
     private SpriteRenderer[] playerSprites;
     public bool IsPlayerHidden { get; private set; }
+    public Vector2Int? HiddenCell => IsPlayerHidden ? hidingCell : null;
     public const float HidingInteractionRange = .9f;
     private Vector2Int lastDiscoveryCell = new(int.MinValue, int.MinValue);
 

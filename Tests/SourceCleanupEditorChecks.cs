@@ -126,6 +126,7 @@ public static class SourceCleanupEditorChecks
         ProductionRefactorEditorChecks.Run(check);
         QuestEditorChecks.Run(check);
         TownPresentationEditorChecks.Run(check);
+        DungeonInteriorEditorChecks.Run(check);
         HidingPhysicsEditorChecks.Run(check);
         File.WriteAllText(Path.Combine(root, "source-cleanup-result.txt"), $"PASS: {count} editor checks; Play mode was not entered.");
     }

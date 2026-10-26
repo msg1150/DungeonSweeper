@@ -67,6 +67,7 @@ public sealed partial class DungeonRunController
         }
         else RestoreHidingPhysics();
         IsPlayerHidden = hidden;
+        ThreeDWorldView.Current?.SetHidingArtwork(hidingCell,hidden);
         if (!hidden) hidingCell = default;
         movement.SetMovementEnabled(!hidden);
         if (playerSprites != null) foreach (var sprite in playerSprites) if (sprite != null) sprite.forceRenderingOff = hidden;

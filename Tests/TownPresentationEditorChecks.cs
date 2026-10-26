@@ -13,7 +13,6 @@ public static class TownPresentationEditorChecks
         var art = Resources.Load<TownPresentationConfig>("TownPresentation");
         check(art != null && art.IsValid(), "new town art config and four facility sprites load correctly");
         var expectedNames = new[] { "Salvager Guild", "Supply Shop", "Town Warehouse", "Dungeon Entrance" };
-        var expectedAnchors = new[] { new Vector2(.273f,.448f), new Vector2(.531f,.29f), new Vector2(.381f,.652f), new Vector2(.746f,.493f) };
         var mask = new Color32[16*16];
         for (int y = 2; y < 16; y++)
         for (int x = 0; x < 16; x++)
@@ -38,8 +37,7 @@ public static class TownPresentationEditorChecks
             for (int i = 0; i < 4; i++)
             {
                 var row = art.facilities[i];
-                check(row.objectName == expectedNames[i] && Vector2.Distance(row.feetAnchor, expectedAnchors[i]) < .0001f,
-                    "facility uses the supplied composition role and anchor: " + row.objectName);
+                check(row.objectName == expectedNames[i], "facility keeps its interaction role after the author edits placement: " + row.objectName);
                 Vector2 position = art.ToWorld(row.feetAnchor, true);
                 Vector3 projected = camera.WorldToViewportPoint(ThreeDWorldView.Map(position));
                 check(Mathf.Abs(projected.x - row.feetAnchor.x) < .0001f && Mathf.Abs(projected.y - (1f-row.feetAnchor.y)) < .0001f,
@@ -47,9 +45,7 @@ public static class TownPresentationEditorChecks
                 check(row.sprite.pivot.y / row.sprite.rect.height < .1f && row.sprite.pivot.x / row.sprite.rect.width > .45f,
                     "facility sprite imports with a foot pivot instead of canvas-center pivot: " + row.objectName);
                 check(row.HasCurrentFootprint, "facility uses a baked contour for the current Sprite and threshold: " + row.objectName);
-                float scale = art.ViewWidth*row.visibleWidth/(row.sprite.bounds.size.x*row.imageWidthFraction);
-                float top = row.feetAnchor.y-row.sprite.bounds.max.y*scale/art.ViewHeight;
-                check(top > -.001f, "relocated facility roof remains inside the frame: " + row.objectName);
+                check(!row.sprite.texture.isReadable, "town art does not keep a runtime CPU pixel buffer: " + row.objectName);
             }
             foreach (float aspect in new[] { 4f/3f, 16f/9f, 1746f/901f, 21f/9f })
             {

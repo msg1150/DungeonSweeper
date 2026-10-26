@@ -1,0 +1,101 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5e233d06a9db442b851dc3e1b725ccad, type: 3}
+  m_Name: DungeonInteriorArt
+  m_EditorClassIdentifier: Assembly-CSharp::DungeonInteriorArt
+  surfaceShader: {fileID: 4800000, guid: 22e56e02796944519efd57b410574873, type: 3}
+  dustyFloor: {fileID: 2800000, guid: 75640003a654462d99c9423120ed4371, type: 3}
+  cleanFloor: {fileID: 2800000, guid: 43620742d2b14afbb50d1a964065a176, type: 3}
+  floorRepeatCells: 6
+  horizontalTop:
+    texture: {fileID: 2800000, guid: 1797c160ed364b979b3b746fde72ba4b, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.295052202
+      y: 0.516806723
+      width: 0.195188379
+      height: 0.25210084
+  verticalTop:
+    texture: {fileID: 2800000, guid: 2c5c2d8991954148a9d0e66836f74b17, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.346679688
+      y: 0.596354167
+      width: 0.29296875
+      height: 0.162760417
+  cornerTop:
+    texture: {fileID: 2800000, guid: 34fff3a89d4a4b73a1631054479f7218, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.5859375
+      y: 0.375
+      width: 0.162760417
+      height: 0.09765625
+  junctionTop:
+    texture: {fileID: 2800000, guid: 82aed5462a264b8585a135420c3a8b20, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.397135417
+      y: 0.326171875
+      width: 0.1953125
+      height: 0.166015625
+  endTop:
+    texture: {fileID: 2800000, guid: bf86ee5ae5d7411a836a2a7195ee6cc5, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.33203125
+      y: 0.482421875
+      width: 0.3125
+      height: 0.21484375
+  wallFace:
+    texture: {fileID: 2800000, guid: 1797c160ed364b979b3b746fde72ba4b, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.295052202
+      y: 0.159663866
+      width: 0.195188379
+      height: 0.224089636
+  portal:
+    texture: {fileID: 2800000, guid: dcdf8f2a323d43ab9db5342d4b996166, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.180786687
+      y: 0.121008403
+      width: 0.644478064
+      height: 0.812605042
+  hideoutOpen:
+    texture: {fileID: 2800000, guid: 7924e9177d004b1abfffa20ce2237f60, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.082742317
+      y: 0.167741935
+      width: 0.831363278
+      height: 0.726612903
+  hideoutClosed:
+    texture: {fileID: 2800000, guid: 2d70002bb3ec48bc8c5321d0c2384713, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.082742317
+      y: 0.167741935
+      width: 0.831363278
+      height: 0.726612903
+  stairs:
+    texture: {fileID: 2800000, guid: 9ee458b41dfd4481848740a103e5317b, type: 3}
+    uv:
+      serializedVersion: 2
+      x: 0.323450135
+      y: 0.320754717
+      width: 0.350404313
+      height: 0.443396226
+  portalWidth: 1.25
+  hideoutWidth: 1.2
+  stairWidth: 1.25

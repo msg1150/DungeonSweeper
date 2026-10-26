@@ -28,6 +28,7 @@ public sealed class ThreeDWorldView : MonoBehaviour
     private Texture2D shadowTexture;
     private SpriteRenderer townGround;
     private TownPresentationConfig townArt;
+    private DungeonInteriorRenderer dungeonInterior;
     private int viewportWidth, viewportHeight;
     public Material SpriteMaterial { get; private set; }
     public Sprite ContactShadow => contactShadow;
@@ -50,6 +51,7 @@ public sealed class ThreeDWorldView : MonoBehaviour
     public static Vector3 Map(Vector2 point, float height = 0) => new(point.x, height, point.y);
     public float FloorHeight(Vector2 point)
     {
+        if (dungeonInterior != null) return 0f; // 새 계단 원화는 내려가는 구멍이므로 배우를 공중으로 올리지 않는다.
         var map = dungeon ? DungeonLayoutFactory.ActiveMap : null;
         if (map == null) return 0;
         if (map.hasStairsUp && OnSteps(point, map.Center(map.stairsUp), out float up)) return up;
@@ -239,6 +241,27 @@ public sealed class ThreeDWorldView : MonoBehaviour
     }
     private void BuildDungeon()
     {
+        var interiorArt = DungeonInteriorArt.Active;
+        if (ThreeDPresentationConfig.SpritesEnabled && interiorArt != null && interiorArt.IsValid())
+        {
+            dungeonInterior = gameObject.AddComponent<DungeonInteriorRenderer>();
+            var map = DungeonLayoutFactory.ActiveMap;
+            if (map == null)
+            {
+                // 구 저장 평면도 같은 표시 경로를 사용하되 저장 데이터는 수정하지 않는다.
+                map = new DungeonFloorMap { width=DungeonLayoutFactory.Width,height=DungeonLayoutFactory.Height,
+                    tiles=new int[DungeonLayoutFactory.Width*DungeonLayoutFactory.Height],entrance=DungeonLayoutFactory.WorldToCell(DungeonLayoutFactory.Entrance) };
+                for (int x=0;x<map.width;x++) for(int y=0;y<map.height;y++)
+                    map.tiles[y*map.width+x]=(int)(DungeonLayoutFactory.IsWalkableCell(x,y)?DungeonTile.Floor:DungeonTile.Empty);
+            }
+            var entranceMarker = GameObject.Find("입구");
+            var exitMarker = GameObject.Find("특수 탈출 게이트");
+            dungeonInterior.Build(interiorArt,map,entranceMarker!=null?(Vector2?)entranceMarker.transform.position:null,
+                exitMarker!=null?(Vector2?)exitMarker.transform.position:null);
+            var run = DungeonRunController.Instance;
+            if (run != null && run.HiddenCell.HasValue) dungeonInterior.SetHiding(run.HiddenCell.Value,true);
+            return;
+        }
         var floor = Surface("Dungeon Slate Floor", ThreeDPresentationConfig.SpritesEnabled ? new Color(.72f,.78f,.79f) : new Color(.25f,.31f,.34f),
             ThreeDPresentationConfig.SpritesEnabled ? "Sprites/Environment/dungeon-floor-casual" : null);
         var stone = Surface("Dungeon Wall Stone", ThreeDPresentationConfig.SpritesEnabled ? new Color(.63f,.70f,.72f) : new Color(.30f,.36f,.39f),
@@ -320,6 +343,7 @@ public sealed class ThreeDWorldView : MonoBehaviour
             lamp.color=new Color(.28f,.9f,.65f);lamp.shadows=LightShadows.None;
         }
     }
+    public void SetHidingArtwork(Vector2Int cell,bool hidden) => dungeonInterior?.SetHiding(cell,hidden);
     private Mesh CubeMesh()
     {
         var temp = GameObject.CreatePrimitive(PrimitiveType.Cube);

@@ -58,6 +58,8 @@ public sealed class ReleaseBuildValidator : IPreprocessBuildWithReport
         if (Resources.Load<MainMenuPresentationConfig>("MainMenuPresentation") == null) issues.Add("Missing menu presentation config.");
         var townArt = Resources.Load<TownPresentationConfig>("TownPresentation");
         if (townArt == null || !townArt.IsValid()) issues.Add("Missing or invalid town presentation config.");
+        var interiorArt = Resources.Load<DungeonInteriorArt>("DungeonInteriorArt");
+        if (interiorArt == null || !interiorArt.IsValid()) issues.Add("Missing or invalid dungeon interior artwork.");
         PlayerVisualProfile profile = Resources.Load<PlayerVisualProfile>("PlayerVisualProfile");
         if (profile == null) issues.Add("Missing player visual profile.");
         else if (profile.columns < 1 || profile.rows < 1 || !Positive(profile.walkFramesPerSecond)

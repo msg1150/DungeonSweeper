@@ -4,11 +4,13 @@
 
 메인 메뉴부터 마을·던전·저장/불러오기까지 이어지는 **개발 중인 게임**입니다. 런타임 코드는 기능별로 분류하고 에디터 제작 도구와 테스트를 분리했습니다. 콘텐츠와 출시 검증은 계속 진행 중입니다.
 
-문서 기준: **2026-10-26** · 새 마을 원화·시설 배치, 의뢰 에셋·길드 목록·복수 재료 제출·완료 이력과 기능별 런타임 분류를 반영했습니다. [마을 배치 설정](Docs/TOWN_ART.md), [코드 구조](Docs/CODE_STRUCTURE.md), [의뢰 설정·테스트](Docs/GUILD_QUESTS.md)를 참고하세요.
+문서 기준: **2026-10-26** · 새 던전·마을 원화, 시설 배치, 의뢰 에셋·길드 목록·복수 재료 제출·완료 이력과 기능별 런타임 분류를 반영했습니다. [던전 원화 설정](Docs/DUNGEON_INTERIOR_ART.md), [마을 배치 설정](Docs/TOWN_ART.md), [코드 구조](Docs/CODE_STRUCTURE.md), [의뢰 설정·테스트](Docs/GUILD_QUESTS.md)를 참고하세요.
 
 고양이와 몬스터의 일러스트 애니메이션에 입체 바닥·벽과 그림자를 결합한 **2.5D 표시**를 사용합니다. 밝은 마을과 어두운 던전을 정사영 카메라로 보여 줍니다. 캐릭터 그림은 지면에 수직으로 세우고 화면상 비율을 보정해, 상체가 벽 메시와 교차하는 문제를 줄였습니다. [2.5D 구조와 편집](Docs/2_5D_PRESENTATION.md), [아트 적용 기록](Docs/ART_DIRECTION.md)을 참고하세요. Blender 3D 모델은 비교·재사용용 실험 원본으로 보관합니다.
 
 ![마을 배경 원화 — 건물은 개별 Sprite로 추가됩니다](Assets/Art/Town/backgrounds/town_background_empty.png)
+
+![새 던전 원화의 정적 구성 예시 — 시야·캐릭터·몬스터는 제외](Docs/Images/DungeonInterior/preview.png)
 
 | 항목 | 현재 기준 |
 | --- | --- |
@@ -158,6 +160,8 @@ Unity 메뉴 **Dungeon Sweeper → Dungeon Builder**에서 제작 창을 엽니�
 | [QuestCatalog](Assets/Resources/QuestCatalog.asset) | 길드 의뢰 목록·순서. 개별 조건·보상·반복 여부는 `Resources/Quests`에서 설정 |
 | [PlayerVisualProfile](Assets/Resources/PlayerVisualProfile.asset) | 플레이어 스프라이트와 애니메이션 |
 | [ThreeDPresentation](Assets/Resources/ThreeDPresentation.asset) | 2.5D 표시, 카메라 각도·화면 범위, 보관 중인 3D 모델 선택 |
+| [DungeonInteriorArt](Assets/Resources/DungeonInteriorArt.asset) | 던전 바닥·벽·포탈·은신처·계단 원화, UV, 타일 반복과 시설 크기 |
+| [TownPresentation](Assets/Resources/TownPresentation.asset) | 마을 배경·시설 배치·크기·알파 충돌·통행 외곽선 |
 | [MainMenuPresentation](Assets/Resources/MainMenuPresentation.asset) | 메인 배경·로고·영상·글꼴, 씬별 음악, 버튼 효과음, 믹서 출력 |
 | [MenuUiArt](Assets/Resources/MenuUiArt.asset) | 메뉴·옵션·저장 확인 패널, 버튼 상태, 음량 슬라이더, 화면 모드 스위치, 수직 동기화 체크박스와 탐색 아이콘 |
 
@@ -247,7 +251,9 @@ Unity가 기본 설치 경로에 없으면 `-UnityEditorPath "C:/path/to/Unity.e
 
 **최신 에디터 검사 기록 · 2026-10-26**
 
-`-EditorOnly`로 **288개 검사**를 통과했습니다. 기존 정리·층 생성·던전 선택·보상·그리기 요청·던전 시야 검사에 더해 임시 물리 장면에서 은신 중 밀림 방지, 숨은 좌표의 저장·복원, 원래 충돌 상태의 복구를 확인했습니다. 메뉴 이미지가 사라지던 UV 저장 형식 오류를 수정하고, Unity가 실제로 읽은 원화 16개의 참조·표시 영역과 기본 테마 전환 조건도 검사합니다. 구조 변경 후 출시 설정 사전 검사, 가방 복원 실패 시 원자성, 해체 복원의 난수 보존, 창고 집계·초기화와 구 평면 호환성도 확인했습니다. [기능별 코드 구조](Docs/CODE_STRUCTURE.md)에 변경 범위를 정리했습니다. 의뢰 수락·복수 재료 제출·반복·일회성 이력·저장 호환·중복 보상 방지도 확인했습니다. 이번 검사는 별도 워크스페이스에서 실행했으며 재현 명령과 범위는 [의뢰 안내](Docs/GUILD_QUESTS.md)에 정리했습니다. 새 마을 원화의 Sprite 참조·발판 피벗·2.5D 투영·해상도 대응·알파 기반 밑동 충돌·구 저장 위치 보정도 검사했습니다. [마을 원화 안내](Docs/TOWN_ART.md)에 설정과 수동 확인 방법을 정리했습니다. 컴파일 오류·경고와 검사 예외는 없었습니다. 게임의 Play 모드는 켜지 않았으며 실제 조작·화면과 Draw Calls 변화는 별도 확인 대상입니다. 자세한 범위는 [정리 기록](Docs/SOURCE_CLEANUP_2026-10-19.md), [보상 테이블 검사 기록](Docs/LOOT_REWARD_TABLES.md#에디터-검사), [그리기 요청 최적화 기록](Docs/RENDERING_OPTIMIZATION_2026-10-21.md), [던전 시야 검사 기록](Docs/DUNGEON_VISION.md#에디터-검사), [은신 확인 순서](Docs/DUNGEON_BUILDER.md#확인-순서), [메뉴 이미지 확인](Docs/MENU_UI_ART.md#확인-범위와-수동-확인)을 참고하세요.
+`-EditorOnly`로 **336개 검사**를 통과했습니다. 기존 정리·층 생성·던전 선택·보상·그리기 요청·던전 시야 검사에 더해 임시 물리 장면에서 은신 중 밀림 방지, 숨은 좌표의 저장·복원, 원래 충돌 상태의 복구를 확인했습니다. 메뉴 이미지가 사라지던 UV 저장 형식 오류를 수정하고, Unity가 실제로 읽은 원화 16개의 참조·표시 영역과 기본 테마 전환 조건도 검사합니다. 구조 변경 후 출시 설정 사전 검사, 가방 복원 실패 시 원자성, 해체 복원의 난수 보존, 창고 집계·초기화와 구 평면 호환성도 확인했습니다. [기능별 코드 구조](Docs/CODE_STRUCTURE.md)에 변경 범위를 정리했습니다. 의뢰 수락·복수 재료 제출·반복·일회성 이력·저장 호환·중복 보상 방지도 확인했습니다. 이번 검사는 별도 워크스페이스에서 실행했으며 재현 명령과 범위는 [의뢰 안내](Docs/GUILD_QUESTS.md)에 정리했습니다. 새 마을 원화의 Sprite 참조·발판 피벗·2.5D 투영·해상도 대응·알파 기반 밑동 충돌·구 저장 위치 보정도 검사했습니다. [마을 원화 안내](Docs/TOWN_ART.md)에 설정과 수동 확인 방법을 정리했습니다. 컴파일 오류·경고와 검사 예외는 없었습니다. 게임의 Play 모드는 켜지 않았으며 실제 조작·화면과 Draw Calls 변화는 별도 확인 대상입니다. 자세한 범위는 [정리 기록](Docs/SOURCE_CLEANUP_2026-10-19.md), [보상 테이블 검사 기록](Docs/LOOT_REWARD_TABLES.md#에디터-검사), [그리기 요청 최적화 기록](Docs/RENDERING_OPTIMIZATION_2026-10-21.md), [던전 시야 검사 기록](Docs/DUNGEON_VISION.md#에디터-검사), [은신 확인 순서](Docs/DUNGEON_BUILDER.md#확인-순서), [메뉴 이미지 확인](Docs/MENU_UI_ART.md#확인-범위와-수동-확인)을 참고하세요.
+
+던전 원화의 벽 연결 16종, 64×64 도면의 청크 배칭·재질 한도, 은신처 커튼 변경, 배치 위치와 무관한 종류별 고정 크기과 자원 해제도 검사했습니다. DX11 에디터에서 같은 렌더러의 정적 화면을 촬영했으며 Play는 실행하지 않았습니다. [원화 설정·플레이 확인](Docs/DUNGEON_INTERIOR_ART.md)을 참고하세요.
 
 Windows x86/x64의 그래픽 API 자동 선택이 꺼져 있고 목록에 Direct3D 11만 있는지도 Unity API로 확인했습니다. 별도의 격리 에디터 실행에서 `-force-d3d11`로 실제 Direct3D 11 초기화를 확인했으며, 이 확인에서도 Play 모드는 실행하지 않았습니다. 이는 장시간 사용 시 종료 문제가 해결되었다는 검증을 의미하지는 않습니다.
 
